@@ -88,7 +88,7 @@ src/
     <RootNamespace>DodeeEdge.Core.BP.API</RootNamespace>
     <PackageId>DodeeEdge.Core.BP.API</PackageId>
     <Authors>Boonhome Wongsuwan</Authors>
-    <Company>DO DEE 365 ONE Co., Ltd.</Company>
+    <Company>Monkora Co., Ltd.</Company>
     <Version Condition="'$(Version)' == ''">1.0.0</Version>
   </PropertyGroup>
   <ItemGroup>
@@ -116,7 +116,7 @@ src/
     <RootNamespace>DodeeEdge.Core.BP.Domain</RootNamespace>
     <PackageId>DodeeEdge.Core.BP.Domain</PackageId>
     <Authors>Boonhome Wongsuwan</Authors>
-    <Company>DO DEE 365 ONE Co., Ltd.</Company>
+    <Company>Monkora Co., Ltd.</Company>
     <Version Condition="'$(Version)' == ''">1.0.0</Version>
   </PropertyGroup>
 </Project>
@@ -135,7 +135,7 @@ src/
     <RootNamespace>DodeeEdge.Core.BP.Infrastructure</RootNamespace>
     <PackageId>DodeeEdge.Core.BP.Infrastructure</PackageId>
     <Authors>Boonhome Wongsuwan</Authors>
-    <Company>DO DEE 365 ONE Co., Ltd.</Company>
+    <Company>Monkora Co., Ltd.</Company>
     <Version Condition="'$(Version)' == ''">1.0.0</Version>
   </PropertyGroup>
   <ItemGroup>

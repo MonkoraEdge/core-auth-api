@@ -2,11 +2,38 @@
 
 **Core Authentication API** สำหรับระบบ MonkoraEdge Platform
 
-- **Company:** DO DEE 365 ONE Co., Ltd.
+- **Company:** Monkora Co., Ltd.
 - **Author:** Boonhome Wongsuwan
 - **Version:** 1.0.0
 - **Framework:** .NET 9.0
-- **Architecture:** Clean Architecture + Domain-Driven Design (DDD)
+- **Architecture:** Clean Architecture (API / Domain / Infrastructure) + Shared `DotNet` Library
+- **Current Focus:** OAuth2.1 Authorization Server + Authentication Platform
+
+---
+
+## Current Status
+
+สถานะปัจจุบันของโค้ดใน repository นี้ ณ เวอร์ชันล่าสุด:
+
+- OAuth2 authorization flow ถูก refactor ให้ controller บางลง และย้าย orchestration เข้า Domain Service
+- มี endpoint metadata ครบทั้ง
+  - `/.well-known/openid-configuration`
+  - `/.well-known/oauth-authorization-server`
+  - `/.well-known/jwks.json`
+- Authorization Code Flow บังคับ `PKCE` แบบ `S256`
+- Token endpoint orchestration อยู่ใน Domain (`ProcessTokenRequestAsync`)
+- Refresh token rotation และ reuse detection ถูก implement ใน Domain service
+- README นี้ต้องถือเป็น `source of truth` สำหรับภาพรวมของระบบและ workflow การแก้ไข
+
+---
+
+## Maintenance Workflow
+
+กติกาการทำงานของ repository นี้:
+
+1. ก่อนเริ่มแก้ไขโค้ดใด ๆ ให้ตรวจ README นี้ก่อนเสมอ
+2. หากมีการเปลี่ยนสถาปัตยกรรม, endpoint, flow, dependency สำคัญ, security behavior หรือ workflow ต้องอัปเดต README นี้ในงานเดียวกันเสมอ
+3. ห้ามถือว่า README ถูกต้องโดยอัตโนมัติหลังแก้โค้ด ต้อง sync ให้ตรงกับ code version ปัจจุบันทุกครั้ง
 
 ---
 
@@ -14,12 +41,54 @@
 
 ```
 core-auth-api/
+├── README.md
+├── MonkoraEdge.Core.Auth.sln
 ├── src/
-│   ├── API/                        # ASP.NET Core Web API Layer
-│   ├── Domain/                     # Domain Layer (Business Logic)
-│   └── Infrastructure/             # Infrastructure Layer (DB, Repos)
-└── MonkoraEdge.Core.Auth.sln
+│   ├── API/                        # Presentation Layer (ASP.NET Core Web API)
+│   ├── Domain/                     # Domain Logic, Use Cases, OAuth orchestration
+│   ├── Infrastructure/             # Persistence, repositories, hosted services, EF Core
+│   └── DotNet/                     # Shared building blocks / cross-cutting library
 ```
+
+---
+
+## Current OAuth2.1 Design
+
+### API Layer
+
+- รับ request / bind model / extract header / return HTTP result เท่านั้น
+- `OAuth2Controller` ไม่ควรมี business rule สำคัญ
+- `WellKnownController` ใช้ Domain service เพื่อประกอบ metadata response
+
+### Domain Layer
+
+- `OAuth2Service` เป็น orchestration point หลักของ OAuth flow
+- methods สำคัญปัจจุบัน:
+  - `ProcessAuthorizeRequestAsync`
+  - `ProcessConsentAsync`
+  - `ProcessTokenRequestAsync`
+  - `ExchangeAuthorizationCodeAsync`
+  - `RefreshTokenGrantAsync`
+- endpoint-facing result models อยู่ใน `src/Domain/AggregatesModel/OAuth2Aggregate`
+
+### Infrastructure Layer
+
+- EF Core + PostgreSQL
+- Repository implementations และ token cleanup background service
+- tables หลักสำหรับ OAuth:
+  - authorization codes
+  - access tokens
+  - refresh tokens
+  - revoked tokens
+  - authorization consents
+
+### Security Posture
+
+- PKCE `S256` required
+- redirect URI exact match
+- confidential client ต้องมี `client_secret`
+- refresh token rotation รองรับ family-based revocation
+- JWKS endpoint สำหรับ public key discovery
 
 ---
 
@@ -33,7 +102,6 @@ ASP.NET Core Web API project ที่เป็น entry point หลักข�
 
 | Package                                         | Version |
 | ----------------------------------------------- | ------- |
-| MediatR                                         | 13.1.0  |
 | Microsoft.AspNetCore.OpenApi                    | 9.0.2   |
 | Microsoft.Extensions.Caching.StackExchangeRedis | 9.0.10  |
 | Swashbuckle.AspNetCore                          | 9.0.6   |
@@ -61,15 +129,16 @@ Domain layer ประกอบด้วย business logic, entities, services �
 
 **Package Dependencies:**
 
-| Package                        | Version |
-| ------------------------------ | ------- |
-| Azure.Identity                 | 1.17.1  |
-| Azure.Security.KeyVault.Keys   | 4.8.0   |
-| BCrypt.Net-Next                | 4.0.3   |
-| Duende.IdentityModel           | 7.1.0   |
-| Isopoh.Cryptography.Argon2     | 2.0.0   |
-| Microsoft.IdentityModel.Tokens | 8.15.0  |
-| RabbitMQ.Client                | 7.2.0   |
+| Package                         | Version |
+| ------------------------------- | ------- |
+| Azure.Identity                  | 1.19.0  |
+| Azure.Security.KeyVault.Keys    | 4.9.0   |
+| BCrypt.Net-Next                 | 4.1.0   |
+| Duende.IdentityModel            | 8.0.1   |
+| Isopoh.Cryptography.Argon2      | 2.0.0   |
+| Microsoft.IdentityModel.Tokens  | 8.16.0  |
+| RabbitMQ.Client                 | 7.2.1   |
+| System.IdentityModel.Tokens.Jwt | 8.16.0  |
 
 **Localization Support:** `en`, `ja`, `th`, `zh`
 
@@ -86,6 +155,14 @@ Infrastructure layer จัดการ Database, Repositories และ HTTP Cl
 | Microsoft.EntityFrameworkCore.Tools | 9.0.10  |
 
 **Database:** PostgreSQL ผ่าน EF Core (Npgsql)
+
+---
+
+### 4. `DotNet` — MonkoraEdge.Core.DotNet
+
+Shared library สำหรับ cross-cutting concerns เช่น authentication options, exception models, security helpers และ infrastructure abstractions ที่ถูกใช้ข้าม layer
+
+หมายเหตุ: เป้าหมายระยะถัดไปคือจำกัดการพึ่งพา shared library ใน Domain ให้เหลือเฉพาะ abstraction ที่จำเป็นจริง
 
 ---
 

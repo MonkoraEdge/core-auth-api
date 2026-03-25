@@ -13,8 +13,6 @@ public class TokenFormRequest
     [Microsoft.AspNetCore.Mvc.ModelBinder(Name = "redirect_uri")] public string? RedirectUri { get; set; }
     [Microsoft.AspNetCore.Mvc.ModelBinder(Name = "code_verifier")]public string? CodeVerifier { get; set; }
     [Microsoft.AspNetCore.Mvc.ModelBinder(Name = "refresh_token")]public string? RefreshToken { get; set; }
-    [Microsoft.AspNetCore.Mvc.ModelBinder(Name = "username")]     public string? Username { get; set; }
-    [Microsoft.AspNetCore.Mvc.ModelBinder(Name = "password")]     public string? Password { get; set; }
     [Microsoft.AspNetCore.Mvc.ModelBinder(Name = "scope")]        public string? Scope { get; set; }
     [Microsoft.AspNetCore.Mvc.ModelBinder(Name = "client_id")]    public string? ClientId { get; set; }
     [Microsoft.AspNetCore.Mvc.ModelBinder(Name = "client_secret")]public string? ClientSecret { get; set; }

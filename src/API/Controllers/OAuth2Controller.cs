@@ -24,41 +24,8 @@ public class OAuth2Controller : ControllerBase
     [HttpPost("authorize")]
     public async Task<IActionResult> Authorize([FromQuery] AuthorizeRequest request)
     {
-        var userId = GetAuthenticatedUserId();
-
-        var validation = await _oauth2Service.ValidateAuthorizeRequestAsync(request, userId ?? Guid.Empty);
-        if (!validation.IsValid)
-        {
-            if (!string.IsNullOrEmpty(request.RedirectUri) && !string.IsNullOrEmpty(request.State))
-                return Redirect($"{request.RedirectUri}?error={validation.Error}&error_description={Uri.EscapeDataString(validation.ErrorDescription ?? "")}&state={request.State}");
-            return BadRequest(new { error = validation.Error, error_description = validation.ErrorDescription });
-        }
-
-        if (validation.RequiresLogin)
-        {
-            // Return the client info so the frontend can show a login form
-            return Ok(new
-            {
-                requires_login = true,
-                client = validation.Client,
-                requested_scopes = validation.RequestedScopes
-            });
-        }
-
-        if (validation.RequiresConsent)
-        {
-            return Ok(new
-            {
-                requires_consent = true,
-                client = validation.Client,
-                requested_scopes = validation.RequestedScopes
-            });
-        }
-
-        // Authenticated and consented — issue code
-        var code = await _oauth2Service.IssueAuthorizationCodeAsync(request, userId!.Value, false);
-        var redirectUrl = BuildRedirectUrl(request.RedirectUri!, code, request.State);
-        return Redirect(redirectUrl);
+        var response = await _oauth2Service.ProcessAuthorizeRequestAsync(request, GetAuthenticatedUserId());
+        return ToActionResult(response);
     }
 
     /// <summary>Submit consent and receive authorization code</summary>
@@ -69,26 +36,20 @@ public class OAuth2Controller : ControllerBase
         var userId = GetAuthenticatedUserId();
         if (userId == null) return Unauthorized();
 
-        if (!request.Approved)
-        {
-            return Redirect($"{request.RedirectUri}?error=access_denied&error_description=User+denied+access&state={request.State}");
-        }
-
-        var authorizeReq = new AuthorizeRequest
+        var response = await _oauth2Service.ProcessConsentAsync(new ConsentRequest
         {
             ClientId = request.ClientId,
-            ResponseType = "code",
             RedirectUri = request.RedirectUri,
             Scope = request.Scope,
             State = request.State,
             CodeChallenge = request.CodeChallenge,
             CodeChallengeMethod = request.CodeChallengeMethod,
-            Nonce = request.Nonce
-        };
+            Nonce = request.Nonce,
+            Approved = request.Approved,
+            RememberConsent = request.RememberConsent
+        }, userId.Value);
 
-        var code = await _oauth2Service.IssueAuthorizationCodeAsync(authorizeReq, userId.Value, request.RememberConsent);
-        var redirectUrl = BuildRedirectUrl(request.RedirectUri, code, request.State);
-        return Redirect(redirectUrl);
+        return Redirect(response.RedirectUrl);
     }
 
     /// <summary>Token endpoint — exchange authorization code, client credentials, or refresh token for tokens</summary>
@@ -100,17 +61,8 @@ public class OAuth2Controller : ControllerBase
         var request = MapFormToTokenRequest(formRequest);
         ExtractClientCredentials(out var clientId, out var clientSecret, request);
 
-        TokenResponse response = request.GrantType?.ToLower() switch
-        {
-            "authorization_code" => await _oauth2Service.ExchangeAuthorizationCodeAsync(
-                request, clientId, clientSecret, GetIpAddress(), GetUserAgent()),
-            "client_credentials" => await _oauth2Service.ClientCredentialsGrantAsync(
-                request, clientId!, clientSecret, GetIpAddress(), GetUserAgent()),
-            "refresh_token" => await _oauth2Service.RefreshTokenGrantAsync(
-                request, clientId, clientSecret, GetIpAddress(), GetUserAgent()),
-            _ => throw new ArgumentException($"Unsupported grant_type: {request.GrantType}")
-        };
-
+        var response = await _oauth2Service.ProcessTokenRequestAsync(
+            request, clientId, clientSecret, GetIpAddress(), GetUserAgent());
         return Ok(response);
     }
 
@@ -213,11 +165,25 @@ public class OAuth2Controller : ControllerBase
 
     private string? GetUserAgent() => Request.Headers.UserAgent.ToString();
 
-    private static string BuildRedirectUrl(string redirectUri, string code, string? state)
+    private IActionResult ToActionResult(AuthorizeEndpointResponse response)
     {
-        var url = $"{redirectUri}?code={Uri.EscapeDataString(code)}";
-        if (!string.IsNullOrEmpty(state)) url += $"&state={Uri.EscapeDataString(state)}";
-        return url;
+        return response.Kind switch
+        {
+            AuthorizeResponseKind.Redirect => Redirect(response.RedirectUrl!),
+            AuthorizeResponseKind.LoginRequired => Ok(new
+            {
+                requires_login = true,
+                client = response.Client,
+                requested_scopes = response.RequestedScopes
+            }),
+            AuthorizeResponseKind.ConsentRequired => Ok(new
+            {
+                requires_consent = true,
+                client = response.Client,
+                requested_scopes = response.RequestedScopes
+            }),
+            _ => BadRequest(new { error = response.Error, error_description = response.ErrorDescription })
+        };
     }
 
     private static TokenRequest MapFormToTokenRequest(TokenFormRequest f) => new()
@@ -227,8 +193,6 @@ public class OAuth2Controller : ControllerBase
         RedirectUri = f.RedirectUri,
         CodeVerifier = f.CodeVerifier,
         RefreshToken = f.RefreshToken,
-        Username = f.Username,
-        Password = f.Password,
         Scope = f.Scope,
         ClientId = f.ClientId,
         ClientSecret = f.ClientSecret

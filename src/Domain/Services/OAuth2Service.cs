@@ -3,6 +3,7 @@ using MonkoraEdge.Core.Auth.Domain.AggregatesModel.OAuth2Aggregate;
 using MonkoraEdge.Core.Auth.Domain.AggregatesModel.AuthorizationAggregate.Interfaces;
 using MonkoraEdge.Core.Auth.Domain.AggregatesModel.UserAggregate.Interfaces;
 using MonkoraEdge.Core.Auth.Domain.Services.Interface;
+using MonkoraEdge.Core.DotNet.AggregatesModel.ConstantAggregate;
 using MonkoraEdge.Core.DotNet.AggregatesModel.ExceptionAggregate;
 using MonkoraEdge.Core.DotNet.Infrastructure.Interfaces;
 
@@ -39,6 +40,57 @@ public class OAuth2Service : IOAuth2Service
         _passwordService = passwordService;
     }
 
+    public async Task<AuthorizeEndpointResponse> ProcessAuthorizeRequestAsync(AuthorizeRequest request, Guid? authenticatedUserId)
+    {
+        var validation = await ValidateAuthorizeRequestAsync(request, authenticatedUserId ?? Guid.Empty);
+        if (!validation.IsValid)
+        {
+            if (!string.IsNullOrEmpty(request.RedirectUri) && !string.IsNullOrEmpty(request.State))
+            {
+                return new AuthorizeEndpointResponse
+                {
+                    Kind = AuthorizeResponseKind.Redirect,
+                    RedirectUrl = BuildErrorRedirectUrl(request.RedirectUri, validation.Error ?? "invalid_request",
+                        validation.ErrorDescription, request.State)
+                };
+            }
+
+            return new AuthorizeEndpointResponse
+            {
+                Kind = AuthorizeResponseKind.Error,
+                Error = validation.Error,
+                ErrorDescription = validation.ErrorDescription
+            };
+        }
+
+        if (validation.RequiresLogin)
+        {
+            return new AuthorizeEndpointResponse
+            {
+                Kind = AuthorizeResponseKind.LoginRequired,
+                Client = validation.Client,
+                RequestedScopes = validation.RequestedScopes
+            };
+        }
+
+        if (validation.RequiresConsent)
+        {
+            return new AuthorizeEndpointResponse
+            {
+                Kind = AuthorizeResponseKind.ConsentRequired,
+                Client = validation.Client,
+                RequestedScopes = validation.RequestedScopes
+            };
+        }
+
+        var code = await IssueAuthorizationCodeAsync(request, authenticatedUserId!.Value, false);
+        return new AuthorizeEndpointResponse
+        {
+            Kind = AuthorizeResponseKind.Redirect,
+            RedirectUrl = BuildCodeRedirectUrl(request.RedirectUri!, code, request.State)
+        };
+    }
+
     public async Task<AuthorizeValidationResult> ValidateAuthorizeRequestAsync(AuthorizeRequest request, Guid authenticatedUserId)
     {
         if (string.IsNullOrEmpty(request.ClientId))
@@ -61,14 +113,13 @@ public class OAuth2Service : IOAuth2Service
         if (string.IsNullOrWhiteSpace(request.State))
             return AuthorizeValidationResult.Fail("invalid_request", "state parameter is required.");
 
-        bool requiresPkce = client.ClientType == "PUBLIC" || client.RequirePkce;
-        if (requiresPkce)
+        if (string.IsNullOrEmpty(request.CodeChallenge))
         {
-            if (string.IsNullOrEmpty(request.CodeChallenge))
-                return AuthorizeValidationResult.Fail("invalid_request", "code_challenge is required.");
-            if (request.CodeChallengeMethod != "S256")
-                return AuthorizeValidationResult.Fail("invalid_request", "code_challenge_method must be S256.");
+            return AuthorizeValidationResult.Fail("invalid_request", "code_challenge is required.");
         }
+
+        if (request.CodeChallengeMethod != "S256")
+            return AuthorizeValidationResult.Fail("invalid_request", "code_challenge_method must be S256.");
 
         var requestedScopes = (request.Scope ?? "openid")
             .Split(' ', StringSplitOptions.RemoveEmptyEntries);
@@ -106,6 +157,46 @@ public class OAuth2Service : IOAuth2Service
         };
     }
 
+    public async Task<ConsentResponse> ProcessConsentAsync(ConsentRequest request, Guid userId)
+    {
+        var authorizeReq = new AuthorizeRequest
+        {
+            ClientId = request.ClientId,
+            ResponseType = "code",
+            RedirectUri = request.RedirectUri,
+            Scope = request.Scope,
+            State = request.State,
+            CodeChallenge = request.CodeChallenge,
+            CodeChallengeMethod = request.CodeChallengeMethod,
+            Nonce = request.Nonce
+        };
+
+        var validation = await ValidateAuthorizeRequestAsync(authorizeReq, userId);
+        if (!validation.IsValid)
+        {
+            return new ConsentResponse
+            {
+                RedirectUrl = BuildErrorRedirectUrl(request.RedirectUri, validation.Error ?? "invalid_request",
+                    validation.ErrorDescription, request.State)
+            };
+        }
+
+        if (!request.Approved)
+        {
+            return new ConsentResponse
+            {
+                RedirectUrl = BuildErrorRedirectUrl(request.RedirectUri, "access_denied",
+                    "User denied access", request.State)
+            };
+        }
+
+        var code = await IssueAuthorizationCodeAsync(authorizeReq, userId, request.RememberConsent);
+        return new ConsentResponse
+        {
+            RedirectUrl = BuildCodeRedirectUrl(request.RedirectUri, code, request.State)
+        };
+    }
+
     public async Task<string> IssueAuthorizationCodeAsync(AuthorizeRequest request, Guid userId, bool rememberConsent)
     {
         var client = await _clientAuth.LoadAsync(request.ClientId);
@@ -139,6 +230,19 @@ public class OAuth2Service : IOAuth2Service
 
         await _unitOfWork.SaveChangesAsync();
         return code;
+    }
+
+    public async Task<TokenResponse> ProcessTokenRequestAsync(
+        TokenRequest request, string? clientId, string? clientSecret, string? ipAddress, string? userAgent)
+    {
+        var normalizedGrantType = request.GrantType?.Trim().ToLowerInvariant();
+        return normalizedGrantType switch
+        {
+            "authorization_code" => await ExchangeAuthorizationCodeAsync(request, clientId, clientSecret, ipAddress, userAgent),
+            "client_credentials" => await ClientCredentialsGrantAsync(request, clientId!, clientSecret, ipAddress, userAgent),
+            "refresh_token" => await RefreshTokenGrantAsync(request, clientId, clientSecret, ipAddress, userAgent),
+            _ => throw new CustomHttpBadRequestException("token", ErrorCodeType.UNSUPPORTED_GRANT_TYPE)
+        };
     }
 
     public async Task<TokenResponse> ExchangeAuthorizationCodeAsync(
@@ -332,6 +436,46 @@ public class OAuth2Service : IOAuth2Service
         };
     }
 
+    public OpenIdConfigurationResponse GetOpenIdConfiguration(string baseUrl)
+    {
+        return new OpenIdConfigurationResponse
+        {
+            Issuer = _tokenService.GetIssuer(),
+            AuthorizationEndpoint = $"{baseUrl}/oauth2/authorize",
+            TokenEndpoint = $"{baseUrl}/oauth2/token",
+            UserInfoEndpoint = $"{baseUrl}/oauth2/userinfo",
+            JwksUri = $"{baseUrl}/.well-known/jwks.json",
+            RevocationEndpoint = $"{baseUrl}/oauth2/revoke",
+            IntrospectionEndpoint = $"{baseUrl}/oauth2/introspect",
+            ResponseTypesSupported = new[] { "code" },
+            GrantTypesSupported = new[] { "authorization_code", "client_credentials", "refresh_token" },
+            SubjectTypesSupported = new[] { "public" },
+            IdTokenSigningAlgValuesSupported = new[] { "RS256" },
+            ScopesSupported = new[] { "openid", "profile", "email", "phone", "address", "offline_access" },
+            ClaimsSupported = new[] { "sub", "iss", "iat", "exp", "aud", "client_id", "scope", "email", "name", "phone_number" },
+            CodeChallengeMethodsSupported = new[] { "S256" },
+            TokenEndpointAuthMethodsSupported = new[] { "client_secret_basic", "client_secret_post" },
+            EndSessionEndpoint = $"{baseUrl}/oauth2/end-session"
+        };
+    }
+
+    public AuthorizationServerMetadataResponse GetAuthorizationServerMetadata(string baseUrl)
+    {
+        return new AuthorizationServerMetadataResponse
+        {
+            Issuer = _tokenService.GetIssuer(),
+            AuthorizationEndpoint = $"{baseUrl}/oauth2/authorize",
+            TokenEndpoint = $"{baseUrl}/oauth2/token",
+            JwksUri = $"{baseUrl}/.well-known/jwks.json",
+            RevocationEndpoint = $"{baseUrl}/oauth2/revoke",
+            IntrospectionEndpoint = $"{baseUrl}/oauth2/introspect",
+            ResponseTypesSupported = new[] { "code" },
+            GrantTypesSupported = new[] { "authorization_code", "client_credentials", "refresh_token" },
+            TokenEndpointAuthMethodsSupported = new[] { "client_secret_basic", "client_secret_post" },
+            CodeChallengeMethodsSupported = new[] { "S256" }
+        };
+    }
+
     public async Task EndSessionAsync(Guid userId, string? idTokenHint)
     {
         // Revoke all active access + refresh tokens for this user
@@ -340,4 +484,22 @@ public class OAuth2Service : IOAuth2Service
 
     // ─── Private helpers ─────────────────────────────────────────────────────────
     // (All client auth and scope logic has moved to ClientAuthenticator)
+
+    private static string BuildCodeRedirectUrl(string redirectUri, string code, string? state)
+    {
+        var url = $"{redirectUri}?code={Uri.EscapeDataString(code)}";
+        if (!string.IsNullOrEmpty(state))
+            url += $"&state={Uri.EscapeDataString(state)}";
+        return url;
+    }
+
+    private static string BuildErrorRedirectUrl(string redirectUri, string error, string? errorDescription, string? state)
+    {
+        var url = $"{redirectUri}?error={Uri.EscapeDataString(error)}";
+        if (!string.IsNullOrEmpty(errorDescription))
+            url += $"&error_description={Uri.EscapeDataString(errorDescription)}";
+        if (!string.IsNullOrEmpty(state))
+            url += $"&state={Uri.EscapeDataString(state)}";
+        return url;
+    }
 }

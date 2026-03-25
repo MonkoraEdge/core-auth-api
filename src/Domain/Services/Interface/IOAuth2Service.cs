@@ -4,11 +4,20 @@ namespace MonkoraEdge.Core.Auth.Domain.Services.Interface;
 
 public interface IOAuth2Service
 {
+    /// <summary>Process the authorization endpoint request and decide the HTTP-facing outcome.</summary>
+    Task<AuthorizeEndpointResponse> ProcessAuthorizeRequestAsync(AuthorizeRequest request, Guid? authenticatedUserId);
+
     /// <summary>Process authorization request — validate client, scope, redirect_uri</summary>
     Task<AuthorizeValidationResult> ValidateAuthorizeRequestAsync(AuthorizeRequest request, Guid authenticatedUserId);
 
+    /// <summary>Process a consent submission and return the redirect result.</summary>
+    Task<ConsentResponse> ProcessConsentAsync(ConsentRequest request, Guid userId);
+
     /// <summary>Issue authorization code after user consents</summary>
     Task<string> IssueAuthorizationCodeAsync(AuthorizeRequest request, Guid userId, bool rememberConsent);
+
+    /// <summary>Dispatch token endpoint grant processing with OAuth-compliant validation.</summary>
+    Task<TokenResponse> ProcessTokenRequestAsync(TokenRequest request, string? clientId, string? clientSecret, string? ipAddress, string? userAgent);
 
     /// <summary>Exchange authorization code for tokens</summary>
     Task<TokenResponse> ExchangeAuthorizationCodeAsync(TokenRequest request, string? clientId, string? clientSecret, string? ipAddress, string? userAgent);
@@ -27,6 +36,12 @@ public interface IOAuth2Service
 
     /// <summary>Get userinfo claims for an access token</summary>
     Task<UserInfoResponse> GetUserInfoAsync(string accessToken);
+
+    /// <summary>Build OpenID Connect discovery metadata for the current base URL.</summary>
+    OpenIdConfigurationResponse GetOpenIdConfiguration(string baseUrl);
+
+    /// <summary>Build OAuth 2.0 Authorization Server metadata (RFC 8414).</summary>
+    AuthorizationServerMetadataResponse GetAuthorizationServerMetadata(string baseUrl);
 
     /// <summary>End session / RP-initiated logout — revokes all user tokens (RFC 8414)</summary>
     Task EndSessionAsync(Guid userId, string? idTokenHint);
