@@ -1,0 +1,62 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFramework>net9.0</TargetFramework>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>disable</Nullable>
+		<!-- Suppress nullable warnings from pre-nullable legacy code — fix gradually over time -->
+		<NoWarn>$(NoWarn);8600;8601;8602;8603;8604;8614;8618;8619;8620;8625;0414</NoWarn>
+		<AssemblyName>MonkoraEdge.Core.Auth.Domain</AssemblyName>
+		<RootNamespace>MonkoraEdge.Core.Auth.Domain</RootNamespace>
+		<PackageId>MonkoraEdge.Core.Auth.Domain</PackageId>
+		<Authors>Boonhome Wongsuwan</Authors>
+		<Company>DO DEE 365 ONE Co., Ltd.</Company>
+		<Description>base package description</Description>
+		<Version Condition="'$(Version)' == ''">1.0.0</Version>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Azure.Identity" Version="1.19.0" />
+		<PackageReference Include="Azure.Security.KeyVault.Keys" Version="4.9.0" />
+		<PackageReference Include="BCrypt.Net-Next" Version="4.1.0" />
+		<PackageReference Include="Duende.IdentityModel" Version="8.0.1" />
+		<PackageReference Include="Isopoh.Cryptography.Argon2" Version="2.0.0" />
+		<PackageReference Include="Microsoft.IdentityModel.Tokens" Version="8.16.0" />
+		<PackageReference Include="Otp.NET" Version="1.4.0" />
+		<PackageReference Include="RabbitMQ.Client" Version="7.2.1" />
+		<PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.16.0" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <ProjectReference Include="..\DotNet\DotNet.csproj" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<Compile Update="Localization\Resources.Designer.cs">
+			<DesignTime>True</DesignTime>
+			<AutoGen>True</AutoGen>
+			<DependentUpon>Resources.resx</DependentUpon>
+		</Compile>
+	</ItemGroup>
+
+	<ItemGroup>
+		<EmbeddedResource Update="Localization\Resources.resx">
+			<Generator>ResXFileCodeGenerator</Generator>
+			<LastGenOutput>Resources.Designer.cs</LastGenOutput>
+		</EmbeddedResource>
+	</ItemGroup>
+
+
+
+
+
+
+
+
+
+
+
+
+</Project>
+
+

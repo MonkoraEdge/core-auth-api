@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFramework>net9.0</TargetFramework>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>disable</Nullable>
+		<!-- Suppress nullable warnings from pre-nullable legacy code — fix gradually over time -->
+		<NoWarn>$(NoWarn);8600;8601;8602;8603;8604;8614;8618;8619;8620;8625;0414</NoWarn>
+		<AssemblyName>MonkoraEdge.Core.Auth.Infrastructure</AssemblyName>
+		<RootNamespace>MonkoraEdge.Core.Auth.Infrastructure</RootNamespace>
+		<PackageId>MonkoraEdge.Core.Auth.Infrastructure</PackageId>
+		<Authors>Boonhome Wongsuwan</Authors>
+		<Company>DO DEE 365 ONE Co., Ltd.</Company>
+		<Description>base package description</Description>
+		<Version Condition="'$(Version)' == ''">1.0.0</Version>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="9.0.10">
+			<PrivateAssets>all</PrivateAssets>
+			<IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+		</PackageReference>
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\Domain\Domain.csproj" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<Folder Include="Migrations\" />
+	</ItemGroup>
+
+
+
+</Project>

@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+	<PropertyGroup>
+		<TargetFramework>net9.0</TargetFramework>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>disable</Nullable>
+		<!-- Suppress nullable warnings from pre-nullable legacy code — fix gradually over time -->
+		<NoWarn>$(NoWarn);8600;8601;8602;8603;8604;8614;8618;8619;8620;8625;0414</NoWarn>
+		<AssemblyName>MonkoraEdge.Core.Auth.API</AssemblyName>
+		<RootNamespace>MonkoraEdge.Core.Auth.API</RootNamespace>
+		<PackageId>MonkoraEdge.Core.Auth.API</PackageId>
+		<Authors>Boonhome Wongsuwan</Authors>
+		<Company>DO DEE 365 ONE Co., Ltd.</Company>
+		<Description>base package description</Description>
+		<Version Condition="'$(Version)' == ''">1.0.0</Version>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="9.0.2" />
+		<PackageReference Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="9.0.10" />
+		<PackageReference Include="Swashbuckle.AspNetCore" Version="9.0.6" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\Infrastructure\Infrastructure.csproj" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <Folder Include="script_sql\" />
+	</ItemGroup>
+
+</Project>
