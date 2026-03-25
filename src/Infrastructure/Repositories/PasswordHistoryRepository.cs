@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace MonkoraEdge.Core.Auth.Infrastructure.Repositories;
 
-public class PasswordHistoryRepository : BaseRepository<AuthenticationDbContext, PasswordHistory>, IPasswordHistoryRepository
+public class PasswordHistoryRepository : AuthRepositoryBase<PasswordHistory>, IPasswordHistoryRepository
 {
     public PasswordHistoryRepository(AuthenticationDbContext context) : base(context) { }
 

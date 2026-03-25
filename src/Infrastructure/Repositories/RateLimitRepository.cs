@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace MonkoraEdge.Core.Auth.Infrastructure.Repositories;
 
-public class RateLimitRepository : BaseRepository<AuthenticationDbContext, RateLimit>, IRateLimitRepository
+public class RateLimitRepository : AuthRepositoryBase<RateLimit>, IRateLimitRepository
 {
     public RateLimitRepository(AuthenticationDbContext context) : base(context) { }
 

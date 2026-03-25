@@ -2,10 +2,9 @@ using MonkoraEdge.Core.Auth.Domain.AggregatesModel.EntityAggregate;
 using MonkoraEdge.Core.Auth.Domain.AggregatesModel.UserAggregate;
 using MonkoraEdge.Core.Auth.Domain.AggregatesModel.UserAggregate.Interfaces;
 using MonkoraEdge.Core.Auth.Domain.AggregatesModel.RoleAggregate.Interfaces;
+using MonkoraEdge.Core.Auth.Domain.Exceptions;
 using MonkoraEdge.Core.Auth.Domain.Services.Interface;
 using MonkoraEdge.Core.DotNet.AggregatesModel.CommonAggregate;
-using MonkoraEdge.Core.DotNet.AggregatesModel.ExceptionAggregate;
-using MonkoraEdge.Core.DotNet.Infrastructure.Interfaces;
 using Microsoft.EntityFrameworkCore;
 
 namespace MonkoraEdge.Core.Auth.Domain.Services;
@@ -38,7 +37,7 @@ public class UserService : IUserService
     public async Task<UserResponse> GetByIdAsync(Guid id)
     {
         var user = await _userRepo.GetByIdAsync(id);
-        if (user == null) throw new CustomHttpBadRequestException("user", "User not found.");
+        if (user == null) throw new DomainException("user", "User not found.");
         return await MapToResponseAsync(user);
     }
 
@@ -73,7 +72,7 @@ public class UserService : IUserService
     {
         var existing = await _userRepo.GetByEmailAsync(request.Email.ToLowerInvariant());
         if (existing != null)
-            throw new CustomHttpBadRequestException("user", "A user with this email already exists.");
+            throw new DomainException("user", "A user with this email already exists.");
 
         var user = new User
         {
@@ -93,7 +92,7 @@ public class UserService : IUserService
         if (!string.IsNullOrEmpty(request.Password))
         {
             if (!_passwordService.MeetsPasswordPolicy(request.Password))
-                throw new CustomHttpBadRequestException("user", "Password does not meet policy requirements.");
+                throw new DomainException("user", "Password does not meet policy requirements.");
 
             _identityRepo.Insert(new UserIdentity
             {
@@ -114,7 +113,7 @@ public class UserService : IUserService
     public async Task<UpdateResponse> UpdateAsync(Guid id, UserUpdateRequest request, string? updatedBy)
     {
         var user = await _userRepo.GetByIdAsync(id);
-        if (user == null) throw new CustomHttpBadRequestException("user", "User not found.");
+        if (user == null) throw new DomainException("user", "User not found.");
 
         if (request.PhoneNumber != null) user.PhoneNumber = request.PhoneNumber;
         if (request.DisplayName != null) user.DisplayName = request.DisplayName;
@@ -130,7 +129,7 @@ public class UserService : IUserService
     public async Task<DeleteResponse> DeleteAsync(Guid id, string? deletedBy)
     {
         var user = await _userRepo.GetByIdAsync(id);
-        if (user == null) throw new CustomHttpBadRequestException("user", "User not found.");
+        if (user == null) throw new DomainException("user", "User not found.");
 
         user.DeletedAt = DateTime.UtcNow;
         user.DeletedBy = deletedBy;
@@ -144,7 +143,7 @@ public class UserService : IUserService
     public async Task<UpdateResponse> ActivateAsync(Guid id, string? updatedBy)
     {
         var user = await _userRepo.GetByIdAsync(id);
-        if (user == null) throw new CustomHttpBadRequestException("user", "User not found.");
+        if (user == null) throw new DomainException("user", "User not found.");
         user.IsActive = true;
         user.Status = "ACTIVE";
         _userRepo.Update(user);
@@ -155,7 +154,7 @@ public class UserService : IUserService
     public async Task<UpdateResponse> DeactivateAsync(Guid id, string? updatedBy)
     {
         var user = await _userRepo.GetByIdAsync(id);
-        if (user == null) throw new CustomHttpBadRequestException("user", "User not found.");
+        if (user == null) throw new DomainException("user", "User not found.");
         user.IsActive = false;
         user.Status = "SUSPENDED";
         _userRepo.Update(user);
@@ -166,7 +165,7 @@ public class UserService : IUserService
     public async Task<UpdateResponse> AssignRolesAsync(Guid userId, AssignRoleRequest request, string? updatedBy)
     {
         var user = await _userRepo.GetByIdAsync(userId);
-        if (user == null) throw new CustomHttpBadRequestException("user", "User not found.");
+        if (user == null) throw new DomainException("user", "User not found.");
 
         var existing = await _userRoleRepo.GetByUserIdAsync(userId);
 
@@ -175,7 +174,7 @@ public class UserService : IUserService
             if (existing.Any(ur => ur.RoleId == roleId)) continue;
 
             var role = await _roleRepo.GetByIdAsync(roleId);
-            if (role == null) throw new CustomHttpBadRequestException("user", $"Role {roleId} not found.");
+            if (role == null) throw new DomainException("user", $"Role {roleId} not found.");
 
             _userRoleRepo.Insert(new UserRole
             {

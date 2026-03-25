@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace MonkoraEdge.Core.Auth.Infrastructure.Repositories;
 
-public class ProviderRepository : BaseRepository<AuthenticationDbContext, Provider>, IProviderRepository
+public class ProviderRepository : AuthRepositoryBase<Provider>, IProviderRepository
 {
     public ProviderRepository(AuthenticationDbContext context) : base(context) { }
 

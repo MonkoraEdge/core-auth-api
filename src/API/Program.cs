@@ -1,4 +1,5 @@
 using MonkoraEdge.Core.Auth.API.Extensions;
+using MonkoraEdge.Core.Auth.API.Middleware;
 using MonkoraEdge.Core.Auth.Infrastructure.Configurations;
 using MonkoraEdge.Core.Auth.Infrastructure.DbContexts;
 using MonkoraEdge.Core.DotNet;
@@ -75,6 +76,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseErrorHandling(new ErrorHandlingOptions("authentication"));
+app.UseMiddleware<DomainExceptionHandlingMiddleware>();
 
 // Security headers — prevent clickjacking, MIME sniffing, and information leakage
 app.Use(async (ctx, next) =>
@@ -97,11 +99,8 @@ app.UseAuthorization();
 
 app.UseCors(corsPolicyName);
 
-app.UseEndpoints(endpoints =>
-{
-    endpoints.MapControllers();
-    endpoints.MapHealthChecks("/health/ready", new HealthCheckOptions()).AllowAnonymous();
-    endpoints.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false }).AllowAnonymous();
-});
+app.MapControllers();
+app.MapHealthChecks("/health/ready", new HealthCheckOptions()).AllowAnonymous();
+app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false }).AllowAnonymous();
 
 app.Run();

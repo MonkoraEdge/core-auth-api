@@ -2,15 +2,14 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
+using MonkoraEdge.Core.Auth.Domain.AggregatesModel.AuthorizationAggregate.Interfaces;
 using MonkoraEdge.Core.Auth.Domain.AggregatesModel.EntityAggregate;
 using MonkoraEdge.Core.Auth.Domain.AggregatesModel.OAuth2Aggregate;
-using MonkoraEdge.Core.Auth.Domain.AggregatesModel.AuthorizationAggregate.Interfaces;
 using MonkoraEdge.Core.Auth.Domain.AggregatesModel.UserAggregate.Interfaces;
 using MonkoraEdge.Core.Auth.Domain.Services.Interface;
-using MonkoraEdge.Core.DotNet.Infrastructure.Interfaces;
 using Microsoft.IdentityModel.Tokens;
 
-namespace MonkoraEdge.Core.Auth.Domain.Services;
+namespace MonkoraEdge.Core.Auth.Infrastructure.Services.Security;
 
 public class TokenService : ITokenService
 {
@@ -20,7 +19,7 @@ public class TokenService : ITokenService
     private readonly IAuthorizationCodeRepository _authCodeRepo;
     private readonly IRevokedTokenRepository _revokedTokenRepo;
     private readonly IUserRepository _userRepo;
-    private readonly RsaSecurityKey _signingKey; // holds private key; public params exported via ExportParameters(false)
+    private readonly RsaSecurityKey _signingKey;
     private readonly string _issuer;
     private readonly int _defaultAccessTokenLifetimeSeconds;
 
@@ -49,7 +48,7 @@ public class TokenService : ITokenService
         _signingKey = new RsaSecurityKey(rsa) { KeyId = ComputeKeyId(rsa) };
     }
 
-    public async Task<string> GenerateAccessTokenAsync(Guid clientId, Guid? userId, string[] scopes, string? grantType, string? ipAddress, string? userAgent)
+    public Task<string> GenerateAccessTokenAsync(Guid clientId, Guid? userId, string[] scopes, string? grantType, string? ipAddress, string? userAgent)
     {
         var now = DateTime.UtcNow;
         var jti = Guid.NewGuid().ToString("N");
@@ -59,7 +58,7 @@ public class TokenService : ITokenService
         {
             new Claim(JwtRegisteredClaimNames.Jti, jti),
             new Claim(JwtRegisteredClaimNames.Iss, _issuer),
-            new Claim(JwtRegisteredClaimNames.Aud, _issuer),  // audience = this issuer by default; resource servers validate this
+            new Claim(JwtRegisteredClaimNames.Aud, _issuer),
             new Claim(JwtRegisteredClaimNames.Iat, DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString(), ClaimValueTypes.Integer64),
             new Claim("client_id", clientId.ToString()),
             new Claim("scope", string.Join(" ", scopes)),
@@ -83,7 +82,7 @@ public class TokenService : ITokenService
         var tokenString = new JwtSecurityTokenHandler().WriteToken(token);
         var tokenHash = HashToken(tokenString);
 
-        var entity = new AccessToken
+        _accessTokenRepo.Insert(new AccessToken
         {
             TokenHash = tokenHash,
             TokenType = "Bearer",
@@ -95,24 +94,20 @@ public class TokenService : ITokenService
             UserAgent = userAgent,
             IssuedAt = now,
             ExpiresAt = expiry
-        };
+        });
 
-        _accessTokenRepo.Insert(entity);
-        // SaveChangesAsync intentionally omitted — callers batch all inserts for the
-        // request into a single atomic commit (see ExchangeAuthorizationCodeAsync etc.)
-        return tokenString;
+        return Task.FromResult(tokenString);
     }
 
-    public async Task<string> GenerateRefreshTokenAsync(Guid accessTokenId, Guid clientId, Guid? userId, Guid? sessionId, string[] scopes, int lifetimeSeconds, Guid? familyId = null)
+    public Task<string> GenerateRefreshTokenAsync(Guid accessTokenId, Guid clientId, Guid? userId, Guid? sessionId, string[] scopes, int lifetimeSeconds, Guid? familyId = null)
     {
         var rawToken = Convert.ToBase64String(RandomNumberGenerator.GetBytes(64))
             .TrimEnd('=').Replace('+', '-').Replace('/', '_');
         var tokenHash = HashToken(rawToken);
 
-        var entity = new RefreshToken
+        _refreshTokenRepo.Insert(new RefreshToken
         {
             RefreshTokenHash = tokenHash,
-            // Assign to existing family (rotation) or start a new one (first issuance)
             FamilyId = familyId ?? Guid.NewGuid(),
             ClientId = clientId,
             UserId = userId ?? Guid.Empty,
@@ -120,20 +115,18 @@ public class TokenService : ITokenService
             Scopes = scopes,
             IssuedAt = DateTime.UtcNow,
             ExpiresAt = DateTime.UtcNow.AddSeconds(lifetimeSeconds)
-        };
+        });
 
-        _refreshTokenRepo.Insert(entity);
-        // SaveChangesAsync omitted — caller owns the transaction
-        return rawToken;
+        return Task.FromResult(rawToken);
     }
 
-    public async Task<string> GenerateAuthorizationCodeAsync(Guid clientId, Guid userId, Guid? sessionId, string[] scopes, string redirectUri, string? codeChallenge, string? codeChallengeMethod, string? nonce)
+    public Task<string> GenerateAuthorizationCodeAsync(Guid clientId, Guid userId, Guid? sessionId, string[] scopes, string redirectUri, string? codeChallenge, string? codeChallengeMethod, string? nonce)
     {
         var rawCode = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32))
             .TrimEnd('=').Replace('+', '-').Replace('/', '_');
         var codeHash = HashToken(rawCode);
 
-        var entity = new AuthorizationCode
+        _authCodeRepo.Insert(new AuthorizationCode
         {
             CodeHash = codeHash,
             ClientId = clientId,
@@ -145,13 +138,10 @@ public class TokenService : ITokenService
             CodeChallengeMethod = codeChallengeMethod ?? "S256",
             Nonce = nonce,
             AuthTime = DateTime.UtcNow,
-            // OAuth 2.1 §4.1.2 / RFC 6749 §4.1.2: authorization codes MUST be short-lived
-            ExpiresAt = DateTime.UtcNow.AddSeconds(60)  // 60 second maximum
-        };
+            ExpiresAt = DateTime.UtcNow.AddSeconds(60)
+        });
 
-        _authCodeRepo.Insert(entity);
-        // SaveChangesAsync omitted — caller owns the transaction
-        return rawCode;
+        return Task.FromResult(rawCode);
     }
 
     public async Task<IntrospectResponse> IntrospectTokenAsync(string token, string? tokenTypeHint)
@@ -162,12 +152,9 @@ public class TokenService : ITokenService
             return inactive;
 
         var tokenHash = HashToken(token);
-
-        // Check revocation list first
         if (await _revokedTokenRepo.IsRevokedAsync(tokenHash))
             return inactive;
 
-        // Try access token
         var accessToken = await _accessTokenRepo.GetByTokenHashAsync(tokenHash);
         if (accessToken != null)
         {
@@ -188,7 +175,6 @@ public class TokenService : ITokenService
             };
         }
 
-        // Try refresh token
         var refreshToken = await _refreshTokenRepo.GetByTokenHashAsync(tokenHash);
         if (refreshToken != null)
         {
@@ -214,7 +200,6 @@ public class TokenService : ITokenService
     {
         var tokenHash = HashToken(token);
 
-        // Revoke access token
         var accessToken = await _accessTokenRepo.GetByTokenHashAsync(tokenHash);
         if (accessToken != null && accessToken.RevokedAt == null)
         {
@@ -222,7 +207,6 @@ public class TokenService : ITokenService
             _accessTokenRepo.Update(accessToken);
         }
 
-        // Revoke refresh token
         var refreshToken = await _refreshTokenRepo.GetByTokenHashAsync(tokenHash);
         if (refreshToken != null && refreshToken.RevokedAt == null)
         {
@@ -230,11 +214,10 @@ public class TokenService : ITokenService
             _refreshTokenRepo.Update(refreshToken);
         }
 
-        // Add to revoked token list
         var existing = await _revokedTokenRepo.GetByTokenHashAsync(tokenHash);
         if (existing == null)
         {
-            var revoked = new RevokedToken
+            _revokedTokenRepo.Insert(new RevokedToken
             {
                 TokenHash = tokenHash,
                 TokenType = tokenTypeHint ?? "access_token",
@@ -243,8 +226,7 @@ public class TokenService : ITokenService
                 Reason = reason,
                 RevokedAt = DateTime.UtcNow,
                 ExpiresAt = accessToken?.ExpiresAt ?? refreshToken?.ExpiresAt
-            };
-            _revokedTokenRepo.Insert(revoked);
+            });
         }
 
         await _unitOfWork.SaveChangesAsync();
@@ -253,31 +235,31 @@ public class TokenService : ITokenService
     public async Task RevokeAllUserTokensAsync(Guid userId, Guid? sessionId = null, string reason = "logout")
     {
         var activeTokens = await _accessTokenRepo.GetActiveByUserIdAsync(userId);
-        foreach (var t in activeTokens)
+        foreach (var token in activeTokens)
         {
-            if (sessionId.HasValue && t.SessionId != sessionId)
+            if (sessionId.HasValue && token.SessionId != sessionId)
                 continue;
-            t.RevokedAt = DateTime.UtcNow;
-            _accessTokenRepo.Update(t);
 
-            var revoked = new RevokedToken
+            token.RevokedAt = DateTime.UtcNow;
+            _accessTokenRepo.Update(token);
+
+            _revokedTokenRepo.Insert(new RevokedToken
             {
-                TokenHash = t.TokenHash,
+                TokenHash = token.TokenHash,
                 TokenType = "access_token",
-                ClientId = t.ClientId,
+                ClientId = token.ClientId,
                 UserId = userId,
                 Reason = reason,
                 RevokedAt = DateTime.UtcNow,
-                ExpiresAt = t.ExpiresAt
-            };
-            _revokedTokenRepo.Insert(revoked);
+                ExpiresAt = token.ExpiresAt
+            });
         }
 
         var activeRefreshTokens = await _refreshTokenRepo.GetActiveByUserIdAsync(userId);
-        foreach (var t in activeRefreshTokens)
+        foreach (var token in activeRefreshTokens)
         {
-            t.RevokedAt = DateTime.UtcNow;
-            _refreshTokenRepo.Update(t);
+            token.RevokedAt = DateTime.UtcNow;
+            _refreshTokenRepo.Update(token);
         }
 
         await _unitOfWork.SaveChangesAsync();
@@ -291,8 +273,6 @@ public class TokenService : ITokenService
 
     public JwksResponse GetJwks()
     {
-        // ExportParameters(false) returns only the public key parameters
-        // even though _signingKey holds the private key — safe to expose
         var parameters = _signingKey.Rsa.ExportParameters(false);
         return new JwksResponse
         {
@@ -313,14 +293,6 @@ public class TokenService : ITokenService
 
     public string GetIssuer() => _issuer;
 
-    /// <summary>
-    /// Generate an OIDC ID Token per OpenID Connect Core 1.0 spec.
-    /// - aud is the requesting client_id (not the issuer)
-    /// - nonce prevents replay attacks
-    /// - auth_time records when authentication occurred
-    /// - user claims are scope-filtered
-    /// - NOT persisted to the access_token table
-    /// </summary>
     public async Task<string> GenerateIdTokenAsync(Guid clientId, Guid userId, string[] scopes, string? nonce, DateTime authTime)
     {
         var now = DateTime.UtcNow;
@@ -332,13 +304,12 @@ public class TokenService : ITokenService
         {
             new Claim(JwtRegisteredClaimNames.Sub, userId.ToString()),
             new Claim(JwtRegisteredClaimNames.Iss, _issuer),
-            new Claim(JwtRegisteredClaimNames.Aud, clientId.ToString()),  // OIDC Core: aud MUST be the client_id
+            new Claim(JwtRegisteredClaimNames.Aud, clientId.ToString()),
             new Claim(JwtRegisteredClaimNames.Iat, new DateTimeOffset(now).ToUnixTimeSeconds().ToString(), ClaimValueTypes.Integer64),
             new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString("N")),
             new Claim("auth_time", new DateTimeOffset(authTime).ToUnixTimeSeconds().ToString(), ClaimValueTypes.Integer64),
         };
 
-        // Nonce: binds ID token to the authorization request — prevents replay attacks
         if (!string.IsNullOrEmpty(nonce))
             claims.Add(new Claim("nonce", nonce));
 
@@ -370,17 +341,13 @@ public class TokenService : ITokenService
         return new JwtSecurityTokenHandler().WriteToken(token);
     }
 
-    /// <summary>
-    /// Revoke every refresh token in a rotation family.
-    /// Called when a previously-rotated (already-revoked) token is presented — indicates theft.
-    /// </summary>
     public async Task RevokeTokenFamilyAsync(Guid familyId, string reason = "refresh_token_reuse")
     {
         var familyTokens = await _refreshTokenRepo.GetByFamilyIdAsync(familyId);
-        foreach (var t in familyTokens.Where(t => t.RevokedAt == null))
+        foreach (var token in familyTokens.Where(t => t.RevokedAt == null))
         {
-            t.RevokedAt = DateTime.UtcNow;
-            _refreshTokenRepo.Update(t);
+            token.RevokedAt = DateTime.UtcNow;
+            _refreshTokenRepo.Update(token);
         }
         await _unitOfWork.SaveChangesAsync();
     }

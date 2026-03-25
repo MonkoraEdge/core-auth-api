@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace MonkoraEdge.Core.Auth.Infrastructure.Repositories;
 
-public class LoginAttemptRepository : BaseRepository<AuthenticationDbContext, LoginAttempt>, ILoginAttemptRepository
+public class LoginAttemptRepository : AuthRepositoryBase<LoginAttempt>, ILoginAttemptRepository
 {
     public LoginAttemptRepository(AuthenticationDbContext context) : base(context) { }
 

@@ -2,14 +2,13 @@ using MonkoraEdge.Core.Auth.Domain.AggregatesModel.EntityAggregate;
 using MonkoraEdge.Core.Auth.Domain.AggregatesModel.TenantAggregate;
 using MonkoraEdge.Core.Auth.Domain.AggregatesModel.TenantAggregate.Interfaces;
 using MonkoraEdge.Core.Auth.Domain.AggregatesModel.TenantAggregate.Setting;
+using MonkoraEdge.Core.Auth.Domain.Exceptions;
 using MonkoraEdge.Core.Auth.Domain.Services.Interface;
 using MonkoraEdge.Core.Auth.Domain.Validations.AccountPermissionValidation;
 using MonkoraEdge.Core.DotNet.AggregatesModel.CommonAggregate;
 using MonkoraEdge.Core.DotNet.AggregatesModel.DataSourceAggregate;
-using MonkoraEdge.Core.DotNet.AggregatesModel.ExceptionAggregate;
 using MonkoraEdge.Core.DotNet.Extensions;
 using MonkoraEdge.Core.DotNet.Extensions.Validations;
-using MonkoraEdge.Core.DotNet.Infrastructure.Interfaces;
 using Microsoft.AspNetCore.Http;
 
 namespace MonkoraEdge.Core.Auth.Domain.Services;
@@ -35,7 +34,7 @@ public class TenantService : ITenantService
     {
         var results = await new TenantValidator().ValidateAsync(request);
         if (!results.IsValid)
-            throw new CustomHttpBadRequestException("created_agreement", results.Errors.ToErrorFields());
+            throw new DomainException("created_agreement", results.Errors.ToErrorFields());
 
         var tenant = new Tenant
         {
@@ -58,7 +57,7 @@ public class TenantService : ITenantService
     {
         var tenant = await _tenanttRepository.GetTenantByIdAsync(id);
         if (tenant is null)
-            throw new CustomHttpBadRequestException("get_tenant", "not_found", "Tenant not found");
+            throw new DomainException("get_tenant", "Tenant not found");
 
         var result = new TenantResponse
         {

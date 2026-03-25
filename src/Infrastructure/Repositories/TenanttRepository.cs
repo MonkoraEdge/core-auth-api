@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace MonkoraEdge.Core.Auth.Infrastructure.Repositories;
 
-public class TenanttRepository : BaseRepository<AuthenticationDbContext, Tenant>, ITenanttRepository
+public class TenanttRepository : AuthRepositoryBase<Tenant>, ITenanttRepository
 {
     public TenanttRepository(AuthenticationDbContext context) 
         : base(context)

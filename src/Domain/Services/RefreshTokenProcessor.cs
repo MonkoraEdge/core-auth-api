@@ -1,0 +1,83 @@
+using MonkoraEdge.Core.Auth.Domain.AggregatesModel.AuthorizationAggregate.Interfaces;
+using MonkoraEdge.Core.Auth.Domain.AggregatesModel.EntityAggregate;
+using MonkoraEdge.Core.Auth.Domain.AggregatesModel.OAuth2Aggregate;
+using MonkoraEdge.Core.Auth.Domain.Exceptions;
+using MonkoraEdge.Core.Auth.Domain.Services.Interface;
+
+namespace MonkoraEdge.Core.Auth.Domain.Services;
+
+/// <summary>
+/// Centralizes refresh-token validation, reuse detection, rotation, and token issuance.
+/// This keeps OAuth2 and legacy auth refresh paths behaviorally aligned.
+/// </summary>
+public sealed class RefreshTokenProcessor : IRefreshTokenProcessor
+{
+    private readonly IUnitOfWork _unitOfWork;
+    private readonly IRefreshTokenRepository _refreshTokenRepo;
+    private readonly ITokenService _tokenService;
+
+    public RefreshTokenProcessor(
+        IUnitOfWork unitOfWork,
+        IRefreshTokenRepository refreshTokenRepo,
+        ITokenService tokenService)
+    {
+        _unitOfWork = unitOfWork;
+        _refreshTokenRepo = refreshTokenRepo;
+        _tokenService = tokenService;
+    }
+
+    public async Task<RefreshToken> ValidateActiveAsync(string refreshToken, string errorSource, string invalidMessage, string expiredMessage)
+    {
+        if (string.IsNullOrWhiteSpace(refreshToken))
+            throw new DomainException(errorSource, invalidMessage);
+
+        var tokenHash = _tokenService.HashToken(refreshToken);
+        var storedToken = await _refreshTokenRepo.GetByTokenHashAsync(tokenHash);
+
+        if (storedToken == null)
+            throw new DomainException(errorSource, invalidMessage);
+
+        if (storedToken.RevokedAt.HasValue)
+        {
+            if (storedToken.FamilyId != Guid.Empty)
+                await _tokenService.RevokeTokenFamilyAsync(storedToken.FamilyId, "refresh_token_reuse_detected");
+
+            throw new DomainException(errorSource,
+                "The refresh token has already been used. All sessions in this chain have been revoked for security.");
+        }
+
+        if (storedToken.ExpiresAt <= DateTime.UtcNow)
+            throw new DomainException(errorSource, expiredMessage);
+
+        return storedToken;
+    }
+
+    public async Task<TokenResponse> RotateAsync(RefreshToken refreshToken, AuthorizationClient client, int refreshTokenLifetimeSeconds, string? ipAddress, string? userAgent)
+    {
+        if (refreshToken.ClientId != client.Id)
+            throw new DomainException("refresh_token", "Client mismatch.");
+
+        refreshToken.RevokedAt = DateTime.UtcNow;
+        _refreshTokenRepo.Update(refreshToken);
+
+        var scopes = refreshToken.Scopes;
+        var userId = refreshToken.UserId == Guid.Empty ? (Guid?)null : refreshToken.UserId;
+
+        var newAccessToken = await _tokenService.GenerateAccessTokenAsync(
+            client.Id, userId, scopes, "refresh_token", ipAddress, userAgent);
+        var newRefreshToken = await _tokenService.GenerateRefreshTokenAsync(
+            Guid.Empty, client.Id, userId, refreshToken.SessionId, scopes,
+            refreshTokenLifetimeSeconds, familyId: refreshToken.FamilyId);
+
+        await _unitOfWork.SaveChangesAsync();
+
+        return new TokenResponse
+        {
+            AccessToken = newAccessToken,
+            TokenType = "Bearer",
+            ExpiresIn = client.AccessTokenLifetime,
+            RefreshToken = newRefreshToken,
+            Scope = string.Join(" ", scopes)
+        };
+    }
+}

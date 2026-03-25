@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using MonkoraEdge.Core.Auth.Domain.AggregatesModel.AuthAggregate;
+using MonkoraEdge.Core.Auth.Domain.AggregatesModel.OAuth2Aggregate;
 using MonkoraEdge.Core.Auth.Domain.Services.Interface;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -12,10 +13,12 @@ namespace MonkoraEdge.Core.Auth.API.Controllers;
 public class AuthController : ControllerBase
 {
     private readonly IAuthService _authService;
+    private readonly IOAuth2Service _oauth2Service;
 
-    public AuthController(IAuthService authService)
+    public AuthController(IAuthService authService, IOAuth2Service oauth2Service)
     {
         _authService = authService;
+        _oauth2Service = oauth2Service;
     }
 
     // ─── Login / Register / Token ─────────────────────────────────────────────
@@ -50,8 +53,18 @@ public class AuthController : ControllerBase
     [HttpPost("refresh")]
     public async Task<IActionResult> Refresh([FromBody] RefreshTokenRequest request)
     {
-        var result = await _authService.RefreshTokenAsync(
-            request.RefreshToken, request.ClientId, request.ClientSecret, GetIpAddress(), GetUserAgent());
+        var result = await _oauth2Service.ProcessTokenRequestAsync(
+            new TokenRequest
+            {
+                GrantType = "refresh_token",
+                RefreshToken = request.RefreshToken,
+                ClientId = request.ClientId,
+                ClientSecret = request.ClientSecret
+            },
+            request.ClientId,
+            request.ClientSecret,
+            GetIpAddress(),
+            GetUserAgent());
         return Ok(result);
     }
 

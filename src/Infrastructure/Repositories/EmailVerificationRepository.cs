@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace MonkoraEdge.Core.Auth.Infrastructure.Repositories;
 
-public class EmailVerificationRepository : BaseRepository<AuthenticationDbContext, EmailVerification>, IEmailVerificationRepository
+public class EmailVerificationRepository : AuthRepositoryBase<EmailVerification>, IEmailVerificationRepository
 {
     public EmailVerificationRepository(AuthenticationDbContext context) : base(context) { }
 

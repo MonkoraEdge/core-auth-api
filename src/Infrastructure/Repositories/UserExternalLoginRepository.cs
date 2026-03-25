@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace MonkoraEdge.Core.Auth.Infrastructure.Repositories;
 
-public class UserExternalLoginRepository : BaseRepository<AuthenticationDbContext, UserExternalLogin>, IUserExternalLoginRepository
+public class UserExternalLoginRepository : AuthRepositoryBase<UserExternalLogin>, IUserExternalLoginRepository
 {
     public UserExternalLoginRepository(AuthenticationDbContext context) : base(context) { }
 

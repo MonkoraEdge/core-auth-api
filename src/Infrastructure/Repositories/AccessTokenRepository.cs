@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace MonkoraEdge.Core.Auth.Infrastructure.Repositories;
 
-public class AccessTokenRepository : BaseRepository<AuthenticationDbContext, AccessToken>, IAccessTokenRepository
+public class AccessTokenRepository : AuthRepositoryBase<AccessToken>, IAccessTokenRepository
 {
     public AccessTokenRepository(AuthenticationDbContext context) : base(context) { }
 

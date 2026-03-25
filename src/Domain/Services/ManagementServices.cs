@@ -5,10 +5,9 @@ using MonkoraEdge.Core.Auth.Domain.AggregatesModel.ApiKeyAggregate;
 using MonkoraEdge.Core.Auth.Domain.AggregatesModel.AuthorizationAggregate.Interfaces;
 using MonkoraEdge.Core.Auth.Domain.AggregatesModel.RoleAggregate.Interfaces;
 using MonkoraEdge.Core.Auth.Domain.AggregatesModel.ApiKeyAggregate.Interfaces;
+using MonkoraEdge.Core.Auth.Domain.Exceptions;
 using MonkoraEdge.Core.Auth.Domain.Services.Interface;
 using MonkoraEdge.Core.DotNet.AggregatesModel.CommonAggregate;
-using MonkoraEdge.Core.DotNet.AggregatesModel.ExceptionAggregate;
-using MonkoraEdge.Core.DotNet.Infrastructure.Interfaces;
 using System.Security.Cryptography;
 
 namespace MonkoraEdge.Core.Auth.Domain.Services;
@@ -37,14 +36,14 @@ public class ScopeService : IScopeService
     public async Task<ScopeResponse> GetByIdAsync(Guid id)
     {
         var scope = await _scopeRepo.GetByIdAsync(id);
-        if (scope == null) throw new CustomHttpBadRequestException("scope", "Scope not found.");
+        if (scope == null) throw new DomainException("scope", "Scope not found.");
         return MapToResponse(scope);
     }
 
     public async Task<CreateResponse> CreateAsync(ScopeCreateRequest request, string? createdBy)
     {
         var existing = await _scopeRepo.GetByScopeNameAsync(request.ScopeName);
-        if (existing != null) throw new CustomHttpBadRequestException("scope", $"Scope '{request.ScopeName}' already exists.");
+        if (existing != null) throw new DomainException("scope", $"Scope '{request.ScopeName}' already exists.");
 
         var scope = new Scope
         {
@@ -62,8 +61,8 @@ public class ScopeService : IScopeService
     public async Task<UpdateResponse> UpdateAsync(Guid id, ScopeUpdateRequest request, string? updatedBy)
     {
         var scope = await _scopeRepo.GetByIdAsync(id);
-        if (scope == null) throw new CustomHttpBadRequestException("scope", "Scope not found.");
-        if (scope.IsSystemScope) throw new CustomHttpBadRequestException("scope", "System scopes cannot be modified.");
+        if (scope == null) throw new DomainException("scope", "Scope not found.");
+        if (scope.IsSystemScope) throw new DomainException("scope", "System scopes cannot be modified.");
         if (request.Claims != null) scope.Claims = request.Claims;
         if (request.IsActive.HasValue) scope.IsActive = request.IsActive.Value;
         _scopeRepo.Update(scope);
@@ -74,8 +73,8 @@ public class ScopeService : IScopeService
     public async Task<DeleteResponse> DeleteAsync(Guid id, string? deletedBy)
     {
         var scope = await _scopeRepo.GetByIdAsync(id);
-        if (scope == null) throw new CustomHttpBadRequestException("scope", "Scope not found.");
-        if (scope.IsSystemScope) throw new CustomHttpBadRequestException("scope", "System scopes cannot be deleted.");
+        if (scope == null) throw new DomainException("scope", "Scope not found.");
+        if (scope.IsSystemScope) throw new DomainException("scope", "System scopes cannot be deleted.");
         scope.DeletedAt = DateTime.UtcNow;
         scope.DeletedBy = deletedBy;
         scope.IsActive = false;
@@ -130,14 +129,14 @@ public class RoleService : IRoleService
     public async Task<RoleResponse> GetByIdAsync(Guid id)
     {
         var role = await _roleRepo.GetByIdAsync(id);
-        if (role == null) throw new CustomHttpBadRequestException("role", "Role not found.");
+        if (role == null) throw new DomainException("role", "Role not found.");
         return await MapToResponseAsync(role);
     }
 
     public async Task<CreateResponse> CreateAsync(RoleCreateRequest request, string? createdBy)
     {
         var existing = await _roleRepo.GetByRoleCodeAsync(request.RoleCode, request.TenantId);
-        if (existing != null) throw new CustomHttpBadRequestException("role", $"Role code '{request.RoleCode}' already exists.");
+        if (existing != null) throw new DomainException("role", $"Role code '{request.RoleCode}' already exists.");
 
         var role = new Role
         {
@@ -153,7 +152,7 @@ public class RoleService : IRoleService
     public async Task<UpdateResponse> UpdateAsync(Guid id, RoleUpdateRequest request, string? updatedBy)
     {
         var role = await _roleRepo.GetByIdAsync(id);
-        if (role == null) throw new CustomHttpBadRequestException("role", "Role not found.");
+        if (role == null) throw new DomainException("role", "Role not found.");
         if (request.IsActive.HasValue) role.IsActive = request.IsActive.Value;
         _roleRepo.Update(role);
         await _unitOfWork.SaveChangesAsync();
@@ -163,7 +162,7 @@ public class RoleService : IRoleService
     public async Task<DeleteResponse> DeleteAsync(Guid id, string? deletedBy)
     {
         var role = await _roleRepo.GetByIdAsync(id);
-        if (role == null) throw new CustomHttpBadRequestException("role", "Role not found.");
+        if (role == null) throw new DomainException("role", "Role not found.");
         role.DeletedAt = DateTime.UtcNow;
         role.DeletedBy = deletedBy;
         role.IsActive = false;
@@ -175,7 +174,7 @@ public class RoleService : IRoleService
     public async Task<UpdateResponse> AssignPermissionsAsync(Guid roleId, AssignPermissionRequest request, string? updatedBy)
     {
         var role = await _roleRepo.GetByIdAsync(roleId);
-        if (role == null) throw new CustomHttpBadRequestException("role", "Role not found.");
+        if (role == null) throw new DomainException("role", "Role not found.");
 
         var existing = await _rolePermissionRepo.GetByRoleIdAsync(roleId);
 
@@ -183,7 +182,7 @@ public class RoleService : IRoleService
         {
             if (existing.Any(rp => rp.PermissionId == permId)) continue;
             var perm = await _permissionRepo.GetByIdAsync(permId);
-            if (perm == null) throw new CustomHttpBadRequestException("role", $"Permission {permId} not found.");
+            if (perm == null) throw new DomainException("role", $"Permission {permId} not found.");
             _rolePermissionRepo.Insert(new RolePermission { RoleId = roleId, PermissionId = permId });
         }
 
@@ -255,14 +254,14 @@ public class PermissionService : IPermissionService
     public async Task<PermissionResponse> GetByIdAsync(Guid id)
     {
         var perm = await _permissionRepo.GetByIdAsync(id);
-        if (perm == null) throw new CustomHttpBadRequestException("permission", "Permission not found.");
+        if (perm == null) throw new DomainException("permission", "Permission not found.");
         return MapToResponse(perm);
     }
 
     public async Task<CreateResponse> CreateAsync(PermissionCreateRequest request, string? createdBy)
     {
         var existing = await _permissionRepo.GetByPermissionCodeAsync(request.PermissionCode, request.TenantId);
-        if (existing != null) throw new CustomHttpBadRequestException("permission", $"Permission code '{request.PermissionCode}' already exists.");
+        if (existing != null) throw new DomainException("permission", $"Permission code '{request.PermissionCode}' already exists.");
 
         var perm = new Permission
         {
@@ -280,7 +279,7 @@ public class PermissionService : IPermissionService
     public async Task<UpdateResponse> UpdateAsync(Guid id, PermissionUpdateRequest request, string? updatedBy)
     {
         var perm = await _permissionRepo.GetByIdAsync(id);
-        if (perm == null) throw new CustomHttpBadRequestException("permission", "Permission not found.");
+        if (perm == null) throw new DomainException("permission", "Permission not found.");
         if (request.Resource != null) perm.Resource = request.Resource;
         if (request.Action != null) perm.Action = request.Action;
         if (request.IsActive.HasValue) perm.IsActive = request.IsActive.Value;
@@ -292,7 +291,7 @@ public class PermissionService : IPermissionService
     public async Task<DeleteResponse> DeleteAsync(Guid id, string? deletedBy)
     {
         var perm = await _permissionRepo.GetByIdAsync(id);
-        if (perm == null) throw new CustomHttpBadRequestException("permission", "Permission not found.");
+        if (perm == null) throw new DomainException("permission", "Permission not found.");
         perm.DeletedAt = DateTime.UtcNow;
         perm.DeletedBy = deletedBy;
         perm.IsActive = false;
@@ -342,7 +341,7 @@ public class ApiKeyService : IApiKeyService
     public async Task<ApiKeyResponse> GetByIdAsync(Guid id)
     {
         var key = await _apiKeyRepo.GetByIdAsync(id);
-        if (key == null) throw new CustomHttpBadRequestException("api_key", "API key not found.");
+        if (key == null) throw new DomainException("api_key", "API key not found.");
         return MapToResponse(key);
     }
 
@@ -375,7 +374,7 @@ public class ApiKeyService : IApiKeyService
     public async Task<DeleteResponse> RevokeAsync(Guid id, string? revokedBy)
     {
         var key = await _apiKeyRepo.GetByIdAsync(id);
-        if (key == null) throw new CustomHttpBadRequestException("api_key", "API key not found.");
+        if (key == null) throw new DomainException("api_key", "API key not found.");
         key.RevokedAt = DateTime.UtcNow;
         key.IsActive = false;
         key.DeletedAt = DateTime.UtcNow;

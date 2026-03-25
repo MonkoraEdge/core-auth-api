@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace MonkoraEdge.Core.Auth.Infrastructure.Repositories;
 
-public class AuditLogRepository : BaseRepository<AuthenticationDbContext, AuditLog>, IAuditLogRepository
+public class AuditLogRepository : AuthRepositoryBase<AuditLog>, IAuditLogRepository
 {
     public AuditLogRepository(AuthenticationDbContext context) : base(context) { }
 

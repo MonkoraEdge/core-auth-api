@@ -1,10 +1,9 @@
 using System.Security.Cryptography;
 using System.Text;
-using BCrypt.Net;
 using MonkoraEdge.Core.Auth.Domain.Services.Interface;
 using OtpNet;
 
-namespace MonkoraEdge.Core.Auth.Domain.Services;
+namespace MonkoraEdge.Core.Auth.Infrastructure.Services.Security;
 
 public class PasswordService : IPasswordService
 {
@@ -54,14 +53,12 @@ public class PasswordService : IPasswordService
         if (string.IsNullOrEmpty(codeVerifier) || string.IsNullOrEmpty(codeChallenge))
             return false;
 
-        // RFC 7636: code_verifier must be 43-128 chars and use unreserved URI charset.
         if (!PkceVerifierRegex.IsMatch(codeVerifier))
             return false;
 
         if (codeChallengeMethod?.ToUpperInvariant() == "PLAIN")
             return codeVerifier == codeChallenge;
 
-        // S256 (default)
         var hashBytes = SHA256.HashData(Encoding.ASCII.GetBytes(codeVerifier));
         var base64 = Convert.ToBase64String(hashBytes)
             .TrimEnd('=').Replace('+', '-').Replace('/', '_');

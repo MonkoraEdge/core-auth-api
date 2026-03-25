@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace MonkoraEdge.Core.Auth.Infrastructure.Repositories;
 
-public class AgreementAcceptRepository : BaseRepository<AuthenticationDbContext, AgreementAccept>, IAgreementAcceptRepository
+public class AgreementAcceptRepository : AuthRepositoryBase<AgreementAccept>, IAgreementAcceptRepository
 {
     public AgreementAcceptRepository(AuthenticationDbContext context) : base(context) { }
 

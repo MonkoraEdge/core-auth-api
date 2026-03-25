@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace MonkoraEdge.Core.Auth.Infrastructure.Repositories;
 
-public class UserTwoFactorRecoveryCodeRepository : BaseRepository<AuthenticationDbContext, UserTwoFactorRecoveryCode>, IUserTwoFactorRecoveryCodeRepository
+public class UserTwoFactorRecoveryCodeRepository : AuthRepositoryBase<UserTwoFactorRecoveryCode>, IUserTwoFactorRecoveryCodeRepository
 {
     public UserTwoFactorRecoveryCodeRepository(AuthenticationDbContext context) : base(context) { }
 

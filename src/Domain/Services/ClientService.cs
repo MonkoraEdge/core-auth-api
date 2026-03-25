@@ -2,10 +2,9 @@ using System.Security.Cryptography;
 using MonkoraEdge.Core.Auth.Domain.AggregatesModel.EntityAggregate;
 using MonkoraEdge.Core.Auth.Domain.AggregatesModel.ClientAggregate;
 using MonkoraEdge.Core.Auth.Domain.AggregatesModel.AuthorizationAggregate.Interfaces;
+using MonkoraEdge.Core.Auth.Domain.Exceptions;
 using MonkoraEdge.Core.Auth.Domain.Services.Interface;
 using MonkoraEdge.Core.DotNet.AggregatesModel.CommonAggregate;
-using MonkoraEdge.Core.DotNet.AggregatesModel.ExceptionAggregate;
-using MonkoraEdge.Core.DotNet.Infrastructure.Interfaces;
 
 namespace MonkoraEdge.Core.Auth.Domain.Services;
 
@@ -34,14 +33,14 @@ public class ClientService : IClientService
     public async Task<ClientResponse> GetByIdAsync(Guid id)
     {
         var client = await _clientRepo.GetByIdAsync(id);
-        if (client == null) throw new CustomHttpBadRequestException("client", "Client not found.");
+        if (client == null) throw new DomainException("client", "Client not found.");
         return await MapToResponseAsync(client);
     }
 
     public async Task<ClientResponse> GetByClientIdAsync(string clientId)
     {
         var client = await _clientRepo.GetByClientIdAsync(clientId);
-        if (client == null) throw new CustomHttpBadRequestException("client", "Client not found.");
+        if (client == null) throw new DomainException("client", "Client not found.");
         return await MapToResponseAsync(client);
     }
 
@@ -124,7 +123,7 @@ public class ClientService : IClientService
     public async Task<UpdateResponse> UpdateAsync(Guid id, ClientUpdateRequest request, string? updatedBy)
     {
         var client = await _clientRepo.GetByIdAsync(id);
-        if (client == null) throw new CustomHttpBadRequestException("client", "Client not found.");
+        if (client == null) throw new DomainException("client", "Client not found.");
 
         if (request.ClientName != null) client.ClientName = request.ClientName;
         if (request.RequirePkce.HasValue) client.RequirePkce = request.RequirePkce.Value;
@@ -167,7 +166,7 @@ public class ClientService : IClientService
     public async Task<DeleteResponse> DeleteAsync(Guid id, string? deletedBy)
     {
         var client = await _clientRepo.GetByIdAsync(id);
-        if (client == null) throw new CustomHttpBadRequestException("client", "Client not found.");
+        if (client == null) throw new DomainException("client", "Client not found.");
         client.DeletedAt = DateTime.UtcNow;
         client.DeletedBy = deletedBy;
         client.IsActive = false;
@@ -179,7 +178,7 @@ public class ClientService : IClientService
     public async Task<ClientSecretResponse> RotateSecretAsync(Guid id, string? updatedBy)
     {
         var client = await _clientRepo.GetByIdAsync(id);
-        if (client == null) throw new CustomHttpBadRequestException("client", "Client not found.");
+        if (client == null) throw new DomainException("client", "Client not found.");
 
         var rawSecret = GenerateClientSecret();
         client.ClientSecretHash = _passwordService.HashPassword(rawSecret);
@@ -197,7 +196,7 @@ public class ClientService : IClientService
     public async Task<UpdateResponse> ActivateAsync(Guid id)
     {
         var client = await _clientRepo.GetByIdAsync(id);
-        if (client == null) throw new CustomHttpBadRequestException("client", "Client not found.");
+        if (client == null) throw new DomainException("client", "Client not found.");
         client.IsActive = true;
         _clientRepo.Update(client);
         await _unitOfWork.SaveChangesAsync();
@@ -207,7 +206,7 @@ public class ClientService : IClientService
     public async Task<UpdateResponse> DeactivateAsync(Guid id)
     {
         var client = await _clientRepo.GetByIdAsync(id);
-        if (client == null) throw new CustomHttpBadRequestException("client", "Client not found.");
+        if (client == null) throw new DomainException("client", "Client not found.");
         client.IsActive = false;
         _clientRepo.Update(client);
         await _unitOfWork.SaveChangesAsync();

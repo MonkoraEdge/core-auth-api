@@ -2,10 +2,9 @@ using MonkoraEdge.Core.Auth.Domain.AggregatesModel.EntityAggregate;
 using MonkoraEdge.Core.Auth.Domain.AggregatesModel.OAuth2Aggregate;
 using MonkoraEdge.Core.Auth.Domain.AggregatesModel.AuthorizationAggregate.Interfaces;
 using MonkoraEdge.Core.Auth.Domain.AggregatesModel.UserAggregate.Interfaces;
+using MonkoraEdge.Core.Auth.Domain.Exceptions;
 using MonkoraEdge.Core.Auth.Domain.Services.Interface;
 using MonkoraEdge.Core.DotNet.AggregatesModel.ConstantAggregate;
-using MonkoraEdge.Core.DotNet.AggregatesModel.ExceptionAggregate;
-using MonkoraEdge.Core.DotNet.Infrastructure.Interfaces;
 
 namespace MonkoraEdge.Core.Auth.Domain.Services;
 
@@ -19,6 +18,7 @@ public class OAuth2Service : IOAuth2Service
     private readonly ITokenService _tokenService;
     private readonly IClientAuthenticator _clientAuth;
     private readonly IPasswordService _passwordService;
+    private readonly IRefreshTokenProcessor _refreshTokenProcessor;
 
     public OAuth2Service(
         IUnitOfWork unitOfWork,
@@ -28,7 +28,8 @@ public class OAuth2Service : IOAuth2Service
         IUserRepository userRepo,
         ITokenService tokenService,
         IClientAuthenticator clientAuth,
-        IPasswordService passwordService)
+        IPasswordService passwordService,
+        IRefreshTokenProcessor refreshTokenProcessor)
     {
         _unitOfWork = unitOfWork;
         _authCodeRepo = authCodeRepo;
@@ -38,6 +39,7 @@ public class OAuth2Service : IOAuth2Service
         _tokenService = tokenService;
         _clientAuth = clientAuth;
         _passwordService = passwordService;
+        _refreshTokenProcessor = refreshTokenProcessor;
     }
 
     public async Task<AuthorizeEndpointResponse> ProcessAuthorizeRequestAsync(AuthorizeRequest request, Guid? authenticatedUserId)
@@ -241,7 +243,7 @@ public class OAuth2Service : IOAuth2Service
             "authorization_code" => await ExchangeAuthorizationCodeAsync(request, clientId, clientSecret, ipAddress, userAgent),
             "client_credentials" => await ClientCredentialsGrantAsync(request, clientId!, clientSecret, ipAddress, userAgent),
             "refresh_token" => await RefreshTokenGrantAsync(request, clientId, clientSecret, ipAddress, userAgent),
-            _ => throw new CustomHttpBadRequestException("token", ErrorCodeType.UNSUPPORTED_GRANT_TYPE)
+            _ => throw new DomainException("token", ErrorCodeType.UNSUPPORTED_GRANT_TYPE)
         };
     }
 
@@ -251,30 +253,30 @@ public class OAuth2Service : IOAuth2Service
         var client = await _clientAuth.AuthenticateAsync(clientId ?? request.ClientId, clientSecret);
 
         if (string.IsNullOrEmpty(request.Code))
-            throw new CustomHttpBadRequestException("token", "code is required.");
+            throw new DomainException("token", "code is required.");
 
         if (string.IsNullOrEmpty(request.RedirectUri))
-            throw new CustomHttpBadRequestException("token", "redirect_uri is required.");
+            throw new DomainException("token", "redirect_uri is required.");
 
         var codeHash = _tokenService.HashToken(request.Code);
         var authCode = await _authCodeRepo.GetByCodeHashAsync(codeHash);
 
         if (authCode == null || authCode.ConsumedAt.HasValue || authCode.ExpiresAt <= DateTime.UtcNow)
-            throw new CustomHttpBadRequestException("token", "Authorization code is invalid, expired, or already used.");
+            throw new DomainException("token", "Authorization code is invalid, expired, or already used.");
 
         if (authCode.ClientId != client.Id)
-            throw new CustomHttpBadRequestException("token", "Code was not issued to this client.");
+            throw new DomainException("token", "Code was not issued to this client.");
 
         if (!string.Equals(authCode.RedirectUri, request.RedirectUri, StringComparison.Ordinal))
-            throw new CustomHttpBadRequestException("token", "redirect_uri mismatch.");
+            throw new DomainException("token", "redirect_uri mismatch.");
 
         if (!string.IsNullOrEmpty(authCode.CodeChallenge))
         {
             if (string.IsNullOrEmpty(request.CodeVerifier))
-                throw new CustomHttpBadRequestException("token", "code_verifier is required.");
+                throw new DomainException("token", "code_verifier is required.");
 
             if (!_passwordService.VerifyPkceCodeVerifier(request.CodeVerifier, authCode.CodeChallenge, authCode.CodeChallengeMethod ?? "S256"))
-                throw new CustomHttpBadRequestException("token", "code_verifier is invalid.");
+                throw new DomainException("token", "code_verifier is invalid.");
         }
 
         // Mark code consumed; generate tokens; commit all three changes in one transaction
@@ -314,14 +316,14 @@ public class OAuth2Service : IOAuth2Service
 
         var allowedGrants = client.AllowedGrantTypes ?? Array.Empty<string>();
         if (!allowedGrants.Contains("client_credentials", StringComparer.OrdinalIgnoreCase))
-            throw new CustomHttpBadRequestException("token", "Client is not authorized for client_credentials grant.");
+            throw new DomainException("token", "Client is not authorized for client_credentials grant.");
 
         var requestedScopes = (request.Scope ?? "").Split(' ', StringSplitOptions.RemoveEmptyEntries);
         var allowedScopes = await _clientAuth.GetAllowedScopeNamesAsync(client.Id);
 
         var invalidScopes = requestedScopes.Except(allowedScopes).ToArray();
         if (invalidScopes.Any())
-            throw new CustomHttpBadRequestException("token", $"Scope(s) not allowed: {string.Join(", ", invalidScopes)}");
+            throw new DomainException("token", $"Scope(s) not allowed: {string.Join(", ", invalidScopes)}");
 
         var finalScopes = requestedScopes.Any() ? requestedScopes : allowedScopes.ToArray();
         var accessToken = await _tokenService.GenerateAccessTokenAsync(
@@ -342,56 +344,24 @@ public class OAuth2Service : IOAuth2Service
         TokenRequest request, string? clientId, string? clientSecret, string? ipAddress, string? userAgent)
     {
         if (string.IsNullOrEmpty(request.RefreshToken))
-            throw new CustomHttpBadRequestException("token", "refresh_token is required.");
+            throw new DomainException("token", "refresh_token is required.");
 
         var client = await _clientAuth.AuthenticateAsync(clientId ?? request.ClientId, clientSecret);
-
-        var tokenHash = _tokenService.HashToken(request.RefreshToken);
-        var rt = await _refreshTokenRepo.GetByTokenHashAsync(tokenHash);
-
-        if (rt == null)
-            throw new CustomHttpBadRequestException("token", "The refresh token is invalid.");
-
-        // Theft detection: a revoked token being re-presented means the rotation chain
-        // is compromised. Revoke the entire family before rejecting.
-        if (rt.RevokedAt.HasValue)
-        {
-            if (rt.FamilyId != Guid.Empty)
-                await _tokenService.RevokeTokenFamilyAsync(rt.FamilyId, "refresh_token_reuse_detected");
-
-            throw new CustomHttpBadRequestException("token",
-                "The refresh token has already been used. All sessions in this chain have been revoked for security.");
-        }
-
-        if (rt.ExpiresAt <= DateTime.UtcNow)
-            throw new CustomHttpBadRequestException("token", "The refresh token has expired.");
+        var rt = await _refreshTokenProcessor.ValidateActiveAsync(
+            request.RefreshToken,
+            "token",
+            "The refresh token is invalid.",
+            "The refresh token has expired.");
 
         if (rt.ClientId != client.Id)
-            throw new CustomHttpBadRequestException("token", "Refresh token was not issued to this client.");
+            throw new DomainException("token", "Refresh token was not issued to this client.");
 
-        var scopes = rt.Scopes;
-        var userId = rt.UserId == Guid.Empty ? (Guid?)null : rt.UserId;
-
-        // Revoke old token, issue new pair, commit atomically
-        rt.RevokedAt = DateTime.UtcNow;
-        _refreshTokenRepo.Update(rt);
-
-        var newAccessToken = await _tokenService.GenerateAccessTokenAsync(
-            client.Id, userId, scopes, "refresh_token", ipAddress, userAgent);
-        var newRefreshToken = await _tokenService.GenerateRefreshTokenAsync(
-            Guid.Empty, client.Id, userId, rt.SessionId, scopes,
-            client.RefreshTokenLifetime, familyId: rt.FamilyId);
-
-        await _unitOfWork.SaveChangesAsync();
-
-        return new TokenResponse
-        {
-            AccessToken = newAccessToken,
-            TokenType = "Bearer",
-            ExpiresIn = client.AccessTokenLifetime,
-            RefreshToken = newRefreshToken,
-            Scope = string.Join(" ", scopes)
-        };
+        return await _refreshTokenProcessor.RotateAsync(
+            rt,
+            client,
+            client.RefreshTokenLifetime,
+            ipAddress,
+            userAgent);
     }
 
     public async Task RevokeAsync(RevocationRequest request, string clientId, string? clientSecret)
@@ -415,20 +385,20 @@ public class OAuth2Service : IOAuth2Service
     {
         var introspect = await _tokenService.IntrospectTokenAsync(accessToken, "access_token");
         if (!introspect.Active || string.IsNullOrEmpty(introspect.Sub))
-            throw new CustomHttpBadRequestException("userinfo", "Invalid or expired access token.");
+            throw new DomainException("userinfo", "Invalid or expired access token.");
 
         var grantedScopes = (introspect.Scope ?? string.Empty)
             .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
         if (!grantedScopes.Contains("openid", StringComparer.Ordinal))
-            throw new CustomHttpBadRequestException("userinfo", "openid scope is required for the UserInfo endpoint.");
+            throw new DomainException("userinfo", "openid scope is required for the UserInfo endpoint.");
 
         if (!Guid.TryParse(introspect.Sub, out var userId))
-            throw new CustomHttpBadRequestException("userinfo", "Invalid subject claim.");
+            throw new DomainException("userinfo", "Invalid subject claim.");
 
         var user = await _userRepo.GetByIdAsync(userId);
         if (user == null)
-            throw new CustomHttpBadRequestException("userinfo", "User not found.");
+            throw new DomainException("userinfo", "User not found.");
 
         return new UserInfoResponse
         {

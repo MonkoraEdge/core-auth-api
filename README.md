@@ -23,6 +23,8 @@
 - Authorization Code Flow บังคับ `PKCE` แบบ `S256`
 - Token endpoint orchestration อยู่ใน Domain (`ProcessTokenRequestAsync`)
 - Refresh token rotation และ reuse detection ถูก implement ใน Domain service
+- Domain เป็นเจ้าของทั้ง `IUnitOfWork` และ `IRepository<TEntity>` abstraction สำหรับการใช้งานของตัวเองแล้ว
+- Domain โยน `DomainException` ของตัวเอง และให้ API translate เป็น HTTP response
 - README นี้ต้องถือเป็น `source of truth` สำหรับภาพรวมของระบบและ workflow การแก้ไข
 
 ---
@@ -58,11 +60,17 @@ core-auth-api/
 
 - รับ request / bind model / extract header / return HTTP result เท่านั้น
 - `OAuth2Controller` ไม่ควรมี business rule สำคัญ
+- legacy `/auth/refresh` เป็น compatibility facade ที่ map request body แล้วส่งต่อเข้า OAuth2 token flow ภายใน
 - `WellKnownController` ใช้ Domain service เพื่อประกอบ metadata response
+- `DomainExceptionHandlingMiddleware` รับผิดชอบ map Domain exception เป็น response schema เดิม
 
 ### Domain Layer
 
 - `OAuth2Service` เป็น orchestration point หลักของ OAuth flow
+- `RefreshTokenProcessor` เป็นจุดกลางสำหรับ validation, reuse detection และ rotation ของ refresh token
+- Domain service ใช้ `IUnitOfWork` abstraction ของตัวเองแล้ว และให้ Infrastructure map implementation เข้ามาใน DI
+- aggregate repository interfaces ใช้ `Domain.Repositories.IRepository<TEntity>` แทน shared repository contract ตรง ๆ
+- Domain exception แยกจาก DotNet HTTP exception แล้ว
 - methods สำคัญปัจจุบัน:
   - `ProcessAuthorizeRequestAsync`
   - `ProcessConsentAsync`
@@ -74,7 +82,12 @@ core-auth-api/
 ### Infrastructure Layer
 
 - EF Core + PostgreSQL
+- crypto/security implementation อยู่ใน Infrastructure
+  - `TokenService` สำหรับ JWT/JWKS/signing
+  - `PasswordService` สำหรับ BCrypt, PKCE, TOTP และ secure token generation
+- `AuthRepositoryBase<TEntity>` ทำหน้าที่ bridge Domain repository contract ไปยัง EF repository base เดิม
 - Repository implementations และ token cleanup background service
+- project nullable context ถูกเปิดแล้วเพื่อลด warning กลุ่ม `CS8632`
 - tables หลักสำหรับ OAuth:
   - authorization codes
   - access tokens
@@ -88,9 +101,15 @@ core-auth-api/
 - redirect URI exact match
 - confidential client ต้องมี `client_secret`
 - refresh token rotation รองรับ family-based revocation
-- legacy `/auth/refresh` path now enforces client authentication for confidential clients
+- legacy `/auth/refresh` path delegates internally to the OAuth2 `refresh_token` flow
 - `/oauth2/userinfo` returns claims only for scopes granted to the access token
 - JWKS endpoint สำหรับ public key discovery
+
+---
+
+## New API Template
+
+- ใช้ [API_TEMPLATE.md](API_TEMPLATE.md) เป็น template สำหรับตั้งต้น API ใหม่ โดยอิง dependency direction, onboarding flow, config checklist, run/migration commands, observability, testing, CI/CD, และ release checklist จาก repository นี้
 
 ---
 
@@ -131,16 +150,13 @@ Domain layer ประกอบด้วย business logic, entities, services �
 
 **Package Dependencies:**
 
-| Package                         | Version |
-| ------------------------------- | ------- |
-| Azure.Identity                  | 1.19.0  |
-| Azure.Security.KeyVault.Keys    | 4.9.0   |
-| BCrypt.Net-Next                 | 4.1.0   |
-| Duende.IdentityModel            | 8.0.1   |
-| Isopoh.Cryptography.Argon2      | 2.0.0   |
-| Microsoft.IdentityModel.Tokens  | 8.16.0  |
-| RabbitMQ.Client                 | 7.2.1   |
-| System.IdentityModel.Tokens.Jwt | 8.16.0  |
+| Package                      | Version |
+| ---------------------------- | ------- |
+| Azure.Identity               | 1.19.0  |
+| Azure.Security.KeyVault.Keys | 4.9.0   |
+| Duende.IdentityModel         | 8.0.1   |
+| Isopoh.Cryptography.Argon2   | 2.0.0   |
+| RabbitMQ.Client              | 7.2.1   |
 
 **Localization Support:** `en`, `ja`, `th`, `zh`
 
@@ -154,7 +170,11 @@ Infrastructure layer จัดการ Database, Repositories และ HTTP Cl
 
 | Package                             | Version |
 | ----------------------------------- | ------- |
+| BCrypt.Net-Next                     | 4.1.0   |
 | Microsoft.EntityFrameworkCore.Tools | 9.0.10  |
+| Microsoft.IdentityModel.Tokens      | 8.16.0  |
+| Otp.NET                             | 1.4.0   |
+| System.IdentityModel.Tokens.Jwt     | 8.16.0  |
 
 **Database:** PostgreSQL ผ่าน EF Core (Npgsql)
 

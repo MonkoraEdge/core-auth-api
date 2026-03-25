@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace MonkoraEdge.Core.Auth.Infrastructure.Repositories;
 
-public class UserRepository : BaseRepository<AuthenticationDbContext, User>, IUserRepository
+public class UserRepository : AuthRepositoryBase<User>, IUserRepository
 {
     public UserRepository(AuthenticationDbContext context) : base(context) { }
 

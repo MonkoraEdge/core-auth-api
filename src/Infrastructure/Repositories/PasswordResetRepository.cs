@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace MonkoraEdge.Core.Auth.Infrastructure.Repositories;
 
-public class PasswordResetRepository : BaseRepository<AuthenticationDbContext, PasswordReset>, IPasswordResetRepository
+public class PasswordResetRepository : AuthRepositoryBase<PasswordReset>, IPasswordResetRepository
 {
     public PasswordResetRepository(AuthenticationDbContext context) : base(context) { }
 

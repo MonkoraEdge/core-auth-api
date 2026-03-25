@@ -1,5 +1,4 @@
 using MonkoraEdge.Core.Auth.Domain.AggregatesModel.AuthAggregate;
-using MonkoraEdge.Core.Auth.Domain.AggregatesModel.OAuth2Aggregate;
 using MonkoraEdge.Core.DotNet.AggregatesModel.CommonAggregate;
 
 namespace MonkoraEdge.Core.Auth.Domain.Services.Interface;
@@ -14,9 +13,6 @@ public interface IAuthService
 
     /// <summary>Logout a session, revoke tokens</summary>
     Task LogoutAsync(Guid userId, string? refreshToken, bool allDevices, string? ipAddress);
-
-    /// <summary>Refresh access token using a valid refresh token</summary>
-    Task<TokenResponse> RefreshTokenAsync(string refreshToken, string? clientId, string? clientSecret, string? ipAddress, string? userAgent);
 
     /// <summary>Send password reset email</summary>
     Task ForgotPasswordAsync(ForgotPasswordRequest request);

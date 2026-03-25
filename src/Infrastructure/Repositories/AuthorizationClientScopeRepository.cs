@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace MonkoraEdge.Core.Auth.Infrastructure.Repositories;
 
-public class AuthorizationClientScopeRepository : BaseRepository<AuthenticationDbContext, AuthorizationClientScope>, IAuthorizationClientScopeRepository
+public class AuthorizationClientScopeRepository : AuthRepositoryBase<AuthorizationClientScope>, IAuthorizationClientScopeRepository
 {
     public AuthorizationClientScopeRepository(AuthenticationDbContext context) : base(context) { }
 

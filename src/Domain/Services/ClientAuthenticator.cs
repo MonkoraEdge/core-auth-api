@@ -1,7 +1,7 @@
 using MonkoraEdge.Core.Auth.Domain.AggregatesModel.AuthorizationAggregate.Interfaces;
 using MonkoraEdge.Core.Auth.Domain.AggregatesModel.EntityAggregate;
+using MonkoraEdge.Core.Auth.Domain.Exceptions;
 using MonkoraEdge.Core.Auth.Domain.Services.Interface;
-using MonkoraEdge.Core.DotNet.AggregatesModel.ExceptionAggregate;
 
 namespace MonkoraEdge.Core.Auth.Domain.Services;
 
@@ -36,11 +36,11 @@ public sealed class ClientAuthenticator : IClientAuthenticator
     public async Task<AuthorizationClient> LoadAsync(string clientId)
     {
         if (string.IsNullOrEmpty(clientId))
-            throw new CustomHttpBadRequestException("authorize", "client_id is required.");
+            throw new DomainException("authorize", "client_id is required.");
 
         var client = await _clientRepo.GetByClientIdAsync(clientId);
         if (client == null || !client.IsActive)
-            throw new CustomHttpBadRequestException("authorize", "Client not found or inactive.");
+            throw new DomainException("authorize", "Client not found or inactive.");
 
         return client;
     }
@@ -48,24 +48,24 @@ public sealed class ClientAuthenticator : IClientAuthenticator
     public async Task<AuthorizationClient> AuthenticateAsync(string? clientId, string? clientSecret)
     {
         if (string.IsNullOrEmpty(clientId))
-            throw new CustomHttpBadRequestException("token", "client_id is required.");
+            throw new DomainException("token", "client_id is required.");
 
         var client = await _clientRepo.GetByClientIdAsync(clientId);
         if (client == null || !client.IsActive)
-            throw new CustomHttpBadRequestException("token", "Invalid client.");
+            throw new DomainException("token", "Invalid client.");
 
         if (client.ClientType == "CONFIDENTIAL")
         {
             if (string.IsNullOrEmpty(clientSecret))
-                throw new CustomHttpBadRequestException("token",
+                throw new DomainException("token",
                     "client_secret is required for confidential clients.");
 
             // bcrypt constant-time comparison — prevents timing-based enumeration
             if (!_passwordService.VerifyPassword(clientSecret, client.ClientSecretHash))
-                throw new CustomHttpBadRequestException("token", "Invalid client credentials.");
+                throw new DomainException("token", "Invalid client credentials.");
 
             if (client.ClientSecretExpiresAt.HasValue && client.ClientSecretExpiresAt < DateTime.UtcNow)
-                throw new CustomHttpBadRequestException("token",
+                throw new DomainException("token",
                     "Client secret has expired. Please rotate the secret.");
         }
 

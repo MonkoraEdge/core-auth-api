@@ -5,10 +5,9 @@ using MonkoraEdge.Core.Auth.Domain.AggregatesModel.UserAggregate.Interfaces;
 using MonkoraEdge.Core.Auth.Domain.AggregatesModel.AuthorizationAggregate.Interfaces;
 using MonkoraEdge.Core.Auth.Domain.AggregatesModel.RoleAggregate.Interfaces;
 using MonkoraEdge.Core.Auth.Domain.AggregatesModel.AuditAggregate.Interfaces;
+using MonkoraEdge.Core.Auth.Domain.Exceptions;
 using MonkoraEdge.Core.Auth.Domain.Services.Interface;
 using MonkoraEdge.Core.DotNet.AggregatesModel.CommonAggregate;
-using MonkoraEdge.Core.DotNet.AggregatesModel.ExceptionAggregate;
-using MonkoraEdge.Core.DotNet.Infrastructure.Interfaces;
 
 namespace MonkoraEdge.Core.Auth.Domain.Services;
 
@@ -28,7 +27,6 @@ public class AuthService : IAuthService
     private readonly IRefreshTokenRepository _refreshTokenRepo;
     private readonly ITokenService _tokenService;
     private readonly IPasswordService _passwordService;
-    private readonly IClientAuthenticator _clientAuthenticator;
     private readonly IAuthorizationClientRepository _clientRepo;
     private readonly int _signinFailedMinutes;
 
@@ -47,7 +45,6 @@ public class AuthService : IAuthService
         IRefreshTokenRepository refreshTokenRepo,
         ITokenService tokenService,
         IPasswordService passwordService,
-        IClientAuthenticator clientAuthenticator,
         IAuthorizationClientRepository clientRepo,
         int signinFailedMinutes = 15)
     {
@@ -65,7 +62,6 @@ public class AuthService : IAuthService
         _refreshTokenRepo = refreshTokenRepo;
         _tokenService = tokenService;
         _passwordService = passwordService;
-        _clientAuthenticator = clientAuthenticator;
         _clientRepo = clientRepo;
         _signinFailedMinutes = signinFailedMinutes;
     }
@@ -78,33 +74,33 @@ public class AuthService : IAuthService
             var since = DateTime.UtcNow.AddMinutes(-_signinFailedMinutes);
             var failCount = await _loginAttemptRepo.CountFailedByIpAddressAsync(ipAddress, since);
             if (failCount >= 10)
-                throw new CustomHttpBadRequestException("login", "Too many failed attempts from this IP. Try again later.");
+                throw new DomainException("login", "Too many failed attempts from this IP. Try again later.");
         }
 
         var user = await _userRepo.GetByEmailAsync(request.Username);
         if (user == null)
         {
             await RecordLoginAttemptAsync(null, request.Username, null, ipAddress, userAgent, false, "user_not_found", request.ClientId);
-            throw new CustomHttpBadRequestException("login", "Invalid username or password.");
+            throw new DomainException("login", "Invalid username or password.");
         }
 
         var identity = await _identityRepo.GetByUserIdAsync(user.Id);
         if (identity == null || string.IsNullOrEmpty(identity.PasswordHash))
         {
             await RecordLoginAttemptAsync(user.Id, request.Username, null, ipAddress, userAgent, false, "no_password", request.ClientId);
-            throw new CustomHttpBadRequestException("login", "Invalid username or password.");
+            throw new DomainException("login", "Invalid username or password.");
         }
 
         if (identity.LockedUntil.HasValue && identity.LockedUntil > DateTime.UtcNow)
         {
             await RecordLoginAttemptAsync(user.Id, request.Username, null, ipAddress, userAgent, false, "account_locked", request.ClientId);
-            throw new CustomHttpBadRequestException("login", $"Account is locked until {identity.LockedUntil:u}.");
+            throw new DomainException("login", $"Account is locked until {identity.LockedUntil:u}.");
         }
 
         if (!user.IsActive || user.Status == "SUSPENDED")
         {
             await RecordLoginAttemptAsync(user.Id, request.Username, null, ipAddress, userAgent, false, "account_inactive", request.ClientId);
-            throw new CustomHttpBadRequestException("login", "Account is disabled.");
+            throw new DomainException("login", "Account is disabled.");
         }
 
         if (!_passwordService.VerifyPassword(request.Password, identity.PasswordHash))
@@ -116,7 +112,7 @@ public class AuthService : IAuthService
 
             await RecordLoginAttemptAsync(user.Id, request.Username, null, ipAddress, userAgent, false, "invalid_password", request.ClientId);
             await _unitOfWork.SaveChangesAsync();
-            throw new CustomHttpBadRequestException("login", "Invalid username or password.");
+            throw new DomainException("login", "Invalid username or password.");
         }
 
         identity.FailedAttempts = 0;
@@ -166,7 +162,7 @@ public class AuthService : IAuthService
             {
                 await RecordLoginAttemptAsync(user.Id, request.Username, null, ipAddress, userAgent, false, "invalid_2fa_code", request.ClientId);
                 await _unitOfWork.SaveChangesAsync();
-                throw new CustomHttpBadRequestException("login", "Invalid two-factor authentication code.");
+                throw new DomainException("login", "Invalid two-factor authentication code.");
             }
         }
 
@@ -176,11 +172,11 @@ public class AuthService : IAuthService
     public async Task<CreateResponse> RegisterAsync(RegisterRequest request, string? ipAddress)
     {
         if (!_passwordService.MeetsPasswordPolicy(request.Password))
-            throw new CustomHttpBadRequestException("register", "Password does not meet policy requirements (min 8 chars, upper, lower, digit, special).");
+            throw new DomainException("register", "Password does not meet policy requirements (min 8 chars, upper, lower, digit, special).");
 
         var existingUser = await _userRepo.GetByEmailAsync(request.Email.ToLowerInvariant());
         if (existingUser != null)
-            throw new CustomHttpBadRequestException("register", "Email address is already registered.");
+            throw new DomainException("register", "Email address is already registered.");
 
         var user = new User
         {
@@ -236,69 +232,6 @@ public class AuthService : IAuthService
         }
     }
 
-    public async Task<TokenResponse> RefreshTokenAsync(string refreshToken, string? clientId, string? clientSecret, string? ipAddress, string? userAgent)
-    {
-        var tokenHash = _tokenService.HashToken(refreshToken);
-        var rt = await _refreshTokenRepo.GetByTokenHashAsync(tokenHash);
-
-        if (rt == null)
-            throw new CustomHttpBadRequestException("refresh_token", "Invalid or expired refresh token.");
-
-        if (rt.RevokedAt.HasValue)
-        {
-            if (rt.FamilyId != Guid.Empty)
-                await _tokenService.RevokeTokenFamilyAsync(rt.FamilyId, "refresh_token_reuse_detected");
-
-            throw new CustomHttpBadRequestException("refresh_token",
-                "The refresh token has already been used. All sessions in this chain have been revoked for security.");
-        }
-
-        if (rt.ExpiresAt <= DateTime.UtcNow)
-            throw new CustomHttpBadRequestException("refresh_token", "Invalid or expired refresh token.");
-
-        var tokenClient = await _clientRepo.GetByIdAsync(rt.ClientId);
-        if (tokenClient == null || !tokenClient.IsActive)
-            throw new CustomHttpBadRequestException("refresh_token", "Client not found or inactive.");
-
-        if (string.Equals(tokenClient.ClientType, "CONFIDENTIAL", StringComparison.OrdinalIgnoreCase))
-        {
-            if (string.IsNullOrEmpty(clientId))
-                throw new CustomHttpBadRequestException("refresh_token", "client_id is required for confidential clients.");
-
-            var authenticatedClient = await _clientAuthenticator.AuthenticateAsync(clientId, clientSecret);
-            if (authenticatedClient.Id != rt.ClientId)
-                throw new CustomHttpBadRequestException("refresh_token", "Client mismatch.");
-        }
-        else if (!string.IsNullOrEmpty(clientId))
-        {
-            var providedClient = await _clientRepo.GetByClientIdAsync(clientId);
-            if (providedClient == null || providedClient.Id != rt.ClientId)
-                throw new CustomHttpBadRequestException("refresh_token", "Client mismatch.");
-        }
-
-        // Rotate: revoke old, issue new
-        rt.RevokedAt = DateTime.UtcNow;
-        _refreshTokenRepo.Update(rt);
-
-        var scopes = rt.Scopes;
-        var newAccessToken = await _tokenService.GenerateAccessTokenAsync(
-            rt.ClientId, rt.UserId == Guid.Empty ? null : rt.UserId, scopes, "refresh_token", ipAddress, userAgent);
-        var newRefreshToken = await _tokenService.GenerateRefreshTokenAsync(
-            Guid.Empty, rt.ClientId, rt.UserId == Guid.Empty ? null : rt.UserId, rt.SessionId, scopes,
-            (int)(rt.ExpiresAt - rt.IssuedAt).TotalSeconds, familyId: rt.FamilyId);
-
-        await _unitOfWork.SaveChangesAsync();
-
-        return new TokenResponse
-        {
-            AccessToken = newAccessToken,
-            TokenType = "Bearer",
-            ExpiresIn = tokenClient.AccessTokenLifetime,
-            RefreshToken = newRefreshToken,
-            Scope = string.Join(" ", scopes)
-        };
-    }
-
     public async Task ForgotPasswordAsync(ForgotPasswordRequest request)
     {
         var user = await _userRepo.GetByEmailAsync(request.Email.ToLowerInvariant());
@@ -320,25 +253,25 @@ public class AuthService : IAuthService
     public async Task<UpdateResponse> ResetPasswordAsync(ResetPasswordRequest request)
     {
         if (!_passwordService.MeetsPasswordPolicy(request.NewPassword))
-            throw new CustomHttpBadRequestException("reset_password", "Password does not meet policy requirements.");
+            throw new DomainException("reset_password", "Password does not meet policy requirements.");
 
         var tokenHash = _passwordService.HashSha256(request.Token);
         var reset = await _passwordResetRepo.GetByTokenHashAsync(tokenHash);
 
         if (reset == null || reset.ExpiresAt <= DateTime.UtcNow || reset.UsedAt.HasValue)
-            throw new CustomHttpBadRequestException("reset_password", "Reset token is invalid or has expired.");
+            throw new DomainException("reset_password", "Reset token is invalid or has expired.");
 
         var user = await _userRepo.GetByIdAsync(reset.UserId);
         if (user == null || !string.Equals(user.Email, request.Email, StringComparison.OrdinalIgnoreCase))
-            throw new CustomHttpBadRequestException("reset_password", "Invalid request.");
+            throw new DomainException("reset_password", "Invalid request.");
 
         var identity = await _identityRepo.GetByUserIdAsync(user.Id);
         if (identity == null)
-            throw new CustomHttpBadRequestException("reset_password", "User identity not found.");
+            throw new DomainException("reset_password", "User identity not found.");
 
         var history = await _passwordHistoryRepo.GetByUserIdAsync(user.Id, 5);
         if (history.Any(h => _passwordService.VerifyPassword(request.NewPassword, h.PasswordHash)))
-            throw new CustomHttpBadRequestException("reset_password", "Cannot reuse a recent password.");
+            throw new DomainException("reset_password", "Cannot reuse a recent password.");
 
         var oldHash = identity.PasswordHash ?? string.Empty;
         identity.PasswordHash = _passwordService.HashPassword(request.NewPassword);
@@ -365,18 +298,18 @@ public class AuthService : IAuthService
     public async Task<UpdateResponse> ChangePasswordAsync(Guid userId, ChangePasswordRequest request)
     {
         if (!_passwordService.MeetsPasswordPolicy(request.NewPassword))
-            throw new CustomHttpBadRequestException("change_password", "Password does not meet policy requirements.");
+            throw new DomainException("change_password", "Password does not meet policy requirements.");
 
         var identity = await _identityRepo.GetByUserIdAsync(userId);
         if (identity == null || string.IsNullOrEmpty(identity.PasswordHash))
-            throw new CustomHttpBadRequestException("change_password", "Identity not found.");
+            throw new DomainException("change_password", "Identity not found.");
 
         if (!_passwordService.VerifyPassword(request.CurrentPassword, identity.PasswordHash))
-            throw new CustomHttpBadRequestException("change_password", "Current password is incorrect.");
+            throw new DomainException("change_password", "Current password is incorrect.");
 
         var history = await _passwordHistoryRepo.GetByUserIdAsync(userId, 5);
         if (history.Any(h => _passwordService.VerifyPassword(request.NewPassword, h.PasswordHash)))
-            throw new CustomHttpBadRequestException("change_password", "Cannot reuse a recent password.");
+            throw new DomainException("change_password", "Cannot reuse a recent password.");
 
         var oldHash = identity.PasswordHash;
         identity.PasswordHash = _passwordService.HashPassword(request.NewPassword);
@@ -415,10 +348,10 @@ public class AuthService : IAuthService
         var verif = await _emailVerifRepo.GetByTokenHashAsync(tokenHash);
 
         if (verif == null || verif.ExpiresAt <= DateTime.UtcNow || verif.VerifiedAt.HasValue)
-            throw new CustomHttpBadRequestException("verify_email", "Token is invalid or has expired.");
+            throw new DomainException("verify_email", "Token is invalid or has expired.");
 
         if (!string.Equals(verif.Email, request.Email, StringComparison.OrdinalIgnoreCase))
-            throw new CustomHttpBadRequestException("verify_email", "Email does not match.");
+            throw new DomainException("verify_email", "Email does not match.");
 
         verif.VerifiedAt = DateTime.UtcNow;
         _emailVerifRepo.Update(verif);
@@ -438,7 +371,7 @@ public class AuthService : IAuthService
     public async Task<TwoFactorSetupResponse> SetupTwoFactorAsync(Guid userId, TwoFactorSetupRequest request)
     {
         var user = await _userRepo.GetByIdAsync(userId);
-        if (user == null) throw new CustomHttpBadRequestException("2fa_setup", "User not found.");
+        if (user == null) throw new DomainException("2fa_setup", "User not found.");
 
         var response = new TwoFactorSetupResponse { DeviceType = request.DeviceType };
 
@@ -475,13 +408,13 @@ public class AuthService : IAuthService
         var settings = await _twoFactorRepo.GetByUserIdAsync(userId);
         var pending = settings.FirstOrDefault(s => s.DeviceType == request.DeviceType && !s.IsActive);
         if (pending == null)
-            throw new CustomHttpBadRequestException("2fa_enable", "No pending 2FA setup found for this device type.");
+            throw new DomainException("2fa_enable", "No pending 2FA setup found for this device type.");
 
         bool valid = request.DeviceType == "TOTP"
             && _passwordService.VerifyTotpCode(pending.SecretKey!, request.Code);
 
         if (!valid)
-            throw new CustomHttpBadRequestException("2fa_enable", "Invalid verification code.");
+            throw new DomainException("2fa_enable", "Invalid verification code.");
 
         pending.IsActive = true;
         pending.VerifiedAt = DateTime.UtcNow;
@@ -512,7 +445,7 @@ public class AuthService : IAuthService
     {
         var identity = await _identityRepo.GetByUserIdAsync(userId);
         if (identity == null || !_passwordService.VerifyPassword(request.Password, identity.PasswordHash ?? ""))
-            throw new CustomHttpBadRequestException("2fa_disable", "Invalid password.");
+            throw new DomainException("2fa_disable", "Invalid password.");
 
         var settings = await _twoFactorRepo.GetByUserIdAsync(userId);
         foreach (var s in settings.Where(s => s.IsActive))
@@ -530,16 +463,16 @@ public class AuthService : IAuthService
         var settings = await _twoFactorRepo.GetByUserIdAsync(userId);
         var setting = settings.FirstOrDefault(s => s.DeviceType == deviceType && s.IsActive);
         if (setting == null)
-            throw new CustomHttpBadRequestException("2fa_verify", "2FA is not configured for this device type.");
+            throw new DomainException("2fa_verify", "2FA is not configured for this device type.");
 
         bool valid = deviceType == "TOTP"
             && _passwordService.VerifyTotpCode(setting.SecretKey!, code);
 
         if (!valid)
-            throw new CustomHttpBadRequestException("2fa_verify", "Invalid 2FA code.");
+            throw new DomainException("2fa_verify", "Invalid 2FA code.");
 
         var user = await _userRepo.GetByIdAsync(userId);
-        if (user == null) throw new CustomHttpBadRequestException("2fa_verify", "User not found.");
+        if (user == null) throw new DomainException("2fa_verify", "User not found.");
 
         return await IssueTokensAndFinalizeLoginAsync(user, null, ipAddress, userAgent);
     }

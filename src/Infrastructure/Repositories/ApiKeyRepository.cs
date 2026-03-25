@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace MonkoraEdge.Core.Auth.Infrastructure.Repositories;
 
-public class ApiKeyRepository : BaseRepository<AuthenticationDbContext, ApiKey>, IApiKeyRepository
+public class ApiKeyRepository : AuthRepositoryBase<ApiKey>, IApiKeyRepository
 {
     public ApiKeyRepository(AuthenticationDbContext context) : base(context) { }
 

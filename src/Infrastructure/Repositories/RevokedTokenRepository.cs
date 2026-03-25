@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace MonkoraEdge.Core.Auth.Infrastructure.Repositories;
 
-public class RevokedTokenRepository : BaseRepository<AuthenticationDbContext, RevokedToken>, IRevokedTokenRepository
+public class RevokedTokenRepository : AuthRepositoryBase<RevokedToken>, IRevokedTokenRepository
 {
     public RevokedTokenRepository(AuthenticationDbContext context) : base(context) { }
 

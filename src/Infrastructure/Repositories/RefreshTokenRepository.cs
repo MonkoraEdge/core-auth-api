@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace MonkoraEdge.Core.Auth.Infrastructure.Repositories;
 
-public class RefreshTokenRepository : BaseRepository<AuthenticationDbContext, RefreshToken>, IRefreshTokenRepository
+public class RefreshTokenRepository : AuthRepositoryBase<RefreshToken>, IRefreshTokenRepository
 {
     public RefreshTokenRepository(AuthenticationDbContext context) : base(context) { }
 
