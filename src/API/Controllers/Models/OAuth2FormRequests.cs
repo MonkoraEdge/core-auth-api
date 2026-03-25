@@ -7,6 +7,7 @@ namespace MonkoraEdge.Core.Auth.API.Controllers;
 
 public class TokenFormRequest
 {
+    [System.ComponentModel.DataAnnotations.Required]
     [Microsoft.AspNetCore.Mvc.ModelBinder(Name = "grant_type")]   public string? GrantType { get; set; }
     [Microsoft.AspNetCore.Mvc.ModelBinder(Name = "code")]         public string? Code { get; set; }
     [Microsoft.AspNetCore.Mvc.ModelBinder(Name = "redirect_uri")] public string? RedirectUri { get; set; }
@@ -21,19 +22,23 @@ public class TokenFormRequest
 
 public class RevocationFormRequest
 {
+    [System.ComponentModel.DataAnnotations.Required]
     [Microsoft.AspNetCore.Mvc.ModelBinder(Name = "token")]           public string Token { get; set; }
     [Microsoft.AspNetCore.Mvc.ModelBinder(Name = "token_type_hint")] public string? TokenTypeHint { get; set; }
 }
 
 public class IntrospectFormRequest
 {
+    [System.ComponentModel.DataAnnotations.Required]
     [Microsoft.AspNetCore.Mvc.ModelBinder(Name = "token")]           public string Token { get; set; }
     [Microsoft.AspNetCore.Mvc.ModelBinder(Name = "token_type_hint")] public string? TokenTypeHint { get; set; }
 }
 
 public class ConsentSubmitRequest
 {
+    [System.ComponentModel.DataAnnotations.Required]
     public string ClientId { get; set; }
+    [System.ComponentModel.DataAnnotations.Required]
     public string RedirectUri { get; set; }
     public string? Scope { get; set; }
     public string? State { get; set; }

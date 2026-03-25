@@ -161,7 +161,7 @@ public class OAuth2Service : IOAuth2Service
         if (authCode.ClientId != client.Id)
             throw new CustomHttpBadRequestException("token", "Code was not issued to this client.");
 
-        if (!string.Equals(authCode.RedirectUri, request.RedirectUri, StringComparison.OrdinalIgnoreCase))
+        if (!string.Equals(authCode.RedirectUri, request.RedirectUri, StringComparison.Ordinal))
             throw new CustomHttpBadRequestException("token", "redirect_uri mismatch.");
 
         if (!string.IsNullOrEmpty(authCode.CodeChallenge))

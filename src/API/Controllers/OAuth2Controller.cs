@@ -3,6 +3,7 @@ using MonkoraEdge.Core.Auth.Domain.AggregatesModel.OAuth2Aggregate;
 using MonkoraEdge.Core.Auth.Domain.Services.Interface;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.Net.Http.Headers;
 
 namespace MonkoraEdge.Core.Auth.API.Controllers;
 
@@ -86,16 +87,17 @@ public class OAuth2Controller : ControllerBase
         };
 
         var code = await _oauth2Service.IssueAuthorizationCodeAsync(authorizeReq, userId.Value, request.RememberConsent);
-        return Ok(new { code, state = request.State, redirect_uri = request.RedirectUri });
+        var redirectUrl = BuildRedirectUrl(request.RedirectUri, code, request.State);
+        return Redirect(redirectUrl);
     }
 
     /// <summary>Token endpoint — exchange authorization code, client credentials, or refresh token for tokens</summary>
     [HttpPost("token")]
-    [Consumes("application/x-www-form-urlencoded", "application/json")]
+    [Consumes("application/x-www-form-urlencoded")]
     [Produces("application/json")]
-    public async Task<IActionResult> Token([FromForm] TokenFormRequest formRequest, [FromBody] TokenRequest? jsonRequest)
+    public async Task<IActionResult> Token([FromForm] TokenFormRequest formRequest)
     {
-        var request = jsonRequest ?? MapFormToTokenRequest(formRequest);
+        var request = MapFormToTokenRequest(formRequest);
         ExtractClientCredentials(out var clientId, out var clientSecret, request);
 
         TokenResponse response = request.GrantType?.ToLower() switch
@@ -114,10 +116,10 @@ public class OAuth2Controller : ControllerBase
 
     /// <summary>Token revocation endpoint (RFC 7009)</summary>
     [HttpPost("revoke")]
-    [Consumes("application/x-www-form-urlencoded", "application/json")]
-    public async Task<IActionResult> Revoke([FromForm] RevocationFormRequest formRequest, [FromBody] RevocationRequest? jsonRequest)
+    [Consumes("application/x-www-form-urlencoded")]
+    public async Task<IActionResult> Revoke([FromForm] RevocationFormRequest formRequest)
     {
-        var request = jsonRequest ?? new RevocationRequest
+        var request = new RevocationRequest
         {
             Token = formRequest.Token,
             TokenTypeHint = formRequest.TokenTypeHint
@@ -129,10 +131,10 @@ public class OAuth2Controller : ControllerBase
 
     /// <summary>Token introspection endpoint (RFC 7662)</summary>
     [HttpPost("introspect")]
-    [Consumes("application/x-www-form-urlencoded", "application/json")]
-    public async Task<IActionResult> Introspect([FromForm] IntrospectFormRequest formRequest, [FromBody] IntrospectRequest? jsonRequest)
+    [Consumes("application/x-www-form-urlencoded")]
+    public async Task<IActionResult> Introspect([FromForm] IntrospectFormRequest formRequest)
     {
-        var request = jsonRequest ?? new IntrospectRequest
+        var request = new IntrospectRequest
         {
             Token = formRequest.Token,
             TokenTypeHint = formRequest.TokenTypeHint
@@ -147,7 +149,10 @@ public class OAuth2Controller : ControllerBase
     [Authorize]
     public async Task<IActionResult> UserInfo()
     {
-        var token = Request.Headers.Authorization.ToString().Replace("Bearer ", "");
+        var headerValue = Request.Headers[HeaderNames.Authorization].ToString();
+        var token = headerValue.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)
+            ? headerValue["Bearer ".Length..].Trim()
+            : string.Empty;
         if (string.IsNullOrEmpty(token)) return Unauthorized();
         var result = await _oauth2Service.GetUserInfoAsync(token);
         return Ok(result);

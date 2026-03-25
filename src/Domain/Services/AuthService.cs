@@ -238,7 +238,19 @@ public class AuthService : IAuthService
         var tokenHash = _tokenService.HashToken(refreshToken);
         var rt = await _refreshTokenRepo.GetByTokenHashAsync(tokenHash);
 
-        if (rt == null || rt.RevokedAt.HasValue || rt.ExpiresAt <= DateTime.UtcNow)
+        if (rt == null)
+            throw new CustomHttpBadRequestException("refresh_token", "Invalid or expired refresh token.");
+
+        if (rt.RevokedAt.HasValue)
+        {
+            if (rt.FamilyId != Guid.Empty)
+                await _tokenService.RevokeTokenFamilyAsync(rt.FamilyId, "refresh_token_reuse_detected");
+
+            throw new CustomHttpBadRequestException("refresh_token",
+                "The refresh token has already been used. All sessions in this chain have been revoked for security.");
+        }
+
+        if (rt.ExpiresAt <= DateTime.UtcNow)
             throw new CustomHttpBadRequestException("refresh_token", "Invalid or expired refresh token.");
 
         if (!string.IsNullOrEmpty(clientId))
@@ -257,7 +269,9 @@ public class AuthService : IAuthService
             rt.ClientId, rt.UserId == Guid.Empty ? null : rt.UserId, scopes, "refresh_token", ipAddress, userAgent);
         var newRefreshToken = await _tokenService.GenerateRefreshTokenAsync(
             Guid.Empty, rt.ClientId, rt.UserId == Guid.Empty ? null : rt.UserId, rt.SessionId, scopes,
-            (int)(rt.ExpiresAt - rt.IssuedAt).TotalSeconds);
+            (int)(rt.ExpiresAt - rt.IssuedAt).TotalSeconds, familyId: rt.FamilyId);
+
+        await _unitOfWork.SaveChangesAsync();
 
         return new TokenResponse
         {

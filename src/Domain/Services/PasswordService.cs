@@ -8,6 +8,9 @@ namespace MonkoraEdge.Core.Auth.Domain.Services;
 
 public class PasswordService : IPasswordService
 {
+    private static readonly System.Text.RegularExpressions.Regex PkceVerifierRegex =
+        new("^[A-Za-z0-9\\-._~]{43,128}$", System.Text.RegularExpressions.RegexOptions.Compiled);
+
     public string HashPassword(string password) =>
         BCrypt.Net.BCrypt.HashPassword(password, workFactor: 12);
 
@@ -49,6 +52,10 @@ public class PasswordService : IPasswordService
     public bool VerifyPkceCodeVerifier(string codeVerifier, string codeChallenge, string codeChallengeMethod)
     {
         if (string.IsNullOrEmpty(codeVerifier) || string.IsNullOrEmpty(codeChallenge))
+            return false;
+
+        // RFC 7636: code_verifier must be 43-128 chars and use unreserved URI charset.
+        if (!PkceVerifierRegex.IsMatch(codeVerifier))
             return false;
 
         if (codeChallengeMethod?.ToUpperInvariant() == "PLAIN")
