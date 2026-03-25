@@ -108,7 +108,7 @@ public static class ServiceCollectionExtensions
                 m.GetRequiredService<IRevokedTokenRepository>(),
                 m.GetRequiredService<IUserRepository>(),
                 opts.OAUTH2_SIGNED_PRIVATE_KEY,
-                opts.AUTH_JWKS_ENDPOINT,
+                opts.AUTH_ISSUER,
                 opts.TOKEN_EXPIRES_IN_MINUTES * 60);
         });
 
@@ -131,6 +131,7 @@ public static class ServiceCollectionExtensions
                 m.GetRequiredService<IRefreshTokenRepository>(),
                 m.GetRequiredService<ITokenService>(),
                 m.GetRequiredService<IPasswordService>(),
+                m.GetRequiredService<IClientAuthenticator>(),
                 m.GetRequiredService<IAuthorizationClientRepository>(),
                 opts.SIGNIN_FAILED_IN_MINUTES);
         });

@@ -417,6 +417,12 @@ public class OAuth2Service : IOAuth2Service
         if (!introspect.Active || string.IsNullOrEmpty(introspect.Sub))
             throw new CustomHttpBadRequestException("userinfo", "Invalid or expired access token.");
 
+        var grantedScopes = (introspect.Scope ?? string.Empty)
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        if (!grantedScopes.Contains("openid", StringComparer.Ordinal))
+            throw new CustomHttpBadRequestException("userinfo", "openid scope is required for the UserInfo endpoint.");
+
         if (!Guid.TryParse(introspect.Sub, out var userId))
             throw new CustomHttpBadRequestException("userinfo", "Invalid subject claim.");
 
@@ -427,12 +433,12 @@ public class OAuth2Service : IOAuth2Service
         return new UserInfoResponse
         {
             Sub = user.Id.ToString(),
-            Name = user.DisplayName,
-            Email = user.Email,
-            EmailVerified = user.EmailVerified,
-            PhoneNumber = user.PhoneNumber,
-            Locale = user.LocaleCode,
-            Zoneinfo = user.Zoneinfo
+            Name = grantedScopes.Contains("profile", StringComparer.Ordinal) ? user.DisplayName : null,
+            Email = grantedScopes.Contains("email", StringComparer.Ordinal) ? user.Email : null,
+            EmailVerified = grantedScopes.Contains("email", StringComparer.Ordinal) ? user.EmailVerified : null,
+            PhoneNumber = grantedScopes.Contains("phone", StringComparer.Ordinal) ? user.PhoneNumber : null,
+            Locale = grantedScopes.Contains("profile", StringComparer.Ordinal) ? user.LocaleCode : null,
+            Zoneinfo = grantedScopes.Contains("profile", StringComparer.Ordinal) ? user.Zoneinfo : null
         };
     }
 

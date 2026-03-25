@@ -51,7 +51,7 @@ public class AuthController : ControllerBase
     public async Task<IActionResult> Refresh([FromBody] RefreshTokenRequest request)
     {
         var result = await _authService.RefreshTokenAsync(
-            request.RefreshToken, request.ClientId, GetIpAddress(), GetUserAgent());
+            request.RefreshToken, request.ClientId, request.ClientSecret, GetIpAddress(), GetUserAgent());
         return Ok(result);
     }
 

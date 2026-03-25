@@ -11,6 +11,7 @@ public class EnvironmentOptions
     [Required] public string BASIC_AUTHENTICATION_PASSWORD { get; init; } 
     
     [Required] public int TOKEN_EXPIRES_IN_MINUTES { get; init; }
+    [Required] public string AUTH_ISSUER { get; init; }
     [Required] public string OAUTH2_SIGNED_PRIVATE_KEY { get; init; }
     [Required] public string REDIS_CONNECTIONSTRING { get; init; }
     [Required] public string API_KEYS { get; init; }

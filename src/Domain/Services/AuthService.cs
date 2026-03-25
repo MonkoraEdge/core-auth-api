@@ -28,6 +28,7 @@ public class AuthService : IAuthService
     private readonly IRefreshTokenRepository _refreshTokenRepo;
     private readonly ITokenService _tokenService;
     private readonly IPasswordService _passwordService;
+    private readonly IClientAuthenticator _clientAuthenticator;
     private readonly IAuthorizationClientRepository _clientRepo;
     private readonly int _signinFailedMinutes;
 
@@ -46,6 +47,7 @@ public class AuthService : IAuthService
         IRefreshTokenRepository refreshTokenRepo,
         ITokenService tokenService,
         IPasswordService passwordService,
+        IClientAuthenticator clientAuthenticator,
         IAuthorizationClientRepository clientRepo,
         int signinFailedMinutes = 15)
     {
@@ -63,6 +65,7 @@ public class AuthService : IAuthService
         _refreshTokenRepo = refreshTokenRepo;
         _tokenService = tokenService;
         _passwordService = passwordService;
+        _clientAuthenticator = clientAuthenticator;
         _clientRepo = clientRepo;
         _signinFailedMinutes = signinFailedMinutes;
     }
@@ -233,7 +236,7 @@ public class AuthService : IAuthService
         }
     }
 
-    public async Task<TokenResponse> RefreshTokenAsync(string refreshToken, string? clientId, string? ipAddress, string? userAgent)
+    public async Task<TokenResponse> RefreshTokenAsync(string refreshToken, string? clientId, string? clientSecret, string? ipAddress, string? userAgent)
     {
         var tokenHash = _tokenService.HashToken(refreshToken);
         var rt = await _refreshTokenRepo.GetByTokenHashAsync(tokenHash);
@@ -253,10 +256,23 @@ public class AuthService : IAuthService
         if (rt.ExpiresAt <= DateTime.UtcNow)
             throw new CustomHttpBadRequestException("refresh_token", "Invalid or expired refresh token.");
 
-        if (!string.IsNullOrEmpty(clientId))
+        var tokenClient = await _clientRepo.GetByIdAsync(rt.ClientId);
+        if (tokenClient == null || !tokenClient.IsActive)
+            throw new CustomHttpBadRequestException("refresh_token", "Client not found or inactive.");
+
+        if (string.Equals(tokenClient.ClientType, "CONFIDENTIAL", StringComparison.OrdinalIgnoreCase))
         {
-            var client = await _clientRepo.GetByClientIdAsync(clientId);
-            if (client == null || client.Id != rt.ClientId)
+            if (string.IsNullOrEmpty(clientId))
+                throw new CustomHttpBadRequestException("refresh_token", "client_id is required for confidential clients.");
+
+            var authenticatedClient = await _clientAuthenticator.AuthenticateAsync(clientId, clientSecret);
+            if (authenticatedClient.Id != rt.ClientId)
+                throw new CustomHttpBadRequestException("refresh_token", "Client mismatch.");
+        }
+        else if (!string.IsNullOrEmpty(clientId))
+        {
+            var providedClient = await _clientRepo.GetByClientIdAsync(clientId);
+            if (providedClient == null || providedClient.Id != rt.ClientId)
                 throw new CustomHttpBadRequestException("refresh_token", "Client mismatch.");
         }
 
@@ -277,7 +293,7 @@ public class AuthService : IAuthService
         {
             AccessToken = newAccessToken,
             TokenType = "Bearer",
-            ExpiresIn = 3600,
+            ExpiresIn = tokenClient.AccessTokenLifetime,
             RefreshToken = newRefreshToken,
             Scope = string.Join(" ", scopes)
         };

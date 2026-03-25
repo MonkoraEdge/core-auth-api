@@ -88,6 +88,8 @@ core-auth-api/
 - redirect URI exact match
 - confidential client ต้องมี `client_secret`
 - refresh token rotation รองรับ family-based revocation
+- legacy `/auth/refresh` path now enforces client authentication for confidential clients
+- `/oauth2/userinfo` returns claims only for scopes granted to the access token
 - JWKS endpoint สำหรับ public key discovery
 
 ---
@@ -856,8 +858,9 @@ All services are registered in `ServiceCollectionExtensions` and injected via co
 | Variable                      | Type   | Description                                      |
 | ----------------------------- | ------ | ------------------------------------------------ |
 | `POSTGRES_CONNECTIONSTRING`   | string | PostgreSQL connection string                     |
+| `AUTH_ISSUER`                 | string | Issuer base URL (e.g. https://auth.example.com)  |
 | `OAUTH2_SIGNED_PRIVATE_KEY`   | string | RSA private key PEM for RS256 signing            |
-| `AUTH_JWKS_ENDPOINT`          | string | Issuer base URL (e.g. https://auth.example.com)  |
+| `AUTH_JWKS_ENDPOINT`          | string | Public JWKS endpoint URL                         |
 | `TOKEN_EXPIRES_IN_MINUTES`    | int    | Access token lifetime (default: 60)              |
 | `SIGNIN_FAILED_IN_MINUTES`    | int    | Window for lock-out counting (default: 15)       |
 | `BLOCK_IP_ADDRESS_IN_MINUTES` | int    | IP block duration after too many failed attempts |
@@ -989,6 +992,7 @@ Swagger UI: `http://localhost:5003/swagger`
 | `RESOURCE_API_ENDPOINT`                 | ✅       | Resources API URL                                |
 | `FACEBOOK_API_ENDPOINT`                 | ✅       | Facebook Graph API URL                           |
 | `APPLE_API_ENDPOINT`                    | ✅       | Apple ID API URL                                 |
+| `AUTH_ISSUER`                           | ✅       | Issuer base URL สำหรับ token claims และ metadata |
 | `AUTH_JWKS_ENDPOINT`                    | ✅       | JWKS endpoint สำหรับ JWT verification            |
 | `ACCOUNT_TOYO_ENDPOINT`                 | ✅       | Account (TOYO) service URL                       |
 | `CLIENT_TOYO_FORGOT_PASSWORD_ENDPOINT`  | ✅       | Forgot password path                             |
