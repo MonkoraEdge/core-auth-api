@@ -119,7 +119,7 @@ core-auth-api/
 
 - โฟลเดอร์ `src/API/script_sql` เก็บทั้ง DDL และ bootstrap SQL สำหรับฐานข้อมูลของระบบ
 - เพิ่มไฟล์ `#33 seed_master_data.sql` สำหรับ seed master/reference data แบบรันซ้ำได้ (idempotent)
-- ฝั่ง `src/Infrastructure/Migrations` มี migration `20260326111730_SeedMasterDataFromScriptSql` ที่โหลด SQL จากไฟล์ `#33 seed_master_data.sql` แบบ embedded resource แล้ว execute อัตโนมัติหลัง schema migration ตอน `dotnet ef database update`
+- ฝั่ง `src/Infrastructure/Migrations` มี migration `SeedMasterDataFromScriptSql` ที่โหลด SQL จากไฟล์ `#33 seed_master_data.sql` แบบ embedded resource แล้ว execute อัตโนมัติหลัง schema migration ตอน `dotnet ef database update`
 - ลำดับ migration สำหรับฐานข้อมูลใหม่คือ `InitialSchema` → `AddDatabaseDefaultsForSeeding` → `SeedMasterDataFromScriptSql`
 - ไฟล์นี้ครอบคลุมตารางหลักต่อไปนี้:
   - `mt_tenants`
@@ -1083,7 +1083,7 @@ dotnet ef database update --context AuthenticationDbContext
 
 - ถ้าต้องการ override connection string ให้ตั้ง `POSTGRES_CONNECTIONSTRING` ใน environment variables ก่อนรัน `dotnet ef`
 - ถ้าต้องการยังใช้ API เป็น startup project ก็ยังทำได้ผ่าน `--startup-project ../API` แต่ไม่จำเป็นแล้วสำหรับ workflow ปกติ
-- migration `20260326111730_SeedMasterDataFromScriptSql` จะรัน master-data seed จาก `src/API/script_sql/#33 seed_master_data.sql` อัตโนมัติหลัง update schema สำเร็จ
+- migration `SeedMasterDataFromScriptSql` จะรัน master-data seed จาก `src/API/script_sql/#33 seed_master_data.sql` อัตโนมัติหลัง update schema สำเร็จ
 
 ---
 
