@@ -12,7 +12,6 @@ INSERT INTO public.mt_tenants (
     tenant_name,
     settings,
     is_active,
-    description,
     created_by
 )
 SELECT
@@ -51,7 +50,6 @@ SELECT
         }
     }'::jsonb,
     TRUE,
-    '{"en":"Bootstrap tenant for local and integration testing.","th":"Tenant ตั้งต้นสำหรับ local และ integration testing"}'::jsonb,
     'SYSTEM'
 WHERE NOT EXISTS (
     SELECT 1
@@ -77,7 +75,6 @@ INSERT INTO public.mt_providers (
     callback_url,
     pkce_supported,
     is_active,
-    description,
     created_by
 )
 SELECT
@@ -97,7 +94,6 @@ SELECT
     seed.callback_url,
     seed.pkce_supported,
     seed.is_active,
-    seed.description,
     'SYSTEM'
 FROM (
     VALUES
@@ -189,7 +185,6 @@ INSERT INTO public.mt_scopes (
     claims,
     is_system_scope,
     is_active,
-    description,
     created_by
 )
 SELECT
@@ -199,7 +194,6 @@ SELECT
     seed.claims,
     seed.is_system_scope,
     seed.is_active,
-    seed.description,
     'SYSTEM'
 FROM (
     VALUES
@@ -242,7 +236,6 @@ INSERT INTO public.mt_authorization_clients (
     jwks,
     client_secret_expires_at,
     is_active,
-    description,
     created_by
 )
 SELECT
@@ -273,7 +266,6 @@ SELECT
     NULL,
     NULL,
     TRUE,
-    '{"en":"Local development SPA client with Authorization Code + PKCE.","th":"Client สำหรับ local development แบบ SPA ที่ใช้ Authorization Code + PKCE"}'::jsonb,
     'SYSTEM'
 FROM public.mt_tenants tenant
 WHERE tenant.tenant_code = 'MONKORA_DEMO'
@@ -290,7 +282,6 @@ INSERT INTO public.lnk_authorization_client_scopes (
     scope_id,
     is_default,
     is_required,
-    description,
     created_by
 )
 SELECT
@@ -298,7 +289,6 @@ SELECT
     scope.id,
     seed.is_default,
     seed.is_required,
-    seed.description,
     'SYSTEM'
 FROM (
     VALUES
@@ -307,7 +297,7 @@ FROM (
         ('permissions', FALSE, FALSE, '{"en":"Optional fine-grained permission claims for advanced clients.","th":"Permission claims แบบละเอียดสำหรับ client ที่ต้องการสิทธิ์ขั้นสูง"}'::jsonb),
         ('api.read', TRUE, FALSE, '{"en":"Default read scope for protected resource APIs.","th":"Scope อ่านข้อมูลเริ่มต้นสำหรับ protected resource APIs"}'::jsonb),
         ('api.write', FALSE, FALSE, '{"en":"Optional write scope that should be explicitly requested.","th":"Scope เขียนข้อมูลที่ควรถูก request แบบ explicit"}'::jsonb)
-) AS seed(scope_name, is_default, is_required, description)
+    ) AS seed(scope_name, is_default, is_required, description)
 JOIN public.mt_authorization_clients client
     ON client.client_id = 'monkora-demo-spa'
    AND client.deleted_at IS NULL
@@ -326,7 +316,6 @@ INSERT INTO public.mt_permissions (
     resource,
     action,
     is_active,
-    description,
     created_by
 )
 SELECT
@@ -336,7 +325,6 @@ SELECT
     seed.resource,
     seed.action,
     TRUE,
-    seed.description,
     'SYSTEM'
 FROM (
     VALUES
@@ -368,7 +356,6 @@ INSERT INTO public.mt_roles (
     role_name,
     parent_role_id,
     is_active,
-    description,
     created_by
 )
 SELECT
@@ -377,7 +364,6 @@ SELECT
     seed.role_name,
     NULL,
     TRUE,
-    seed.description,
     'SYSTEM'
 FROM (
     SELECT
@@ -410,19 +396,16 @@ WHERE existing.id IS NULL;
 INSERT INTO public.lnk_role_permissions (
     role_id,
     permission_id,
-    description,
     created_by
 )
 SELECT
     role_map.role_id,
     role_map.permission_id,
-    role_map.description,
     'SYSTEM'
 FROM (
     SELECT
         role_entity.id AS role_id,
-        permission_entity.id AS permission_id,
-        seed.description
+        permission_entity.id AS permission_id
     FROM (
         VALUES
             ('PLATFORM_ADMIN', NULL, 'users.read', '{"en":"Platform admins can view users.","th":"Platform admin สามารถดูข้อมูลผู้ใช้ได้"}'::jsonb),
@@ -492,7 +475,6 @@ INSERT INTO public.mt_agreements (
     is_required,
     requires_explicit_action,
     is_active,
-    description,
     created_by
 )
 SELECT
@@ -508,7 +490,6 @@ SELECT
     seed.is_required,
     seed.requires_explicit_action,
     TRUE,
-    seed.description,
     'SYSTEM'
 FROM (
     VALUES

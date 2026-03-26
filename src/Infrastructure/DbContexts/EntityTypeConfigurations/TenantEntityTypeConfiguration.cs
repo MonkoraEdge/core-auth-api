@@ -8,11 +8,14 @@ public class TenantEntityTypeConfiguration : IEntityTypeConfiguration<Tenant>
 {
     public void Configure(EntityTypeBuilder<Tenant> builder)
     {
-        builder.ToTable("tenants");
+        builder.ToTable("mt_tenants");
         
         builder.HasKey(m => m.Id);
         
         builder.Property(m => m.TenantName)
-            .HasColumnType("jsonb");      
+            .HasColumnType("jsonb");
+
+        builder.Property(m => m.Settings)
+            .HasColumnType("jsonb");
     }
 }

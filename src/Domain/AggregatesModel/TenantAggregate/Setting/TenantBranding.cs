@@ -7,6 +7,6 @@ namespace MonkoraEdge.Core.Auth.Domain.AggregatesModel.TenantAggregate.Setting
         public Locale DisplayName { get; set; }
         public string LogoUrl { get; set; }
         public string PrimaryColor { get; set; }
-        public object FaviconUrl { get; set; } = null;
+        public string? FaviconUrl { get; set; }
     }
 }

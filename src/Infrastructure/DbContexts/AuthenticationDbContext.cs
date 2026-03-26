@@ -1,10 +1,10 @@
 using MonkoraEdge.Core.Auth.Domain.AggregatesModel.EntityAggregate;
 using MonkoraEdge.Core.Auth.Infrastructure.DbContexts.EntityTypeConfigurations;
+using MonkoraEdge.Core.DotNet.Extensions;
+using MonkoraEdge.Core.DotNet.Domain.ValueObjects;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Design;
-using Microsoft.Extensions.Configuration;
 using System.Diagnostics;
-using System.Diagnostics.CodeAnalysis;
+using BaseEntity = MonkoraEdge.Core.DotNet.Domain.SeedWork.BaseEntity;
 
 namespace MonkoraEdge.Core.Auth.Infrastructure.DbContexts;
 
@@ -57,6 +57,8 @@ public class AuthenticationDbContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.HasPostgresExtension("pgcrypto");
+
         modelBuilder.ApplyConfiguration(new TenantEntityTypeConfiguration());
         modelBuilder.ApplyConfiguration(new UserEntityTypeConfiguration());
         modelBuilder.ApplyConfiguration(new UserFileEntityTypeConfiguration());
@@ -90,26 +92,25 @@ public class AuthenticationDbContext : DbContext
         modelBuilder.ApplyConfiguration(new AgreementEntityTypeConfiguration());
         modelBuilder.ApplyConfiguration(new AgreementAcceptEntityTypeConfiguration());
 
-        //modelBuilder.ApplyGlobalFiltersSoftDeleted();
-        //modelBuilder.UseSnakeCaseNames();
+        modelBuilder.ApplyGlobalFiltersSoftDeleted();
+        modelBuilder.UseSnakeCaseNames(DatabaseType.PostgreSql);
+        ApplyBaseEntityDefaults(modelBuilder);
+    }
+
+    private static void ApplyBaseEntityDefaults(ModelBuilder modelBuilder)
+    {
+        foreach (var entityType in modelBuilder.Model.GetEntityTypes())
+        {
+            var idProperty = entityType.FindProperty(nameof(BaseEntity.Id));
+            if (idProperty?.ClrType == typeof(Guid))
+            {
+                idProperty.SetDefaultValueSql("gen_random_uuid()");
+            }
+
+            entityType.FindProperty(nameof(BaseEntity.CreatedAt))?.SetDefaultValueSql("CURRENT_TIMESTAMP");
+            entityType.FindProperty(nameof(BaseEntity.CreatedBy))?.SetDefaultValueSql("'SYSTEM'");
+            entityType.FindProperty(nameof(BaseEntity.UpdatedAt))?.SetDefaultValueSql("CURRENT_TIMESTAMP");
+            entityType.FindProperty(nameof(BaseEntity.UpdatedBy))?.SetDefaultValueSql("'SYSTEM'");
+        }
     }
 }
-
-//[ExcludeFromCodeCoverage]
-//public class AuthenticationContextDesignFactory : IDesignTimeDbContextFactory<AuthenticationDbContext>
-//{
-//    public AuthenticationDbContext CreateDbContext(string[] args)
-//    {
-//        var connectionString = ConfigurationExtension
-//            .CreateConfigurationBuilder("API")
-//            .AddJsonFile($"appsettings.Development.json", true, true)
-//            .AddEnvironmentVariables()
-//            .Build()["POSTGRES_CONNECTIONSTRING"];
-
-//        var dbContextOptions = new DbContextOptionsBuilder<AuthenticationDbContext>()
-//            .UseNpgsql(connectionString)
-//            .Options;
-
-//        return new AuthenticationDbContext(dbContextOptions);
-//    }
-//}

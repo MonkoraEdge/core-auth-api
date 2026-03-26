@@ -88,6 +88,8 @@ core-auth-api/
 - `AuthRepositoryBase<TEntity>` ทำหน้าที่ bridge Domain repository contract ไปยัง EF repository base เดิม
 - Repository implementations และ token cleanup background service
 - project nullable context ถูกเปิดแล้วเพื่อลด warning กลุ่ม `CS8632`
+- `AuthenticationDbContext` เปิดใช้ global soft-delete query filter และ apply snake_case naming convention สำหรับ PostgreSQL model metadata
+- `AuthenticationContextDesignFactory` ใน Infrastructure สามารถ resolve connection string จาก `src/API/appsettings*.json` หรือ environment variables เพื่อให้ `dotnet ef` รันตรงจาก `src/Infrastructure` ได้
 - tables หลักสำหรับ OAuth:
   - authorization codes
   - access tokens
@@ -117,6 +119,8 @@ core-auth-api/
 
 - โฟลเดอร์ `src/API/script_sql` เก็บทั้ง DDL และ bootstrap SQL สำหรับฐานข้อมูลของระบบ
 - เพิ่มไฟล์ `#33 seed_master_data.sql` สำหรับ seed master/reference data แบบรันซ้ำได้ (idempotent)
+- ฝั่ง `src/Infrastructure/Migrations` มี migration `20260326111730_SeedMasterDataFromScriptSql` ที่โหลด SQL จากไฟล์ `#33 seed_master_data.sql` แบบ embedded resource แล้ว execute อัตโนมัติหลัง schema migration ตอน `dotnet ef database update`
+- ลำดับ migration สำหรับฐานข้อมูลใหม่คือ `InitialSchema` → `AddDatabaseDefaultsForSeeding` → `SeedMasterDataFromScriptSql`
 - ไฟล์นี้ครอบคลุมตารางหลักต่อไปนี้:
   - `mt_tenants`
   - `mt_providers`
@@ -142,6 +146,7 @@ ASP.NET Core Web API project ที่เป็น entry point หลักข�
 
 | Package                                         | Version |
 | ----------------------------------------------- | ------- |
+| Microsoft.EntityFrameworkCore.Design            | 9.0.10  |
 | Microsoft.AspNetCore.OpenApi                    | 9.0.2   |
 | Microsoft.Extensions.Caching.StackExchangeRedis | 9.0.10  |
 | Swashbuckle.AspNetCore                          | 9.0.6   |
@@ -187,13 +192,14 @@ Infrastructure layer จัดการ Database, Repositories และ HTTP Cl
 
 **Package Dependencies:**
 
-| Package                             | Version |
-| ----------------------------------- | ------- |
-| BCrypt.Net-Next                     | 4.1.0   |
-| Microsoft.EntityFrameworkCore.Tools | 9.0.10  |
-| Microsoft.IdentityModel.Tokens      | 8.16.0  |
-| Otp.NET                             | 1.4.0   |
-| System.IdentityModel.Tokens.Jwt     | 8.16.0  |
+| Package                              | Version |
+| ------------------------------------ | ------- |
+| BCrypt.Net-Next                      | 4.1.0   |
+| Microsoft.EntityFrameworkCore.Design | 9.0.10  |
+| Microsoft.EntityFrameworkCore.Tools  | 9.0.10  |
+| Microsoft.IdentityModel.Tokens       | 8.16.0  |
+| Otp.NET                              | 1.4.0   |
+| System.IdentityModel.Tokens.Jwt      | 8.16.0  |
 
 **Database:** PostgreSQL ผ่าน EF Core (Npgsql)
 
@@ -209,7 +215,7 @@ Shared library สำหรับ cross-cutting concerns เช่น authentica
 
 ## Entities
 
-### `Tenant` → table: `tenants`
+### `Tenant` → table: `mt_tenants`
 
 Inherits `BaseEntity` (GUID PK) + `ISoftDelete`
 
@@ -1068,9 +1074,16 @@ dotnet run
 
 ```bash
 cd src/Infrastructure
-dotnet ef migrations add <MigrationName> --startup-project ../API
-dotnet ef database update --startup-project ../API
+set ASPNETCORE_ENVIRONMENT=Development
+dotnet ef migrations add <MigrationName> --context AuthenticationDbContext
+dotnet ef database update --context AuthenticationDbContext
 ```
+
+หมายเหตุ:
+
+- ถ้าต้องการ override connection string ให้ตั้ง `POSTGRES_CONNECTIONSTRING` ใน environment variables ก่อนรัน `dotnet ef`
+- ถ้าต้องการยังใช้ API เป็น startup project ก็ยังทำได้ผ่าน `--startup-project ../API` แต่ไม่จำเป็นแล้วสำหรับ workflow ปกติ
+- migration `20260326111730_SeedMasterDataFromScriptSql` จะรัน master-data seed จาก `src/API/script_sql/#33 seed_master_data.sql` อัตโนมัติหลัง update schema สำเร็จ
 
 ---
 
