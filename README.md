@@ -113,6 +113,25 @@ core-auth-api/
 
 ---
 
+## Bootstrap SQL Scripts
+
+- โฟลเดอร์ `src/API/script_sql` เก็บทั้ง DDL และ bootstrap SQL สำหรับฐานข้อมูลของระบบ
+- เพิ่มไฟล์ `#33 seed_master_data.sql` สำหรับ seed master/reference data แบบรันซ้ำได้ (idempotent)
+- ไฟล์นี้ครอบคลุมตารางหลักต่อไปนี้:
+  - `mt_tenants`
+  - `mt_providers`
+  - `mt_scopes`
+  - `mt_authorization_clients`
+  - `lnk_authorization_client_scopes`
+  - `mt_roles`
+  - `mt_permissions`
+  - `lnk_role_permissions`
+  - `mt_agreements`
+- seed นี้จงใจไม่สร้างข้อมูลใน `mt_users`, `mt_user_identities`, และ `mt_api_keys` เพราะต้องใช้ credential/secret เฉพาะ environment
+- development client ที่ถูก seed คือ `monkora-demo-spa` แบบ `PUBLIC` พร้อม `Authorization Code + PKCE` และ redirect URIs สำหรับ `localhost:3000` กับ `localhost:5173`
+
+---
+
 ## Projects
 
 ### 1. `API` — MonkoraEdge.Core.Auth.API
