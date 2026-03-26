@@ -90,6 +90,8 @@ core-auth-api/
 - project nullable context ถูกเปิดแล้วเพื่อลด warning กลุ่ม `CS8632`
 - `AuthenticationDbContext` เปิดใช้ global soft-delete query filter และ apply snake_case naming convention สำหรับ PostgreSQL model metadata
 - `AuthenticationContextDesignFactory` ใน Infrastructure สามารถ resolve connection string จาก `src/API/appsettings*.json` หรือ environment variables เพื่อให้ `dotnet ef` รันตรงจาก `src/Infrastructure` ได้
+- EF model มี shared convention สำหรับ `Description -> jsonb` และ `IpAddress -> inet` เพื่อให้ตรงกับ DDL ใน `src/API/script_sql`
+- `AuthenticationDbContext.ConfigureConventions(...)` register JSON value conversion สำหรับ `Locale` และ `TenantSettings` ทำให้ EF treat ค่าเหล่านี้เป็น scalar `jsonb` property ตั้งแต่ขั้น model discovery และสร้าง migration จาก `src/Infrastructure` ได้ตรง
 - tables หลักสำหรับ OAuth:
   - authorization codes
   - access tokens
@@ -119,8 +121,9 @@ core-auth-api/
 
 - โฟลเดอร์ `src/API/script_sql` เก็บทั้ง DDL และ bootstrap SQL สำหรับฐานข้อมูลของระบบ
 - เพิ่มไฟล์ `#33 seed_master_data.sql` สำหรับ seed master/reference data แบบรันซ้ำได้ (idempotent)
-- ฝั่ง `src/Infrastructure/Migrations` มี migration `SeedMasterDataFromScriptSql` ที่โหลด SQL จากไฟล์ `#33 seed_master_data.sql` แบบ embedded resource แล้ว execute อัตโนมัติหลัง schema migration ตอน `dotnet ef database update`
-- ลำดับ migration สำหรับฐานข้อมูลใหม่คือ `InitialSchema` → `AddDatabaseDefaultsForSeeding` → `SeedMasterDataFromScriptSql`
+- ฝั่ง `src/Infrastructure/Migrations/SeedMasterDataFromScriptSql.cs` ถูกใช้เป็น support code สำหรับ seed SQL และ migration จริงควรถูก scaffold ผ่าน EF เพื่อให้ timestamp ถูก generate อัตโนมัติ
+- helper `src/Infrastructure/Migrations/MigrationSqlScriptLoader.cs` ใช้รวม logic โหลด embedded SQL และ strip transaction statement เพื่อให้ seed migration ตัวถัดไป reuse ได้
+- ลำดับ migration สำหรับฐานข้อมูลใหม่คือ `InitialCreate` → `SeedMasterDataFromScriptSql`
 - ไฟล์นี้ครอบคลุมตารางหลักต่อไปนี้:
   - `mt_tenants`
   - `mt_providers`
@@ -1075,15 +1078,44 @@ dotnet run
 ```bash
 cd src/Infrastructure
 set ASPNETCORE_ENVIRONMENT=Development
-dotnet ef migrations add <MigrationName> --context AuthenticationDbContext
+dotnet ef migrations add <MigrationName> --context AuthenticationDbContext --output-dir Migrations
 dotnet ef database update --context AuthenticationDbContext
 ```
+
+สำหรับ seed migration ใหม่ที่ไม่อยากชนชื่อเดิม ให้ใช้:
+
+```powershell
+cd src/Infrastructure
+.\Add-SeedMigration.ps1
+```
+
+หมายเหตุ:
+
+- EF Core ไม่รองรับการสร้าง `[Migration("yyyyMMddHHmmss_Name")]` แบบ dynamic ภายในไฟล์ C# เพราะค่าใน attribute ต้องเป็น compile-time constant
+- สคริปต์ `Add-SeedMigration.ps1` จะใช้ EF CLI สร้าง migration ใหม่พร้อม timestamp อัตโนมัติ แล้ว patch `Up()` ให้เรียก `SeedMasterDataMigrationSupport.Apply(migrationBuilder)` ให้อัตโนมัติ
+- ถ้าชื่อ `SeedMasterDataFromScriptSql` มีอยู่แล้ว สคริปต์จะเติม suffix เวลาเข้าไปในชื่อ migration ใหม่ให้อัตโนมัติ
+- ต้องมี migration schema อย่างน้อยหนึ่งตัวก่อน เช่น `InitialCreate`; ถ้าโฟลเดอร์ `Migrations` ยังไม่มี migration แบบ `yyyyMMddHHmmss_Name.cs` สคริปต์จะหยุดเพื่อกันการ scaffold schema ทั้งก้อนออกมาเป็น seed migration โดยผิดลำดับ
 
 หมายเหตุ:
 
 - ถ้าต้องการ override connection string ให้ตั้ง `POSTGRES_CONNECTIONSTRING` ใน environment variables ก่อนรัน `dotnet ef`
 - ถ้าต้องการยังใช้ API เป็น startup project ก็ยังทำได้ผ่าน `--startup-project ../API` แต่ไม่จำเป็นแล้วสำหรับ workflow ปกติ
 - migration `SeedMasterDataFromScriptSql` จะรัน master-data seed จาก `src/API/script_sql/#33 seed_master_data.sql` อัตโนมัติหลัง update schema สำเร็จ
+
+
+# Create Migrations Step
+
+1. สร้าง Migrations
+  dotnet ef migrations add InitialCreate --context AuthenticationDbContext --output-dir Migrations
+
+2. สร้าง .\Add-SeedMigration.ps1
+
+3. dotnet ef database update --context AuthenticationDbContext
+
+--
+
+
+
 
 ---
 

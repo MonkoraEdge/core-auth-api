@@ -39,7 +39,6 @@
 			<Link>Migrations\SeedScripts\seed_master_data.sql</Link>
 			<LogicalName>MonkoraEdge.Core.Auth.Infrastructure.Migrations.SeedScripts.seed_master_data.sql</LogicalName>
 		</EmbeddedResource>
-		<Folder Include="Migrations\" />
 	</ItemGroup>
 
 

@@ -1,9 +1,14 @@
 using MonkoraEdge.Core.Auth.Domain.AggregatesModel.EntityAggregate;
+using MonkoraEdge.Core.Auth.Domain.AggregatesModel.TenantAggregate;
 using MonkoraEdge.Core.Auth.Infrastructure.DbContexts.EntityTypeConfigurations;
+using MonkoraEdge.Core.DotNet.AggregatesModel.CommonAggregate;
 using MonkoraEdge.Core.DotNet.Extensions;
 using MonkoraEdge.Core.DotNet.Domain.ValueObjects;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
+using System.Net;
 using System.Diagnostics;
+using System.Text.Json;
 using BaseEntity = MonkoraEdge.Core.DotNet.Domain.SeedWork.BaseEntity;
 
 namespace MonkoraEdge.Core.Auth.Infrastructure.DbContexts;
@@ -55,6 +60,17 @@ public class AuthenticationDbContext : DbContext
         Debug.WriteLine("AuthenticationDbContext::ctor ->" + GetHashCode());
     }
 
+    protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
+    {
+        configurationBuilder.Properties<Locale>()
+            .HaveConversion<LocaleJsonValueConverter>()
+            .HaveColumnType("jsonb");
+
+        configurationBuilder.Properties<TenantSettings>()
+            .HaveConversion<TenantSettingsJsonValueConverter>()
+            .HaveColumnType("jsonb");
+    }
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.HasPostgresExtension("pgcrypto");
@@ -94,7 +110,34 @@ public class AuthenticationDbContext : DbContext
 
         modelBuilder.ApplyGlobalFiltersSoftDeleted();
         modelBuilder.UseSnakeCaseNames(DatabaseType.PostgreSql);
+        ApplySharedColumnConventions(modelBuilder);
         ApplyBaseEntityDefaults(modelBuilder);
+    }
+
+    private static void ApplySharedColumnConventions(ModelBuilder modelBuilder)
+    {
+        var ipAddressConverter = new ValueConverter<string?, IPAddress?>(
+            value => string.IsNullOrWhiteSpace(value) ? null : IPAddress.Parse(value),
+            value => value == null ? null : value.ToString());
+
+        foreach (var entityType in modelBuilder.Model.GetEntityTypes())
+        {
+            var entityBuilder = modelBuilder.Entity(entityType.ClrType);
+
+            var descriptionProperty = entityType.FindProperty(nameof(BaseEntity.Description));
+            if (descriptionProperty?.ClrType == typeof(Locale))
+            {
+                entityBuilder.Property(typeof(Locale), nameof(BaseEntity.Description)).HasColumnType("jsonb");
+            }
+
+            var ipAddressProperty = entityType.FindProperty("IpAddress");
+            if (ipAddressProperty?.ClrType == typeof(string))
+            {
+                entityBuilder.Property<string>("IpAddress")
+                    .HasConversion(ipAddressConverter)
+                    .HasColumnType("inet");
+            }
+        }
     }
 
     private static void ApplyBaseEntityDefaults(ModelBuilder modelBuilder)
@@ -113,4 +156,31 @@ public class AuthenticationDbContext : DbContext
             entityType.FindProperty(nameof(BaseEntity.UpdatedBy))?.SetDefaultValueSql("'SYSTEM'");
         }
     }
+}
+
+file sealed class LocaleJsonValueConverter() : ValueConverter<Locale, string>(
+    value => JsonValueConverterHelpers.Serialize(value),
+    value => JsonValueConverterHelpers.Deserialize<Locale>(value))
+{
+}
+
+file sealed class TenantSettingsJsonValueConverter() : ValueConverter<TenantSettings, string>(
+    value => JsonValueConverterHelpers.Serialize(value),
+    value => JsonValueConverterHelpers.Deserialize<TenantSettings>(value))
+{
+}
+
+file static class JsonValueConverterHelpers
+{
+    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+
+    public static string Serialize<TValue>(TValue value)
+        where TValue : class
+        => JsonSerializer.Serialize(value, SerializerOptions);
+
+    public static TValue Deserialize<TValue>(string value)
+        where TValue : class, new()
+        => string.IsNullOrWhiteSpace(value)
+            ? new TValue()
+            : JsonSerializer.Deserialize<TValue>(value, SerializerOptions) ?? new TValue();
 }

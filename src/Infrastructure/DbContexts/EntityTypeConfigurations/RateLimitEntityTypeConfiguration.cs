@@ -10,5 +10,6 @@ public class RateLimitEntityTypeConfiguration : IEntityTypeConfiguration<RateLim
     {
         builder.ToTable("tx_rate_limits");
         builder.HasKey(m => m.Id);
+        builder.Ignore(m => m.Description);
     }
 }

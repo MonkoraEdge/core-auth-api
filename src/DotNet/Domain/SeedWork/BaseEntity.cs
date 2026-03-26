@@ -1,5 +1,6 @@
 using MonkoraEdge.Core.DotNet.Domain.Interfaces;
 using MonkoraEdge.Core.DotNet.Domain.Interfaces.DomainEvent;
+using MonkoraEdge.Core.DotNet.AggregatesModel.CommonAggregate;
 
 namespace MonkoraEdge.Core.DotNet.Domain.SeedWork
 {
@@ -10,6 +11,7 @@ namespace MonkoraEdge.Core.DotNet.Domain.SeedWork
 
         /// <summary>Unique entity identifier. Auto-generated on construction.</summary>
         public Guid Id { get; set; } = Guid.NewGuid();
+        public Locale? Description { get; set; }
         public DateTime CreatedAt { get; set; }
         public string CreatedBy { get; set; }
         public DateTime UpdatedAt { get; set; }

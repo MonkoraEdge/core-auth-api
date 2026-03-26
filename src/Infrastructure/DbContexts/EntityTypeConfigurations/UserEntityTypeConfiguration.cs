@@ -11,6 +11,7 @@ public class UserEntityTypeConfiguration : IEntityTypeConfiguration<User>
         builder.ToTable("mt_users");
         builder.HasKey(m => m.Id);
 
+        builder.Property(m => m.LocaleCode).HasColumnName("locale");
         builder.Property(m => m.Status).HasDefaultValue("INACTIVE");
         builder.Property(m => m.RegistrationSource).HasDefaultValue("LOCAL");
 
