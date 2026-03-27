@@ -92,6 +92,7 @@ core-auth-api/
 - `AuthenticationContextDesignFactory` ใน Infrastructure สามารถ resolve connection string จาก `src/API/appsettings*.json` หรือ environment variables เพื่อให้ `dotnet ef` รันตรงจาก `src/Infrastructure` ได้
 - EF model มี shared convention สำหรับ `Description -> jsonb` และ `IpAddress -> inet` เพื่อให้ตรงกับ DDL ใน `src/API/script_sql`
 - `AuthenticationDbContext.ConfigureConventions(...)` register JSON value conversion สำหรับ `Locale` และ `TenantSettings` ทำให้ EF treat ค่าเหล่านี้เป็น scalar `jsonb` property ตั้งแต่ขั้น model discovery และสร้าง migration จาก `src/Infrastructure` ได้ตรง
+- middleware `ErrorHandlingMiddleware` ถูกเรียกผ่าน DI แบบ `IMiddleware`; extension `UseErrorHandling(...)` จะไม่ส่ง explicit constructor arguments เข้าระบบ pipeline เพื่อหลีกเลี่ยง startup error ของ ASP.NET Core
 - tables หลักสำหรับ OAuth:
   - authorization codes
   - access tokens
@@ -1102,20 +1103,16 @@ cd src/Infrastructure
 - ถ้าต้องการยังใช้ API เป็น startup project ก็ยังทำได้ผ่าน `--startup-project ../API` แต่ไม่จำเป็นแล้วสำหรับ workflow ปกติ
 - migration `SeedMasterDataFromScriptSql` จะรัน master-data seed จาก `src/API/script_sql/#33 seed_master_data.sql` อัตโนมัติหลัง update schema สำเร็จ
 
-
 # Create Migrations Step
 
 1. สร้าง Migrations
-  dotnet ef migrations add InitialCreate --context AuthenticationDbContext --output-dir Migrations
+   dotnet ef migrations add InitialCreate --context AuthenticationDbContext --output-dir Migrations
 
 2. สร้าง .\Add-SeedMigration.ps1
 
 3. dotnet ef database update --context AuthenticationDbContext
 
 --
-
-
-
 
 ---
 
