@@ -1074,6 +1074,14 @@ cd src/API
 dotnet run
 ```
 
+### Postman
+
+- Postman collection อยู่ที่ `postman/MonkoraEdge.Core.Auth.postman_collection.json`
+- Postman environment สำหรับ local อยู่ที่ `postman/MonkoraEdge.Core.Auth.local.postman_environment.json`
+- collection ครอบคลุม health checks, discovery endpoints, auth, OAuth2, users, clients, roles, permissions, scopes, API keys และ console tenant endpoint
+- ก่อนใช้งาน protected endpoints ให้ตั้งค่า `bearerToken`; สำหรับ `oauth2/revoke` และ `oauth2/introspect` ให้ตั้งค่า `basicAuth` เป็น Base64 ของ `clientId:clientSecret`
+- ค่าเริ่มต้นของ `baseUrl` ถูกตั้งไว้เป็น `http://localhost:5000` ตาม workflow `dotnet run --no-launch-profile`; หากรันด้วยพอร์ตอื่นให้แก้ใน environment ก่อน import หรือหลัง import
+
 ### Database Migration
 
 ```bash
