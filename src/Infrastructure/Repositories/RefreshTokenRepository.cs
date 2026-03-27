@@ -18,4 +18,14 @@ public class RefreshTokenRepository : AuthRepositoryBase<RefreshToken>, IRefresh
 
     public async Task<IEnumerable<RefreshToken>> GetByFamilyIdAsync(Guid familyId) =>
         await Context.RefreshTokens.Where(m => m.FamilyId == familyId).ToListAsync();
+
+    public async Task<bool> TryRevokeAsync(Guid id, DateTime revokedAtUtc)
+    {
+        var affected = await Context.RefreshTokens
+            .Where(m => m.Id == id && m.RevokedAt == null && m.ExpiresAt > DateTime.UtcNow)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(m => m.RevokedAt, revokedAtUtc));
+
+        return affected == 1;
+    }
 }

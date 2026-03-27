@@ -9,4 +9,5 @@ public interface IRefreshTokenRepository : IRepository<RefreshToken>
     Task<IEnumerable<RefreshToken>> GetActiveByUserIdAsync(Guid userId);
     /// <summary>Returns all tokens belonging to the same rotation family (for theft detection/revocation)</summary>
     Task<IEnumerable<RefreshToken>> GetByFamilyIdAsync(Guid familyId);
+    Task<bool> TryRevokeAsync(Guid id, DateTime revokedAtUtc);
 }

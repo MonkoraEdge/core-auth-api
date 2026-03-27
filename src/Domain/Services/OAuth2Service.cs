@@ -279,16 +279,21 @@ public class OAuth2Service : IOAuth2Service
                 throw new DomainException("token", "code_verifier is invalid.");
         }
 
-        // Mark code consumed; generate tokens; commit all three changes in one transaction
-        authCode.ConsumedAt = DateTime.UtcNow;
-        _authCodeRepo.Update(authCode);
+        // Ensure one-time code use under concurrency.
+        var consumed = await _authCodeRepo.TryConsumeAsync(authCode.Id, DateTime.UtcNow);
+        if (!consumed)
+            throw new DomainException("token", "Authorization code is invalid, expired, or already used.");
 
         var scopes = authCode.Scopes;
         var accessToken = await _tokenService.GenerateAccessTokenAsync(
             client.Id, authCode.UserId, scopes, "authorization_code", ipAddress, userAgent);
-        var refreshToken = await _tokenService.GenerateRefreshTokenAsync(
-            Guid.Empty, client.Id, authCode.UserId, authCode.SessionId, scopes,
-            client.RefreshTokenLifetime, familyId: Guid.NewGuid());
+        string? refreshToken = null;
+        if (scopes.Contains("offline_access", StringComparer.Ordinal))
+        {
+            refreshToken = await _tokenService.GenerateRefreshTokenAsync(
+                Guid.Empty, client.Id, authCode.UserId, authCode.SessionId, scopes,
+                client.RefreshTokenLifetime, familyId: Guid.NewGuid());
+        }
 
         string? idToken = null;
         if (scopes.Contains("openid"))
@@ -319,13 +324,16 @@ public class OAuth2Service : IOAuth2Service
             throw new DomainException("token", "Client is not authorized for client_credentials grant.");
 
         var requestedScopes = (request.Scope ?? "").Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (!requestedScopes.Any())
+            throw new DomainException("token", "scope is required for client_credentials grant.");
+
         var allowedScopes = await _clientAuth.GetAllowedScopeNamesAsync(client.Id);
 
         var invalidScopes = requestedScopes.Except(allowedScopes).ToArray();
         if (invalidScopes.Any())
             throw new DomainException("token", $"Scope(s) not allowed: {string.Join(", ", invalidScopes)}");
 
-        var finalScopes = requestedScopes.Any() ? requestedScopes : allowedScopes.ToArray();
+        var finalScopes = requestedScopes.Distinct(StringComparer.Ordinal).ToArray();
         var accessToken = await _tokenService.GenerateAccessTokenAsync(
             client.Id, null, finalScopes, "client_credentials", ipAddress, userAgent);
 

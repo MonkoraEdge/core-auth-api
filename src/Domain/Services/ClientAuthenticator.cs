@@ -14,7 +14,7 @@ public sealed class ClientAuthenticator : IClientAuthenticator
     // Every client implicitly has access to these OIDC baseline scopes without
     // explicit registration — they match the standard OIDC claim sets.
     private static readonly string[] BaselineScopes =
-        { "openid", "profile", "email", "offline_access" };
+        { "openid", "profile", "email" };
 
     private readonly IAuthorizationClientRepository _clientRepo;
     private readonly IAuthorizationClientScopeRepository _clientScopeRepo;

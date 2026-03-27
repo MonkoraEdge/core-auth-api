@@ -7,4 +7,5 @@ public interface IAuthorizationCodeRepository : IRepository<AuthorizationCode>
 {
     Task<AuthorizationCode?> GetByCodeHashAsync(string codeHash);
     Task<IEnumerable<AuthorizationCode>> GetByUserIdAsync(Guid userId);
+    Task<bool> TryConsumeAsync(Guid id, DateTime consumedAtUtc);
 }

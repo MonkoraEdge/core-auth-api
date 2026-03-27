@@ -57,8 +57,15 @@ public sealed class RefreshTokenProcessor : IRefreshTokenProcessor
         if (refreshToken.ClientId != client.Id)
             throw new DomainException("refresh_token", "Client mismatch.");
 
-        refreshToken.RevokedAt = DateTime.UtcNow;
-        _refreshTokenRepo.Update(refreshToken);
+        var revoked = await _refreshTokenRepo.TryRevokeAsync(refreshToken.Id, DateTime.UtcNow);
+        if (!revoked)
+        {
+            if (refreshToken.FamilyId != Guid.Empty)
+                await _tokenService.RevokeTokenFamilyAsync(refreshToken.FamilyId, "refresh_token_reuse_detected");
+
+            throw new DomainException("refresh_token",
+                "The refresh token has already been used. All sessions in this chain have been revoked for security.");
+        }
 
         var scopes = refreshToken.Scopes;
         var userId = refreshToken.UserId == Guid.Empty ? (Guid?)null : refreshToken.UserId;

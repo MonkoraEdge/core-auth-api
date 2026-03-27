@@ -199,20 +199,28 @@ public class TokenService : ITokenService
     public async Task RevokeTokenAsync(string token, string? tokenTypeHint, Guid clientId, string? reason = "revoked")
     {
         var tokenHash = HashToken(token);
+        var now = DateTime.UtcNow;
+        var revokedAny = false;
 
         var accessToken = await _accessTokenRepo.GetByTokenHashAsync(tokenHash);
-        if (accessToken != null && accessToken.RevokedAt == null)
+        if (accessToken != null && accessToken.ClientId == clientId && accessToken.RevokedAt == null)
         {
-            accessToken.RevokedAt = DateTime.UtcNow;
+            accessToken.RevokedAt = now;
             _accessTokenRepo.Update(accessToken);
+            revokedAny = true;
         }
 
         var refreshToken = await _refreshTokenRepo.GetByTokenHashAsync(tokenHash);
-        if (refreshToken != null && refreshToken.RevokedAt == null)
+        if (refreshToken != null && refreshToken.ClientId == clientId && refreshToken.RevokedAt == null)
         {
-            refreshToken.RevokedAt = DateTime.UtcNow;
+            refreshToken.RevokedAt = now;
             _refreshTokenRepo.Update(refreshToken);
+            revokedAny = true;
         }
+
+        // Do not reveal token ownership or existence for another client.
+        if (!revokedAny)
+            return;
 
         var existing = await _revokedTokenRepo.GetByTokenHashAsync(tokenHash);
         if (existing == null)
@@ -224,7 +232,7 @@ public class TokenService : ITokenService
                 ClientId = clientId,
                 UserId = accessToken?.UserId ?? refreshToken?.UserId,
                 Reason = reason,
-                RevokedAt = DateTime.UtcNow,
+                RevokedAt = now,
                 ExpiresAt = accessToken?.ExpiresAt ?? refreshToken?.ExpiresAt
             });
         }

@@ -99,6 +99,11 @@ See controller files in `src/API/Controllers` for full route details.
 - Redirect URI exact-match validation.
 - Confidential clients require `client_secret`.
 - Refresh token rotation with family-aware revocation support.
+- Refresh token issuance on OAuth token endpoint now requires `offline_access` scope.
+- Atomic one-time consume checks are applied for authorization codes and refresh token rotation.
+- Token revocation is restricted to tokens owned by the authenticated client.
+- Runtime rate limiting is enabled and enforced on high-risk OAuth endpoints.
+- Consent submit endpoint enforces same-origin checks for browser/cookie contexts.
 - Security headers are set in API middleware pipeline.
 - CORS is deny-by-default when `Cors:AllowedOrigins` is empty.
 

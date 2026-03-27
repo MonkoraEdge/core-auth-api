@@ -46,6 +46,9 @@ builder.Services.AddSingleton<IPostConfigureOptions<ApiKeyAuthenticationOptions>
 
 builder.Services.AddMemoryCache();
 
+// Global fixed-window limiter policy. Critical OAuth endpoints are explicitly annotated.
+builder.Services.AddDefaultRateLimiting(permitLimit: 60, windowMinutes: 1, queueLimit: 0);
+
 builder.Services.AddStackExchangeRedisCache(options =>
 {
     options.Configuration = environmentOptions.REDIS_CONNECTIONSTRING;
@@ -92,6 +95,8 @@ app.Use(async (ctx, next) =>
 //app.UseRequestCulture();
 
 app.UseRouting();
+
+app.UseRateLimiter();
 
 app.UseAuthentication();
 

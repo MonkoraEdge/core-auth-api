@@ -3,6 +3,7 @@ using MonkoraEdge.Core.Auth.Domain.AggregatesModel.OAuth2Aggregate;
 using MonkoraEdge.Core.Auth.Domain.Services.Interface;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Net.Http.Headers;
 
 namespace MonkoraEdge.Core.Auth.API.Controllers;
@@ -22,6 +23,7 @@ public class OAuth2Controller : ControllerBase
     /// <summary>Authorization endpoint — validates request and (if logged in) issues authorization code</summary>
     [HttpGet("authorize")]
     [HttpPost("authorize")]
+    [EnableRateLimiting("default")]
     public async Task<IActionResult> Authorize([FromQuery] AuthorizeRequest request)
     {
         var response = await _oauth2Service.ProcessAuthorizeRequestAsync(request, GetAuthenticatedUserId());
@@ -31,8 +33,12 @@ public class OAuth2Controller : ControllerBase
     /// <summary>Submit consent and receive authorization code</summary>
     [HttpPost("authorize/consent")]
     [Authorize]
+    [EnableRateLimiting("default")]
     public async Task<IActionResult> SubmitConsent([FromBody] ConsentSubmitRequest request)
     {
+        if (!IsSameOriginBrowserPost())
+            return Forbid();
+
         var userId = GetAuthenticatedUserId();
         if (userId == null) return Unauthorized();
 
@@ -56,6 +62,7 @@ public class OAuth2Controller : ControllerBase
     [HttpPost("token")]
     [Consumes("application/x-www-form-urlencoded")]
     [Produces("application/json")]
+    [EnableRateLimiting("default")]
     public async Task<IActionResult> Token([FromForm] TokenFormRequest formRequest)
     {
         var request = MapFormToTokenRequest(formRequest);
@@ -69,6 +76,7 @@ public class OAuth2Controller : ControllerBase
     /// <summary>Token revocation endpoint (RFC 7009)</summary>
     [HttpPost("revoke")]
     [Consumes("application/x-www-form-urlencoded")]
+    [EnableRateLimiting("default")]
     public async Task<IActionResult> Revoke([FromForm] RevocationFormRequest formRequest)
     {
         var request = new RevocationRequest
@@ -84,6 +92,7 @@ public class OAuth2Controller : ControllerBase
     /// <summary>Token introspection endpoint (RFC 7662)</summary>
     [HttpPost("introspect")]
     [Consumes("application/x-www-form-urlencoded")]
+    [EnableRateLimiting("default")]
     public async Task<IActionResult> Introspect([FromForm] IntrospectFormRequest formRequest)
     {
         var request = new IntrospectRequest
@@ -162,6 +171,27 @@ public class OAuth2Controller : ControllerBase
         Request.Headers["X-Forwarded-For"].FirstOrDefault()
         ?? HttpContext.Connection.RemoteIpAddress?.ToString()
         ?? "unknown";
+
+    private bool IsSameOriginBrowserPost()
+    {
+        // CSRF guard for browser form/cookie contexts. Non-browser clients typically don't send Cookie.
+        if (!Request.Headers.ContainsKey("Cookie"))
+            return true;
+
+        var currentOrigin = $"{Request.Scheme}://{Request.Host.Value}";
+
+        if (Request.Headers.TryGetValue("Origin", out var origin) && !string.IsNullOrWhiteSpace(origin))
+            return string.Equals(origin.ToString(), currentOrigin, StringComparison.OrdinalIgnoreCase);
+
+        if (Request.Headers.TryGetValue("Referer", out var referer)
+            && Uri.TryCreate(referer.ToString(), UriKind.Absolute, out var refererUri))
+        {
+            var refererOrigin = $"{refererUri.Scheme}://{refererUri.Authority}";
+            return string.Equals(refererOrigin, currentOrigin, StringComparison.OrdinalIgnoreCase);
+        }
+
+        return false;
+    }
 
     private string? GetUserAgent() => Request.Headers.UserAgent.ToString();
 

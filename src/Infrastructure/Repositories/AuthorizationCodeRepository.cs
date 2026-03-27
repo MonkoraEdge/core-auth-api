@@ -15,4 +15,14 @@ public class AuthorizationCodeRepository : AuthRepositoryBase<AuthorizationCode>
 
     public async Task<IEnumerable<AuthorizationCode>> GetByUserIdAsync(Guid userId) =>
         await Context.AuthorizationCodes.Where(m => m.UserId == userId).ToListAsync();
+
+    public async Task<bool> TryConsumeAsync(Guid id, DateTime consumedAtUtc)
+    {
+        var affected = await Context.AuthorizationCodes
+            .Where(m => m.Id == id && m.ConsumedAt == null && m.ExpiresAt > DateTime.UtcNow)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(m => m.ConsumedAt, consumedAtUtc));
+
+        return affected == 1;
+    }
 }
