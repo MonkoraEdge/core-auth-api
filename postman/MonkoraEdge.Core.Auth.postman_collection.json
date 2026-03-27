@@ -17,6 +17,13 @@
     { "key": "redirectUri", "value": "http://localhost:3000/auth/callback" },
     { "key": "state", "value": "sample-state" },
     { "key": "nonce", "value": "sample-nonce" },
+    { "key": "codeChallenge", "value": "" },
+    { "key": "oauthScope", "value": "openid profile email" },
+    {
+      "key": "oauthScopeWithOfflineAccess",
+      "value": "openid profile email offline_access"
+    },
+    { "key": "clientCredentialsScope", "value": "openid profile email" },
     { "key": "tenantId", "value": "00000000-0000-0000-0000-000000000001" },
     { "key": "userId", "value": "00000000-0000-0000-0000-000000000002" },
     { "key": "roleId", "value": "00000000-0000-0000-0000-000000000003" },
@@ -329,20 +336,40 @@
       "item": [
         {
           "name": "Authorize GET",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const partA = pm.variables.replaceIn('{{$guid}}').replace(/-/g, '');",
+                  "const partB = pm.variables.replaceIn('{{$guid}}').replace(/-/g, '');",
+                  "const verifier = (partA + partB).slice(0, 86);",
+                  "const digest = CryptoJS.SHA256(verifier);",
+                  "const challenge = CryptoJS.enc.Base64.stringify(digest)",
+                  "  .replace(/\\+/g, '-')",
+                  "  .replace(/\\//g, '_')",
+                  "  .replace(/=+$/, '');",
+                  "pm.collectionVariables.set('codeVerifier', verifier);",
+                  "pm.collectionVariables.set('codeChallenge', challenge);"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/oauth2/authorize?responseType=code&clientId={{clientId}}&redirectUri={{redirectUri}}&scope=openid profile email&state={{state}}&codeChallenge=challenge&codeChallengeMethod=S256&nonce={{nonce}}",
+              "raw": "{{baseUrl}}/oauth2/authorize?responseType=code&clientId={{clientId}}&redirectUri={{redirectUri}}&scope={{oauthScopeWithOfflineAccess}}&state={{state}}&codeChallenge={{codeChallenge}}&codeChallengeMethod=S256&nonce={{nonce}}",
               "host": ["{{baseUrl}}"],
               "path": ["oauth2", "authorize"],
               "query": [
                 { "key": "responseType", "value": "code" },
                 { "key": "clientId", "value": "{{clientId}}" },
                 { "key": "redirectUri", "value": "{{redirectUri}}" },
-                { "key": "scope", "value": "openid profile email" },
+                { "key": "scope", "value": "{{oauthScopeWithOfflineAccess}}" },
                 { "key": "state", "value": "{{state}}" },
-                { "key": "codeChallenge", "value": "challenge" },
+                { "key": "codeChallenge", "value": "{{codeChallenge}}" },
                 { "key": "codeChallengeMethod", "value": "S256" },
                 { "key": "nonce", "value": "{{nonce}}" }
               ]
@@ -351,20 +378,40 @@
         },
         {
           "name": "Authorize POST",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const partA = pm.variables.replaceIn('{{$guid}}').replace(/-/g, '');",
+                  "const partB = pm.variables.replaceIn('{{$guid}}').replace(/-/g, '');",
+                  "const verifier = (partA + partB).slice(0, 86);",
+                  "const digest = CryptoJS.SHA256(verifier);",
+                  "const challenge = CryptoJS.enc.Base64.stringify(digest)",
+                  "  .replace(/\\+/g, '-')",
+                  "  .replace(/\\//g, '_')",
+                  "  .replace(/=+$/, '');",
+                  "pm.collectionVariables.set('codeVerifier', verifier);",
+                  "pm.collectionVariables.set('codeChallenge', challenge);"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "POST",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/oauth2/authorize?responseType=code&clientId={{clientId}}&redirectUri={{redirectUri}}&scope=openid profile email&state={{state}}&codeChallenge=challenge&codeChallengeMethod=S256&nonce={{nonce}}",
+              "raw": "{{baseUrl}}/oauth2/authorize?responseType=code&clientId={{clientId}}&redirectUri={{redirectUri}}&scope={{oauthScopeWithOfflineAccess}}&state={{state}}&codeChallenge={{codeChallenge}}&codeChallengeMethod=S256&nonce={{nonce}}",
               "host": ["{{baseUrl}}"],
               "path": ["oauth2", "authorize"],
               "query": [
                 { "key": "responseType", "value": "code" },
                 { "key": "clientId", "value": "{{clientId}}" },
                 { "key": "redirectUri", "value": "{{redirectUri}}" },
-                { "key": "scope", "value": "openid profile email" },
+                { "key": "scope", "value": "{{oauthScopeWithOfflineAccess}}" },
                 { "key": "state", "value": "{{state}}" },
-                { "key": "codeChallenge", "value": "challenge" },
+                { "key": "codeChallenge", "value": "{{codeChallenge}}" },
                 { "key": "codeChallengeMethod", "value": "S256" },
                 { "key": "nonce", "value": "{{nonce}}" }
               ]
@@ -377,11 +424,13 @@
             "method": "POST",
             "header": [
               { "key": "Authorization", "value": "Bearer {{bearerToken}}" },
-              { "key": "Content-Type", "value": "application/json" }
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Origin", "value": "{{baseUrl}}" },
+              { "key": "Referer", "value": "{{baseUrl}}/oauth2/authorize" }
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"clientId\": \"{{clientId}}\",\n  \"redirectUri\": \"{{redirectUri}}\",\n  \"scope\": \"openid profile email\",\n  \"state\": \"{{state}}\",\n  \"codeChallenge\": \"challenge\",\n  \"codeChallengeMethod\": \"S256\",\n  \"nonce\": \"{{nonce}}\",\n  \"approved\": true,\n  \"rememberConsent\": true\n}"
+              "raw": "{\n  \"clientId\": \"{{clientId}}\",\n  \"redirectUri\": \"{{redirectUri}}\",\n  \"scope\": \"{{oauthScopeWithOfflineAccess}}\",\n  \"state\": \"{{state}}\",\n  \"codeChallenge\": \"{{codeChallenge}}\",\n  \"codeChallengeMethod\": \"S256\",\n  \"nonce\": \"{{nonce}}\",\n  \"approved\": true,\n  \"rememberConsent\": true\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/oauth2/authorize/consent",
@@ -391,7 +440,22 @@
           }
         },
         {
-          "name": "Token",
+          "name": "Token - Authorization Code",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const data = pm.response.json();",
+                  "  if (data.access_token) pm.collectionVariables.set('bearerToken', data.access_token);",
+                  "  if (data.refresh_token) pm.collectionVariables.set('refreshToken', data.refresh_token);",
+                  "}"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "POST",
             "header": [
@@ -423,10 +487,102 @@
                   "value": "{{codeVerifier}}",
                   "type": "text"
                 },
-                { "key": "refresh_token", "value": "", "type": "text" },
                 {
                   "key": "scope",
-                  "value": "openid profile email",
+                  "value": "{{oauthScopeWithOfflineAccess}}",
+                  "type": "text"
+                },
+                { "key": "client_id", "value": "{{clientId}}", "type": "text" },
+                {
+                  "key": "client_secret",
+                  "value": "{{clientSecret}}",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/oauth2/token",
+              "host": ["{{baseUrl}}"],
+              "path": ["oauth2", "token"]
+            }
+          }
+        },
+        {
+          "name": "Token - Refresh Grant",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const data = pm.response.json();",
+                  "  if (data.access_token) pm.collectionVariables.set('bearerToken', data.access_token);",
+                  "  if (data.refresh_token) pm.collectionVariables.set('refreshToken', data.refresh_token);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                { "key": "grant_type", "value": "refresh_token", "type": "text" },
+                { "key": "refresh_token", "value": "{{refreshToken}}", "type": "text" },
+                { "key": "client_id", "value": "{{clientId}}", "type": "text" },
+                { "key": "client_secret", "value": "{{clientSecret}}", "type": "text" }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/oauth2/token",
+              "host": ["{{baseUrl}}"],
+              "path": ["oauth2", "token"]
+            }
+          }
+        },
+        {
+          "name": "Token - Client Credentials",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const data = pm.response.json();",
+                  "  if (data.access_token) pm.collectionVariables.set('bearerToken', data.access_token);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "grant_type",
+                  "value": "client_credentials",
+                  "type": "text"
+                },
+                {
+                  "key": "scope",
+                  "value": "{{clientCredentialsScope}}",
                   "type": "text"
                 },
                 { "key": "client_id", "value": "{{clientId}}", "type": "text" },
