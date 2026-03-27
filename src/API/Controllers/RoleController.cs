@@ -5,7 +5,9 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace MonkoraEdge.Core.Auth.API.Controllers;
 
-/// <summary>Role management endpoints</summary>
+/// <summary>
+/// Role management endpoints for tenant/global role catalog and role-permission mappings.
+/// </summary>
 [Route("roles")]
 [ApiController]
 [Authorize]
@@ -18,13 +20,18 @@ public class RoleController : ControllerBase
         _roleService = roleService;
     }
 
+    /// <summary>
+    /// Resolve caller id for auditing role changes.
+    /// </summary>
     private string GetUserIdString()
     {
         var sub = User.FindFirst("sub")?.Value ?? User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
         return sub ?? "system";
     }
 
-    /// <summary>List all roles with optional tenant filter</summary>
+    /// <summary>
+    /// List roles with optional tenant and active filters.
+    /// </summary>
     [HttpGet]
     public async Task<IActionResult> GetList([FromQuery] Guid? tenantId, [FromQuery] bool activeOnly = true)
     {
@@ -32,7 +39,9 @@ public class RoleController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>List roles for a specific tenant</summary>
+    /// <summary>
+    /// List all roles within a specific tenant scope.
+    /// </summary>
     [HttpGet("tenant/{tenantId:guid}")]
     public async Task<IActionResult> GetByTenant(Guid tenantId)
     {
@@ -40,7 +49,9 @@ public class RoleController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>Get a single role by ID</summary>
+    /// <summary>
+    /// Get a single role by identifier.
+    /// </summary>
     [HttpGet("{id:guid}")]
     public async Task<IActionResult> GetById(Guid id)
     {
@@ -48,7 +59,9 @@ public class RoleController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>Create a new role</summary>
+    /// <summary>
+    /// Create a new role definition.
+    /// </summary>
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] RoleCreateRequest request)
     {
@@ -56,7 +69,9 @@ public class RoleController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>Update an existing role</summary>
+    /// <summary>
+    /// Update role metadata and status.
+    /// </summary>
     [HttpPut("{id:guid}")]
     public async Task<IActionResult> Update(Guid id, [FromBody] RoleUpdateRequest request)
     {
@@ -64,7 +79,9 @@ public class RoleController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>Delete a role</summary>
+    /// <summary>
+    /// Delete a role definition.
+    /// </summary>
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> Delete(Guid id)
     {
@@ -72,7 +89,9 @@ public class RoleController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>Assign permissions to a role</summary>
+    /// <summary>
+    /// Assign permission set to target role.
+    /// </summary>
     [HttpPost("{id:guid}/permissions")]
     public async Task<IActionResult> AssignPermissions(Guid id, [FromBody] AssignPermissionRequest request)
     {
@@ -80,7 +99,9 @@ public class RoleController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>Remove permissions from a role</summary>
+    /// <summary>
+    /// Remove permission set from target role.
+    /// </summary>
     [HttpDelete("{id:guid}/permissions")]
     public async Task<IActionResult> RemovePermissions(Guid id, [FromBody] AssignPermissionRequest request)
     {

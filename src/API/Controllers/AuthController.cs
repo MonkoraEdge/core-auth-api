@@ -7,7 +7,10 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace MonkoraEdge.Core.Auth.API.Controllers;
 
-/// <summary>Authentication endpoints — login, register, password management, 2FA</summary>
+/// <summary>
+/// Authentication endpoints for end-user account lifecycle:
+/// sign-in, registration, password recovery, email verification, and 2FA operations.
+/// </summary>
 [Route("auth")]
 [ApiController]
 public class AuthController : ControllerBase
@@ -23,7 +26,10 @@ public class AuthController : ControllerBase
 
     // ─── Login / Register / Token ─────────────────────────────────────────────
 
-    /// <summary>Login with username and password</summary>
+    /// <summary>
+    /// Authenticate a user with username/password and optional second factor payload.
+    /// Returns access/refresh tokens, or a 2FA challenge response when required.
+    /// </summary>
     [HttpPost("login")]
     public async Task<IActionResult> Login([FromBody] LoginRequest request)
     {
@@ -31,7 +37,9 @@ public class AuthController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>Register a new user account</summary>
+    /// <summary>
+    /// Register a new local account and trigger verification workflow.
+    /// </summary>
     [HttpPost("register")]
     public async Task<IActionResult> Register([FromBody] RegisterRequest request)
     {
@@ -39,7 +47,9 @@ public class AuthController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>Logout and revoke tokens</summary>
+    /// <summary>
+    /// Sign out the current user and revoke refresh tokens for one device or all devices.
+    /// </summary>
     [HttpPost("logout")]
     [Authorize]
     public async Task<IActionResult> Logout([FromBody] LogoutRequest request)
@@ -49,7 +59,9 @@ public class AuthController : ControllerBase
         return NoContent();
     }
 
-    /// <summary>Refresh access token using refresh token</summary>
+    /// <summary>
+    /// Compatibility refresh endpoint that proxies to OAuth2 refresh_token grant processing.
+    /// </summary>
     [HttpPost("refresh")]
     public async Task<IActionResult> Refresh([FromBody] RefreshTokenRequest request)
     {
@@ -70,7 +82,9 @@ public class AuthController : ControllerBase
 
     // ─── Password Management ──────────────────────────────────────────────────
 
-    /// <summary>Initiate forgot password flow — sends reset email/link</summary>
+    /// <summary>
+    /// Start forgot-password flow and send reset instructions (email/link) if account exists.
+    /// </summary>
     [HttpPost("forgot-password")]
     public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordRequest request)
     {
@@ -78,7 +92,9 @@ public class AuthController : ControllerBase
         return NoContent();
     }
 
-    /// <summary>Reset password using the token received by email</summary>
+    /// <summary>
+    /// Complete password reset using a valid reset token issued by forgot-password flow.
+    /// </summary>
     [HttpPost("reset-password")]
     public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordRequest request)
     {
@@ -86,7 +102,9 @@ public class AuthController : ControllerBase
         return NoContent();
     }
 
-    /// <summary>Change password while authenticated</summary>
+    /// <summary>
+    /// Change password for currently authenticated user after validating current credentials.
+    /// </summary>
     [HttpPost("change-password")]
     [Authorize]
     public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest request)
@@ -97,7 +115,9 @@ public class AuthController : ControllerBase
 
     // ─── Email Verification ───────────────────────────────────────────────────
 
-    /// <summary>Verify email address using the token sent to the user</summary>
+    /// <summary>
+    /// Verify ownership of email address via verification token.
+    /// </summary>
     [HttpPost("verify-email")]
     public async Task<IActionResult> VerifyEmail([FromBody] VerifyEmailRequest request)
     {
@@ -105,7 +125,9 @@ public class AuthController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>Resend email verification message (requires authentication)</summary>
+    /// <summary>
+    /// Re-send email verification message for current user context.
+    /// </summary>
     [HttpPost("resend-verification")]
     [Authorize]
     public async Task<IActionResult> ResendVerification([FromBody] ResendVerificationEmailRequest request)
@@ -116,7 +138,9 @@ public class AuthController : ControllerBase
 
     // ─── Two-Factor Authentication ────────────────────────────────────────────
 
-    /// <summary>Get TOTP setup details (secret + QR URI)</summary>
+    /// <summary>
+    /// Generate or fetch 2FA setup materials (for example TOTP secret and QR payload).
+    /// </summary>
     [HttpGet("2fa/setup")]
     [Authorize]
     public async Task<IActionResult> TwoFactorSetup([FromQuery] string deviceType = "TOTP")
@@ -126,7 +150,9 @@ public class AuthController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>Enable 2FA after verifying TOTP code</summary>
+    /// <summary>
+    /// Enable 2FA for current user after successful verification of one-time code.
+    /// </summary>
     [HttpPost("2fa/enable")]
     [Authorize]
     public async Task<IActionResult> TwoFactorEnable([FromBody] TwoFactorVerifyRequest request)
@@ -135,7 +161,9 @@ public class AuthController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>Disable 2FA — requires password confirmation</summary>
+    /// <summary>
+    /// Disable 2FA for current user. Service validates required proof such as password/code.
+    /// </summary>
     [HttpPost("2fa/disable")]
     [Authorize]
     public async Task<IActionResult> TwoFactorDisable([FromBody] TwoFactorDisableRequest request)
@@ -144,7 +172,9 @@ public class AuthController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>Complete login for 2FA-protected accounts (called after initial login challenge)</summary>
+    /// <summary>
+    /// Finalize login when account is protected by 2FA challenge.
+    /// </summary>
     [HttpPost("2fa/verify")]
     public async Task<IActionResult> TwoFactorVerify([FromBody] TwoFactorLoginRequest request)
     {
@@ -155,6 +185,9 @@ public class AuthController : ControllerBase
 
     // ─── Helpers ──────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Resolve authenticated user id from JWT claims (sub/nameidentifier).
+    /// </summary>
     private Guid GetUserId()
     {
         var sub = User.FindFirstValue("sub") ?? User.FindFirstValue(ClaimTypes.NameIdentifier);
@@ -162,11 +195,17 @@ public class AuthController : ControllerBase
         return id;
     }
 
+    /// <summary>
+    /// Resolve caller IP address using reverse-proxy header fallback.
+    /// </summary>
     private string GetIpAddress() =>
         Request.Headers["X-Forwarded-For"].FirstOrDefault()
         ?? HttpContext.Connection.RemoteIpAddress?.ToString()
         ?? "unknown";
 
+    /// <summary>
+    /// Resolve caller user-agent for security telemetry and anomaly checks.
+    /// </summary>
     private string? GetUserAgent() => Request.Headers.UserAgent.ToString();
 }
 

@@ -5,7 +5,9 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace MonkoraEdge.Core.Auth.API.Controllers;
 
-/// <summary>OAuth2 scope management endpoints</summary>
+/// <summary>
+/// OAuth scope management endpoints for defining API/resource scopes.
+/// </summary>
 [Route("scopes")]
 [ApiController]
 [Authorize]
@@ -18,13 +20,18 @@ public class ScopeController : ControllerBase
         _scopeService = scopeService;
     }
 
+    /// <summary>
+    /// Resolve caller id for auditing scope changes.
+    /// </summary>
     private string GetUserIdString()
     {
         var sub = User.FindFirst("sub")?.Value ?? User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
         return sub ?? "system";
     }
 
-    /// <summary>List all scopes</summary>
+    /// <summary>
+    /// List all scopes with optional active-only filter.
+    /// </summary>
     [HttpGet]
     public async Task<IActionResult> GetList([FromQuery] bool activeOnly = true)
     {
@@ -32,7 +39,9 @@ public class ScopeController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>Get a single scope by ID</summary>
+    /// <summary>
+    /// Get scope details by identifier.
+    /// </summary>
     [HttpGet("{id:guid}")]
     public async Task<IActionResult> GetById(Guid id)
     {
@@ -40,7 +49,9 @@ public class ScopeController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>Create a new scope</summary>
+    /// <summary>
+    /// Create a new scope definition.
+    /// </summary>
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] ScopeCreateRequest request)
     {
@@ -48,7 +59,9 @@ public class ScopeController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>Update an existing scope</summary>
+    /// <summary>
+    /// Update a scope definition.
+    /// </summary>
     [HttpPut("{id:guid}")]
     public async Task<IActionResult> Update(Guid id, [FromBody] ScopeUpdateRequest request)
     {
@@ -56,7 +69,9 @@ public class ScopeController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>Delete a scope (system scopes are protected)</summary>
+    /// <summary>
+    /// Delete a scope. Domain rules protect built-in/system scopes.
+    /// </summary>
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> Delete(Guid id)
     {

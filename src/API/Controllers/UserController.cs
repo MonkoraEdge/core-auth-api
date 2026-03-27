@@ -6,7 +6,9 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace MonkoraEdge.Core.Auth.API.Controllers;
 
-/// <summary>User management endpoints</summary>
+/// <summary>
+/// User administration endpoints for querying, provisioning, lifecycle status, and role assignments.
+/// </summary>
 [Route("users")]
 [ApiController]
 [Authorize]
@@ -19,7 +21,9 @@ public class UserController : ControllerBase
         _userService = userService;
     }
 
-    /// <summary>List users with optional filtering and paging</summary>
+    /// <summary>
+    /// List users using datasource filters (search, status, tenant, paging, sorting).
+    /// </summary>
     [HttpGet]
     public async Task<IActionResult> GetList([FromQuery] UserDataSourceRequest request)
     {
@@ -27,7 +31,9 @@ public class UserController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>Get a single user by ID</summary>
+    /// <summary>
+    /// Get detailed profile for a single user by identifier.
+    /// </summary>
     [HttpGet("{id:guid}")]
     public async Task<IActionResult> GetById(Guid id)
     {
@@ -35,7 +41,9 @@ public class UserController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>Get all users for a specific tenant</summary>
+    /// <summary>
+    /// Get all users associated with a specific tenant.
+    /// </summary>
     [HttpGet("tenant/{tenantId:guid}")]
     public async Task<IActionResult> GetByTenant(Guid tenantId)
     {
@@ -43,7 +51,9 @@ public class UserController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>Create a new user</summary>
+    /// <summary>
+    /// Create a new user account under optional tenant context.
+    /// </summary>
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] UserCreateRequest request)
     {
@@ -51,7 +61,9 @@ public class UserController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>Update an existing user</summary>
+    /// <summary>
+    /// Update mutable user profile fields and account flags.
+    /// </summary>
     [HttpPut("{id:guid}")]
     public async Task<IActionResult> Update(Guid id, [FromBody] UserUpdateRequest request)
     {
@@ -59,7 +71,9 @@ public class UserController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>Delete a user (soft-delete)</summary>
+    /// <summary>
+    /// Soft-delete a user record.
+    /// </summary>
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> Delete(Guid id)
     {
@@ -67,7 +81,9 @@ public class UserController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>Activate a user account</summary>
+    /// <summary>
+    /// Mark a user account as active and eligible for authentication.
+    /// </summary>
     [HttpPost("{id:guid}/activate")]
     public async Task<IActionResult> Activate(Guid id)
     {
@@ -75,7 +91,9 @@ public class UserController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>Deactivate a user account</summary>
+    /// <summary>
+    /// Mark a user account as inactive to block new authentications.
+    /// </summary>
     [HttpPost("{id:guid}/deactivate")]
     public async Task<IActionResult> Deactivate(Guid id)
     {
@@ -83,7 +101,9 @@ public class UserController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>Assign roles to a user</summary>
+    /// <summary>
+    /// Assign one or more roles to target user.
+    /// </summary>
     [HttpPost("{id:guid}/roles")]
     public async Task<IActionResult> AssignRoles(Guid id, [FromBody] AssignRoleRequest request)
     {
@@ -91,7 +111,9 @@ public class UserController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>Remove roles from a user</summary>
+    /// <summary>
+    /// Remove one or more roles from target user.
+    /// </summary>
     [HttpDelete("{id:guid}/roles")]
     public async Task<IActionResult> RemoveRoles(Guid id, [FromBody] AssignRoleRequest request)
     {
@@ -101,6 +123,9 @@ public class UserController : ControllerBase
 
     // ─── Helpers ──────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Resolve caller user id from token claims.
+    /// </summary>
     private Guid GetUserId()
     {
         var sub = User.FindFirstValue("sub") ?? User.FindFirstValue(ClaimTypes.NameIdentifier);
@@ -108,5 +133,8 @@ public class UserController : ControllerBase
         return id;
     }
 
+    /// <summary>
+    /// Resolve caller user id as string for auditing metadata.
+    /// </summary>
     private string GetUserIdString() => GetUserId().ToString();
 }

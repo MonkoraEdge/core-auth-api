@@ -8,7 +8,10 @@ using Microsoft.Net.Http.Headers;
 
 namespace MonkoraEdge.Core.Auth.API.Controllers;
 
-/// <summary>OAuth2 authorization server endpoints (RFC 6749, RFC 7009, RFC 7662)</summary>
+/// <summary>
+/// OAuth2/OIDC protocol endpoints exposed by this authorization server.
+/// Covers authorize, token issuance, revocation, introspection, userinfo, and logout session handling.
+/// </summary>
 [Route("oauth2")]
 [ApiController]
 public class OAuth2Controller : ControllerBase
@@ -20,7 +23,10 @@ public class OAuth2Controller : ControllerBase
         _oauth2Service = oauth2Service;
     }
 
-    /// <summary>Authorization endpoint — validates request and (if logged in) issues authorization code</summary>
+    /// <summary>
+    /// OAuth2 authorize endpoint.
+    /// Validates authorize parameters and returns one of: redirect with code, login required, or consent required.
+    /// </summary>
     [HttpGet("authorize")]
     [HttpPost("authorize")]
     [EnableRateLimiting("default")]
@@ -30,7 +36,10 @@ public class OAuth2Controller : ControllerBase
         return ToActionResult(response);
     }
 
-    /// <summary>Submit consent and receive authorization code</summary>
+    /// <summary>
+    /// Consent submission endpoint used after UI consent screen.
+    /// Performs same-origin guard for browser cookie contexts and returns redirect with success/error.
+    /// </summary>
     [HttpPost("authorize/consent")]
     [Authorize]
     [EnableRateLimiting("default")]
@@ -58,7 +67,10 @@ public class OAuth2Controller : ControllerBase
         return Redirect(response.RedirectUrl);
     }
 
-    /// <summary>Token endpoint — exchange authorization code, client credentials, or refresh token for tokens</summary>
+    /// <summary>
+    /// Token endpoint.
+    /// Supports authorization_code, refresh_token, and client_credentials grants.
+    /// </summary>
     [HttpPost("token")]
     [Consumes("application/x-www-form-urlencoded")]
     [Produces("application/json")]
@@ -73,7 +85,10 @@ public class OAuth2Controller : ControllerBase
         return Ok(response);
     }
 
-    /// <summary>Token revocation endpoint (RFC 7009)</summary>
+    /// <summary>
+    /// Token revocation endpoint (RFC 7009).
+    /// Revokes caller-owned token and always responds HTTP 200 per RFC behavior.
+    /// </summary>
     [HttpPost("revoke")]
     [Consumes("application/x-www-form-urlencoded")]
     [EnableRateLimiting("default")]
@@ -89,7 +104,10 @@ public class OAuth2Controller : ControllerBase
         return Ok(); // RFC 7009: always 200
     }
 
-    /// <summary>Token introspection endpoint (RFC 7662)</summary>
+    /// <summary>
+    /// Token introspection endpoint (RFC 7662).
+    /// Returns active/inactive token metadata for authorized clients.
+    /// </summary>
     [HttpPost("introspect")]
     [Consumes("application/x-www-form-urlencoded")]
     [EnableRateLimiting("default")]
@@ -105,7 +123,9 @@ public class OAuth2Controller : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>UserInfo endpoint — returns claims for authenticated user</summary>
+    /// <summary>
+    /// OIDC UserInfo endpoint that returns allowed claims for authenticated subject.
+    /// </summary>
     [HttpGet("userinfo")]
     [Authorize]
     public async Task<IActionResult> UserInfo()
@@ -119,7 +139,10 @@ public class OAuth2Controller : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>End session endpoint (OIDC RP-Initiated Logout)</summary>
+    /// <summary>
+    /// End session endpoint for RP-initiated logout.
+    /// Revokes active sessions and optionally redirects to post-logout URI.
+    /// </summary>
     [HttpGet("end-session")]
     [HttpPost("end-session")]
     public async Task<IActionResult> EndSession([FromQuery] string? id_token_hint, [FromQuery] string? post_logout_redirect_uri)
@@ -138,12 +161,18 @@ public class OAuth2Controller : ControllerBase
 
     // ─── Helpers ────────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Resolve authenticated subject id from JWT claims when available.
+    /// </summary>
     private Guid? GetAuthenticatedUserId()
     {
         var sub = User.FindFirst("sub")?.Value ?? User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
         return Guid.TryParse(sub, out var id) ? id : null;
     }
 
+    /// <summary>
+    /// Extract OAuth client credentials from request body and Authorization basic header.
+    /// </summary>
     private void ExtractClientCredentials(out string? clientId, out string? clientSecret, TokenRequest? request)
     {
         clientId = request?.ClientId;
@@ -167,11 +196,17 @@ public class OAuth2Controller : ControllerBase
         }
     }
 
+    /// <summary>
+    /// Resolve caller IP address using reverse-proxy header fallback.
+    /// </summary>
     private string GetIpAddress() =>
         Request.Headers["X-Forwarded-For"].FirstOrDefault()
         ?? HttpContext.Connection.RemoteIpAddress?.ToString()
         ?? "unknown";
 
+    /// <summary>
+    /// Same-origin guard for browser cookie requests to reduce CSRF risk on consent POST.
+    /// </summary>
     private bool IsSameOriginBrowserPost()
     {
         // CSRF guard for browser form/cookie contexts. Non-browser clients typically don't send Cookie.
@@ -193,8 +228,14 @@ public class OAuth2Controller : ControllerBase
         return false;
     }
 
+    /// <summary>
+    /// Resolve caller user-agent for security telemetry and token issuance context.
+    /// </summary>
     private string? GetUserAgent() => Request.Headers.UserAgent.ToString();
 
+    /// <summary>
+    /// Convert domain-level authorize result into API response shape.
+    /// </summary>
     private IActionResult ToActionResult(AuthorizeEndpointResponse response)
     {
         return response.Kind switch
@@ -216,6 +257,9 @@ public class OAuth2Controller : ControllerBase
         };
     }
 
+    /// <summary>
+    /// Map form-urlencoded token request payload to domain token request model.
+    /// </summary>
     private static TokenRequest MapFormToTokenRequest(TokenFormRequest f) => new()
     {
         GrantType = f.GrantType,

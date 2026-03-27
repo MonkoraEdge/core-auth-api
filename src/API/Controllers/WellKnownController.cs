@@ -4,7 +4,9 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace MonkoraEdge.Core.Auth.API.Controllers;
 
-/// <summary>OpenID Connect discovery endpoints</summary>
+/// <summary>
+/// Discovery endpoints for OAuth2/OIDC clients to bootstrap server metadata and keys.
+/// </summary>
 [ApiController]
 public class WellKnownController : ControllerBase
 {
@@ -17,7 +19,9 @@ public class WellKnownController : ControllerBase
         _tokenService = tokenService;
     }
 
-    /// <summary>OpenID Connect Discovery Document (RFC 8414)</summary>
+    /// <summary>
+    /// Return OIDC discovery document used by clients/libraries for dynamic configuration.
+    /// </summary>
     [HttpGet("/.well-known/openid-configuration")]
     [Produces("application/json")]
     public IActionResult GetOpenIdConfiguration()
@@ -26,7 +30,9 @@ public class WellKnownController : ControllerBase
         return Ok(_oauth2Service.GetOpenIdConfiguration(baseUrl));
     }
 
-    /// <summary>OAuth 2.0 Authorization Server Metadata (RFC 8414)</summary>
+    /// <summary>
+    /// Return OAuth authorization server metadata (RFC 8414).
+    /// </summary>
     [HttpGet("/.well-known/oauth-authorization-server")]
     [Produces("application/json")]
     public IActionResult GetAuthorizationServerMetadata()
@@ -35,7 +41,9 @@ public class WellKnownController : ControllerBase
         return Ok(_oauth2Service.GetAuthorizationServerMetadata(baseUrl));
     }
 
-    /// <summary>JSON Web Key Set (RFC 7517)</summary>
+    /// <summary>
+    /// Return public signing keys (JWKS) so token consumers can validate JWT signatures.
+    /// </summary>
     [HttpGet("/.well-known/jwks.json")]
     [Produces("application/json")]
     public IActionResult GetJwks()

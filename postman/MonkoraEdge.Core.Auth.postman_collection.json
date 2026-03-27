@@ -2,12 +2,13 @@
   "info": {
     "_postman_id": "f8f0bc6e-7bb5-4978-ae29-e3f7a2751f12",
     "name": "MonkoraEdge Core Auth API",
-    "description": "Postman collection for the MonkoraEdge Core Auth API. Update environment variables before running protected or tenant-specific requests.",
+    "description": "Postman collection for MonkoraEdge Core Auth API (updated 2026-03-27). Includes Auth, OAuth2/OIDC, and IAM management flows with PKCE helpers and token auto-save scripts.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
     { "key": "baseUrl", "value": "http://localhost:5000" },
     { "key": "bearerToken", "value": "" },
+    { "key": "idToken", "value": "" },
     { "key": "basicAuth", "value": "" },
     { "key": "clientId", "value": "monkora-demo-spa" },
     { "key": "clientSecret", "value": "" },
@@ -359,6 +360,7 @@
           "request": {
             "method": "GET",
             "header": [],
+            "description": "Start Authorization Code + PKCE flow. Pre-request script auto-generates codeVerifier/codeChallenge (S256).",
             "url": {
               "raw": "{{baseUrl}}/oauth2/authorize?responseType=code&clientId={{clientId}}&redirectUri={{redirectUri}}&scope={{oauthScopeWithOfflineAccess}}&state={{state}}&codeChallenge={{codeChallenge}}&codeChallengeMethod=S256&nonce={{nonce}}",
               "host": ["{{baseUrl}}"],
@@ -401,6 +403,7 @@
           "request": {
             "method": "POST",
             "header": [],
+            "description": "Alternative authorize entrypoint with same semantics as GET for compatibility tests.",
             "url": {
               "raw": "{{baseUrl}}/oauth2/authorize?responseType=code&clientId={{clientId}}&redirectUri={{redirectUri}}&scope={{oauthScopeWithOfflineAccess}}&state={{state}}&codeChallenge={{codeChallenge}}&codeChallengeMethod=S256&nonce={{nonce}}",
               "host": ["{{baseUrl}}"],
@@ -422,6 +425,7 @@
           "name": "Submit Consent",
           "request": {
             "method": "POST",
+            "description": "Submit user consent. Origin/Referer headers are included to satisfy same-origin CSRF guard in API.",
             "header": [
               { "key": "Authorization", "value": "Bearer {{bearerToken}}" },
               { "key": "Content-Type", "value": "application/json" },
@@ -451,6 +455,7 @@
                   "  const data = pm.response.json();",
                   "  if (data.access_token) pm.collectionVariables.set('bearerToken', data.access_token);",
                   "  if (data.refresh_token) pm.collectionVariables.set('refreshToken', data.refresh_token);",
+                  "  if (data.id_token) pm.collectionVariables.set('idToken', data.id_token);",
                   "}"
                 ]
               }
@@ -458,6 +463,7 @@
           ],
           "request": {
             "method": "POST",
+            "description": "Exchange authorization code for tokens. Refresh token is returned only when offline_access scope was granted.",
             "header": [
               {
                 "key": "Content-Type",
@@ -526,6 +532,7 @@
           ],
           "request": {
             "method": "POST",
+            "description": "Rotate refresh token and obtain a fresh access token pair.",
             "header": [
               {
                 "key": "Content-Type",
@@ -535,10 +542,22 @@
             "body": {
               "mode": "urlencoded",
               "urlencoded": [
-                { "key": "grant_type", "value": "refresh_token", "type": "text" },
-                { "key": "refresh_token", "value": "{{refreshToken}}", "type": "text" },
+                {
+                  "key": "grant_type",
+                  "value": "refresh_token",
+                  "type": "text"
+                },
+                {
+                  "key": "refresh_token",
+                  "value": "{{refreshToken}}",
+                  "type": "text"
+                },
                 { "key": "client_id", "value": "{{clientId}}", "type": "text" },
-                { "key": "client_secret", "value": "{{clientSecret}}", "type": "text" }
+                {
+                  "key": "client_secret",
+                  "value": "{{clientSecret}}",
+                  "type": "text"
+                }
               ]
             },
             "url": {
@@ -566,6 +585,7 @@
           ],
           "request": {
             "method": "POST",
+            "description": "Client credentials grant. API requires explicit scope (no implicit default scope).",
             "header": [
               {
                 "key": "Content-Type",
@@ -602,8 +622,21 @@
         },
         {
           "name": "Revoke",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const creds = pm.collectionVariables.get('clientId') + ':' + pm.collectionVariables.get('clientSecret');",
+                  "pm.collectionVariables.set('basicAuth', btoa(creds));"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "POST",
+            "description": "Revoke token for current authenticated client. Pre-request script auto-builds Basic auth header from clientId/clientSecret.",
             "header": [
               { "key": "Authorization", "value": "Basic {{basicAuth}}" },
               {
@@ -631,8 +664,21 @@
         },
         {
           "name": "Introspect",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const creds = pm.collectionVariables.get('clientId') + ':' + pm.collectionVariables.get('clientSecret');",
+                  "pm.collectionVariables.set('basicAuth', btoa(creds));"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "POST",
+            "description": "Validate token activity/status for authorized client. Pre-request script auto-builds Basic auth header.",
             "header": [
               { "key": "Authorization", "value": "Basic {{basicAuth}}" },
               {

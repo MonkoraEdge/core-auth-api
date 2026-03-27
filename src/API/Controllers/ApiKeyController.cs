@@ -6,7 +6,9 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace MonkoraEdge.Core.Auth.API.Controllers;
 
-/// <summary>API key management endpoints</summary>
+/// <summary>
+/// API key management endpoints for issuing, listing, revoking, and validating service keys.
+/// </summary>
 [Route("api-keys")]
 [ApiController]
 [Authorize]
@@ -19,7 +21,9 @@ public class ApiKeyController : ControllerBase
         _apiKeyService = apiKeyService;
     }
 
-    /// <summary>List API keys for the current user</summary>
+    /// <summary>
+    /// List API keys owned by current authenticated user.
+    /// </summary>
     [HttpGet]
     public async Task<IActionResult> GetList()
     {
@@ -27,7 +31,9 @@ public class ApiKeyController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>List API keys for a specific client</summary>
+    /// <summary>
+    /// List API keys associated with a specific OAuth client.
+    /// </summary>
     [HttpGet("client/{clientId:guid}")]
     public async Task<IActionResult> GetByClient(Guid clientId)
     {
@@ -35,7 +41,9 @@ public class ApiKeyController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>Get a single API key by ID</summary>
+    /// <summary>
+    /// Get API key metadata by key identifier.
+    /// </summary>
     [HttpGet("{id:guid}")]
     public async Task<IActionResult> GetById(Guid id)
     {
@@ -43,7 +51,9 @@ public class ApiKeyController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>Create a new API key — returns the plain-text key (shown once)</summary>
+    /// <summary>
+    /// Create a new API key and return plain-text value once at creation time.
+    /// </summary>
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] ApiKeyCreateRequest request)
     {
@@ -51,7 +61,9 @@ public class ApiKeyController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>Revoke an API key</summary>
+    /// <summary>
+    /// Revoke an API key and prevent further authentication usage.
+    /// </summary>
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> Revoke(Guid id)
     {
@@ -59,7 +71,9 @@ public class ApiKeyController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>Validate an API key (intended for internal/microservice use)</summary>
+    /// <summary>
+    /// Validate API key string and return validation result for internal service-to-service use.
+    /// </summary>
     [HttpPost("validate")]
     [AllowAnonymous]
     public async Task<IActionResult> Validate([FromBody] ApiKeyValidateRequest request)
@@ -70,6 +84,9 @@ public class ApiKeyController : ControllerBase
 
     // ─── Helpers ──────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Resolve caller user id from token claims.
+    /// </summary>
     private Guid GetUserId()
     {
         var sub = User.FindFirstValue("sub") ?? User.FindFirstValue(ClaimTypes.NameIdentifier);
