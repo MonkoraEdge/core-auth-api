@@ -232,20 +232,22 @@ public class OAuth2Controller : MonkoraControllerBase
 
     /// <summary>
     /// End session endpoint for RP-initiated logout.
-    /// Revokes active sessions and optionally redirects to post-logout URI.
+    /// Revokes active sessions and redirects to post_logout_redirect_uri only when it
+    /// exactly matches a URI registered by the client identified via id_token_hint or client_id.
     /// </summary>
     [HttpGet("end-session")]
     [HttpPost("end-session")]
-    public async Task<IActionResult> EndSession([FromQuery] string? id_token_hint, [FromQuery] string? post_logout_redirect_uri)
+    public async Task<IActionResult> EndSession(
+        [FromQuery] string? id_token_hint,
+        [FromQuery] string? post_logout_redirect_uri,
+        [FromQuery] string? client_id)
     {
         var userId = GetAuthenticatedUserId();
-        if (userId.HasValue)
-            await _oauth2Service.EndSessionAsync(userId.Value, id_token_hint);
+        var validatedRedirectUri = await _oauth2Service.EndSessionAsync(
+            userId, id_token_hint, post_logout_redirect_uri, client_id);
 
-        if (!string.IsNullOrEmpty(post_logout_redirect_uri)
-            && Uri.TryCreate(post_logout_redirect_uri, UriKind.Absolute, out var redirectUri)
-            && (redirectUri.Scheme == Uri.UriSchemeHttps || redirectUri.Scheme == Uri.UriSchemeHttp))
-            return Redirect(post_logout_redirect_uri);
+        if (!string.IsNullOrEmpty(validatedRedirectUri))
+            return Redirect(validatedRedirectUri);
 
         return Ok(new { message = "Session ended." });
     }

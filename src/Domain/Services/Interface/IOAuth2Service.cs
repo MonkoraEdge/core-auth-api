@@ -43,6 +43,10 @@ public interface IOAuth2Service
     /// <summary>Build OAuth 2.0 Authorization Server metadata (RFC 8414).</summary>
     AuthorizationServerMetadataResponse GetAuthorizationServerMetadata(string baseUrl);
 
-    /// <summary>End session / RP-initiated logout — revokes all user tokens (RFC 8414)</summary>
-    Task EndSessionAsync(Guid userId, string? idTokenHint);
+    /// <summary>
+    /// End session / RP-initiated logout — revokes all user tokens and returns the
+    /// validated post-logout redirect URI if it matches the client's registered list.
+    /// Returns <c>null</c> when no safe redirect target can be confirmed.
+    /// </summary>
+    Task<string?> EndSessionAsync(Guid? userId, string? idTokenHint, string? postLogoutRedirectUri, string? clientId = null);
 }

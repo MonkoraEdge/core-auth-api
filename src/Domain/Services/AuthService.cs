@@ -160,7 +160,8 @@ public class AuthService : IAuthService
             }
             else if (!string.IsNullOrEmpty(request.TwoFactorRecoveryCode))
             {
-                var codeHash = _passwordService.HashSha256(request.TwoFactorRecoveryCode.ToUpperInvariant());
+                // Strip formatting hyphens before hashing — storage normalizes the same way in EnableTwoFactorAsync.
+                var codeHash = _passwordService.HashSha256(request.TwoFactorRecoveryCode.Replace("-", "").ToUpperInvariant());
                 var recoveryCode = await _recoveryCodeRepo.GetActiveByCodeHashAsync(codeHash);
                 if (recoveryCode != null)
                 {

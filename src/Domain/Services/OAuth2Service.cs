@@ -147,11 +147,55 @@ public class OAuth2Service : IOAuth2Service
                 requiresConsent = false;
         }
 
+        // ── OIDC Core §3.1.2.1: prompt parameter ────────────────────────────────
+        // Must be processed after consent state is determined so prompt=none can
+        // return the correct error (login_required vs consent_required).
+        bool forceLogin = false;
+        bool forceConsent = false;
+        var prompt = request.Prompt?.Trim().ToLowerInvariant();
+        if (!string.IsNullOrEmpty(prompt))
+        {
+            switch (prompt)
+            {
+                case "none":
+                    // prompt=none: server MUST NOT display any interactive UI.
+                    // Return error codes from OIDC Core §3.1.2.6 instead of requiring interaction.
+                    if (authenticatedUserId == Guid.Empty)
+                        return AuthorizeValidationResult.Fail("login_required",
+                            "Authentication is required. Re-authenticate and retry.");
+                    if (requiresConsent)
+                        return AuthorizeValidationResult.Fail("consent_required",
+                            "Consent has not been granted for the requested scopes.");
+                    break;
+                case "login":
+                case "select_account":
+                    // Force the login flow even when a session already exists.
+                    forceLogin = true;
+                    break;
+                case "consent":
+                    // Force the consent screen even when prior consent covers the scopes.
+                    forceConsent = true;
+                    break;
+            }
+        }
+
+        // ── OIDC Core §3.1.2.1: max_age parameter ───────────────────────────────
+        // If the elapsed time since last authentication exceeds max_age, the user
+        // MUST be re-authenticated (even if a valid session exists).
+        if (!string.IsNullOrEmpty(request.MaxAge) && authenticatedUserId != Guid.Empty
+            && int.TryParse(request.MaxAge, out var maxAgeSeconds) && maxAgeSeconds >= 0)
+        {
+            var user = await _userRepo.GetByIdAsync(authenticatedUserId);
+            var lastAuthAt = user?.LastLoginAt;
+            if (!lastAuthAt.HasValue || (DateTime.UtcNow - lastAuthAt.Value).TotalSeconds > maxAgeSeconds)
+                forceLogin = true;
+        }
+
         return new AuthorizeValidationResult
         {
             IsValid = true,
-            RequiresConsent = requiresConsent,
-            RequiresLogin = authenticatedUserId == Guid.Empty,
+            RequiresConsent = requiresConsent || forceConsent,
+            RequiresLogin = authenticatedUserId == Guid.Empty || forceLogin,
             Client = new AuthorizationClientInfo
             {
                 ClientId = client.ClientId,
@@ -514,10 +558,48 @@ public class OAuth2Service : IOAuth2Service
         };
     }
 
-    public async Task EndSessionAsync(Guid userId, string? idTokenHint)
+    public async Task<string?> EndSessionAsync(Guid? userId, string? idTokenHint, string? postLogoutRedirectUri, string? clientId = null)
     {
-        // Revoke all active access + refresh tokens for this user
-        await _tokenService.RevokeAllUserTokensAsync(userId, sessionId: null, reason: "end_session");
+        if (userId.HasValue)
+            await _tokenService.RevokeAllUserTokensAsync(userId.Value, sessionId: null, reason: "end_session");
+
+        if (string.IsNullOrEmpty(postLogoutRedirectUri))
+            return null;
+
+        // Resolve client_id: prefer explicit parameter, then parse the id_token_hint JWT as an
+        // unauthenticated hint (OIDC Session Management §2.1 — no signature verification required
+        // because the hint is advisory only; we just need the "aud" claim to look up the client).
+        var resolvedClientId = clientId;
+        if (string.IsNullOrEmpty(resolvedClientId) && !string.IsNullOrEmpty(idTokenHint))
+        {
+            try
+            {
+                var parts = idTokenHint.Split('.');
+                if (parts.Length == 3)
+                {
+                    var padded = parts[1].PadRight(parts[1].Length + (4 - parts[1].Length % 4) % 4, '=');
+                    var json = System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(padded));
+                    using var doc = System.Text.Json.JsonDocument.Parse(json);
+                    if (doc.RootElement.TryGetProperty("aud", out var aud))
+                        resolvedClientId = aud.ValueKind == System.Text.Json.JsonValueKind.Array
+                            ? aud.EnumerateArray().FirstOrDefault().GetString()
+                            : aud.GetString();
+                }
+            }
+            catch { /* malformed token hint — ignore */ }
+        }
+
+        if (string.IsNullOrEmpty(resolvedClientId))
+            return null; // No client context — cannot safely validate the redirect URI.
+
+        AuthorizationClient? client;
+        try { client = await _clientAuth.LoadAsync(resolvedClientId); }
+        catch { return null; }
+
+        var allowed = client.PostLogoutRedirectUris ?? Array.Empty<string>();
+        return allowed.Any(u => string.Equals(u, postLogoutRedirectUri, StringComparison.Ordinal))
+            ? postLogoutRedirectUri
+            : null;
     }
 
     // ─── Private helpers ─────────────────────────────────────────────────────────
