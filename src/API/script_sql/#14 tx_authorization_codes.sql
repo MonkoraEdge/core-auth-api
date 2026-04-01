@@ -45,10 +45,8 @@ CREATE TABLE public.tx_authorization_codes (
 
 	CONSTRAINT chk_tx_authorization_codes_code_challenge_method
 	CHECK (
-	    code_challenge_method IN (
-	        'PLAIN',
-			'S256'
-	    )
+	    code_challenge_method IS NULL OR
+	    code_challenge_method = 'S256'  -- OAuth 2.1 §4.1.1: plain PKCE is prohibited
 	),
 	
 	CONSTRAINT chk_tx_authorization_codes_pkce_pairing
@@ -56,7 +54,11 @@ CREATE TABLE public.tx_authorization_codes (
 		(code_challenge IS NULL AND code_challenge_method IS NULL)
 		OR
 		(code_challenge IS NOT NULL AND code_challenge_method IS NOT NULL)
-	)	
+	),
+
+	-- consumed_at must be at or after creation — prevents back-dated consumption records
+	CONSTRAINT chk_tx_authorization_codes_consumed_at
+	CHECK (consumed_at IS NULL OR consumed_at >= created_at)	
 );
 
 -- Unique
@@ -83,4 +85,8 @@ CREATE INDEX idx_tx_authorization_codes_created_at ON public.tx_authorization_co
 
 -- filter expires_at
 CREATE INDEX idx_tx_authorization_codes_expires_at ON public.tx_authorization_codes(expires_at);
+
+-- cleanup: expired unused codes (TTL cleanup job scans only unconsumed rows, keeping this index tiny)
+CREATE INDEX idx_tx_authorization_codes_expires_at_cleanup ON public.tx_authorization_codes (expires_at)
+    WHERE consumed_at IS NULL;
 

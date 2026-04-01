@@ -78,9 +78,9 @@ CREATE TABLE public.mt_authorization_clients (
 
 	CONSTRAINT chk_mt_authorization_clients_pkce_code_challenge_method
 	CHECK (
+	    pkce_code_challenge_method IS NULL OR
 	    pkce_code_challenge_method IN (
-	        'PLAIN',
-	        'S256'
+	        'S256'  -- OAuth 2.1 §4.1.1: plain PKCE is prohibited; only S256 is permitted
 	    )
 	),
 
@@ -88,28 +88,22 @@ CREATE TABLE public.mt_authorization_clients (
 	CHECK (
 	    allowed_grant_types IS NULL OR
 	    allowed_grant_types <@ ARRAY[
-	        'AUTHORIZATION_CODE',   -- OAuth2.1 §4.1
+		'AUTHORIZATION_CODE',   -- OAuth2.1 §4.1
 	        'CLIENT_CREDENTIALS',   -- OAuth2.1 §4.2
 	        'REFRESH_TOKEN',        -- OAuth2.1 §6
 	        'DEVICE_CODE',          -- RFC 8628
 	        'JWT_BEARER'            -- RFC 7523
-	        -- IMPLICIT removed: OAuth2.1 §2.1 prohibits implicit grant
-	        -- PASSWORD removed: OAuth2.1 §2.1 prohibits ROPC grant
+	        -- implicit removed: OAuth2.1 §2.1 prohibits implicit grant
+	        -- password removed: OAuth2.1 §2.1 prohibits ROPC grant
 	    ]::TEXT[]
 	),
 
 	CONSTRAINT chk_mt_authorization_clients_allowed_response_types
 	CHECK (
+	    -- OAuth 2.1 §4.1: only authorization code flow is permitted.
+	    -- Implicit ('token') and hybrid flows are explicitly prohibited.
 	    allowed_response_types IS NULL OR
-	    allowed_response_types <@ ARRAY[
-	        'code',
-	        'token',
-	        'id_token',
-	        'code token',
-	        'code id_token',
-	        'token id_token',
-	        'code token id_token'
-	    ]::TEXT[]
+	    allowed_response_types <@ ARRAY['code']::TEXT[]
 	)
 );
 

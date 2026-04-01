@@ -65,7 +65,7 @@ public sealed class RefreshTokenProcessor : IRefreshTokenProcessor
         // RFC 6749 §5.1: expires_in MUST reflect the actual JWT lifetime, not the client config value.
         var expiresIn = _tokenService.GetAccessTokenLifetimeSeconds(client.AccessTokenLifetime);
         var newAccessToken = await _tokenService.GenerateAccessTokenAsync(
-            client.Id, userId, scopes, "refresh_token", ipAddress, userAgent, expiresIn);
+            client.Id, userId, scopes, "REFRESH_TOKEN", ipAddress, userAgent, expiresIn);
         // Generate the new refresh token first so we know its ID before we write anything.
         var (newRefreshToken, newRefreshTokenId) = await _tokenService.GenerateRefreshTokenAsync(
             client.Id, userId, refreshToken.SessionId, scopes,

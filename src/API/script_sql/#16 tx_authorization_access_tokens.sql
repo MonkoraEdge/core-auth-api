@@ -48,13 +48,16 @@ CREATE TABLE public.tx_authorization_access_tokens (
             'CLIENT_CREDENTIALS',   -- OAuth2.1 §4.2
             'REFRESH_TOKEN',        -- OAuth2.1 §6
             'DEVICE_CODE'           -- RFC 8628
-            -- IMPLICIT removed: OAuth2.1 §2.1 prohibits implicit grant
-            -- PASSWORD removed: OAuth2.1 §2.1 prohibits ROPC grant
+            -- implicit removed: OAuth2.1 §2.1 prohibits implicit grant
+            -- password removed: OAuth2.1 §2.1 prohibits ROPC grant
         )
     ),
 
     CONSTRAINT chk_tx_authorization_access_tokens_token_type
-    CHECK (token_type IN ('Bearer', 'DPoP'))
+    CHECK (token_type IN ('Bearer', 'DPoP')),
+
+    CONSTRAINT chk_tx_authorization_access_tokens_expiry
+    CHECK (expires_at > issued_at)
 );
 
 -- Unique

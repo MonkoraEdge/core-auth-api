@@ -75,7 +75,7 @@ public class AuthController : MonkoraControllerBase
             var result = await _oauth2Service.ProcessTokenRequestAsync(
                 new TokenRequest
                 {
-                    GrantType = "refresh_token",
+                    GrantType = "REFRESH_TOKEN",
                     RefreshToken = request.RefreshToken,
                     ClientId = request.ClientId,
                     ClientSecret = request.ClientSecret

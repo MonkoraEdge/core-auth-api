@@ -40,7 +40,15 @@ CREATE TABLE public.mt_api_keys (
 	REFERENCES public.mt_authorization_clients(id) ON DELETE CASCADE,
 
     CONSTRAINT fk_mt_api_keys_user FOREIGN KEY (user_id)
-	REFERENCES public.mt_users(id) ON DELETE SET NULL
+	REFERENCES public.mt_users(id) ON DELETE SET NULL,
+
+	-- Key expiry must be after creation when set
+	CONSTRAINT chk_mt_api_keys_expiry
+	CHECK (expires_at IS NULL OR expires_at > created_at),
+
+	-- Revocation must happen after creation
+	CONSTRAINT chk_mt_api_keys_revoked_at
+	CHECK (revoked_at IS NULL OR revoked_at >= created_at)
 );
 
 -- Unique
@@ -61,4 +69,13 @@ CREATE INDEX idx_mt_api_keys_client_id ON public.mt_api_keys (client_id) WHERE d
 
 -- filter user_id
 CREATE INDEX idx_mt_api_keys_user_id ON public.mt_api_keys (user_id) WHERE deleted_at IS NULL;
+
+-- composite: user_id + is_active (list a user's active API keys)
+CREATE INDEX idx_mt_api_keys_user_is_active ON public.mt_api_keys (user_id, is_active) WHERE deleted_at IS NULL;
+
+-- filter revoked_at (partial: only revoked keys — most keys are active so this stays small)
+CREATE INDEX idx_mt_api_keys_revoked_at ON public.mt_api_keys (revoked_at) WHERE revoked_at IS NOT NULL;
+
+-- filter expires_at (TTL cleanup: find keys expiring soon)
+CREATE INDEX idx_mt_api_keys_expires_at ON public.mt_api_keys (expires_at) WHERE expires_at IS NOT NULL AND deleted_at IS NULL;
 

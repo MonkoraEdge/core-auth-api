@@ -23,7 +23,14 @@ CREATE TABLE public.mt_permissions (
     CONSTRAINT pk_mt_permissions PRIMARY KEY (id),
 
     CONSTRAINT fk_mt_permissions_mt_tenants FOREIGN KEY (tenant_id)
-	REFERENCES public.mt_tenants(id) ON DELETE SET NULL	
+	REFERENCES public.mt_tenants(id) ON DELETE SET NULL,
+
+	-- Valid action values aligned with RBAC convention
+	CONSTRAINT chk_mt_permissions_action
+	CHECK (
+	    action IS NULL OR
+	    action IN ('READ', 'WRITE', 'DELETE', 'EXECUTE', 'ADMIN', 'ALL', 'MANAGE')
+	)	
 );
 
 -- Unique: platform-wide permissions have globally unique permission_code
@@ -41,4 +48,7 @@ CREATE INDEX idx_mt_permissions_created_at ON public.mt_permissions (created_at 
 
 -- filter tenant_id
 CREATE INDEX idx_mt_permissions_tenant_id ON public.mt_permissions(tenant_id) WHERE deleted_at IS NULL;
+
+-- composite: resource + action (RBAC lookup: find all permissions for a given resource/action pair)
+CREATE INDEX idx_mt_permissions_resource_action ON public.mt_permissions (resource, action) WHERE is_active = TRUE AND deleted_at IS NULL;
 

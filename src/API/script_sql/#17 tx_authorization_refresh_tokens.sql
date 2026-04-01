@@ -41,7 +41,11 @@ CREATE TABLE public.tx_authorization_refresh_tokens (
     REFERENCES public.tx_user_sessions(id) ON DELETE SET NULL,
 
     CONSTRAINT fk_tx_authorization_refresh_tokens_tx_authorization_refresh FOREIGN KEY (replaced_by_token_id)
-	REFERENCES public.tx_authorization_refresh_tokens(id) ON DELETE SET NULL
+	REFERENCES public.tx_authorization_refresh_tokens(id) ON DELETE SET NULL,
+
+	-- Expiry must be in the future relative to issuance — prevents corrupt/forged token records
+	CONSTRAINT chk_tx_authorization_refresh_tokens_expiry
+	CHECK (expires_at > issued_at)
 );
 
 -- Unique
@@ -71,4 +75,8 @@ CREATE INDEX idx_tx_authorization_refresh_tokens_expires_at ON public.tx_authori
 
 -- filter revoked_at (bulk query revoked refresh tokens for audit / rotation chain; most tokens are NOT revoked so partial index is small)
 CREATE INDEX idx_tx_authorization_refresh_tokens_revoked_at ON public.tx_authorization_refresh_tokens (revoked_at) WHERE revoked_at IS NOT NULL;
+
+-- composite: family_id + revoked_at
+-- Theft detection revokes the entire token family in one query: WHERE family_id = $1 AND revoked_at IS NULL
+CREATE INDEX idx_tx_authorization_refresh_tokens_family_revoked ON public.tx_authorization_refresh_tokens (family_id, revoked_at) WHERE revoked_at IS NULL;
 

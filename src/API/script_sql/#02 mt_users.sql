@@ -54,7 +54,15 @@ CREATE TABLE public.mt_users (
 	'LOCKED',
 	'DELETED',
 	'ARCHIVED'
-	))	
+	)),
+
+	-- RFC 5321 §4.5.3.1.3: max email address length is 320 characters
+	CONSTRAINT chk_mt_users_email_length
+	CHECK (LENGTH(email) <= 320),
+
+	-- ITU-T E.164: max phone number length is 15 digits plus optional + prefix
+	CONSTRAINT chk_mt_users_phone_length
+	CHECK (phone_number IS NULL OR LENGTH(phone_number) <= 20)	
 );
 
 -- Unique
@@ -77,4 +85,7 @@ CREATE INDEX idx_mt_users_status ON public.mt_users (status) WHERE deleted_at IS
 
 -- filter registration_source
 CREATE INDEX idx_mt_users_registration_source ON public.mt_users (registration_source) WHERE deleted_at IS NULL;
+
+-- filter last_login_at (security dashboard: inactive users; OIDC max_age enforcement)
+CREATE INDEX idx_mt_users_last_login_at ON public.mt_users (last_login_at DESC) WHERE deleted_at IS NULL;
 

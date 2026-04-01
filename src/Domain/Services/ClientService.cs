@@ -62,10 +62,10 @@ public class ClientService : IClientService
         return (responses, total);
     }
 
-    // Permitted lowercase grant type values — matches the DB CHECK constraint and OAuth 2.1.
+    // Permitted uppercase grant type values — matches the DB CHECK constraint and OAuth 2.1.
     private static readonly HashSet<string> AllowedGrantTypeValues = new(StringComparer.OrdinalIgnoreCase)
     {
-        "authorization_code", "client_credentials", "refresh_token", "device_code", "jwt_bearer"
+        "AUTHORIZATION_CODE", "CLIENT_CREDENTIALS", "REFRESH_TOKEN", "DEVICE_CODE", "JWT_BEARER"
     };
 
     // Permitted token endpoint auth method values — matches the DB CHECK constraint.
@@ -85,8 +85,8 @@ public class ClientService : IClientService
         ValidateLifetimes(request.AccessTokenLifetime, request.RefreshTokenLifetime);
 
         // Redirect URI requirements
-        var effectiveGrantTypes = (request.AllowedGrantTypes ?? new[] { "authorization_code", "refresh_token" })
-            .Select(g => g.ToLowerInvariant()).ToArray();
+        var effectiveGrantTypes = (request.AllowedGrantTypes ?? new[] { "AUTHORIZATION_CODE", "REFRESH_TOKEN" })
+            .Select(g => g.ToUpperInvariant()).ToArray();
 
         ValidateGrantTypes(effectiveGrantTypes);
 
@@ -95,7 +95,7 @@ public class ClientService : IClientService
             throw new DomainException("client",
                 $"token_endpoint_auth_method '{authMethod}' is not supported. Allowed: {string.Join(", ", AllowedAuthMethods)}.");
 
-        bool needsRedirectUri = effectiveGrantTypes.Contains("authorization_code", StringComparer.OrdinalIgnoreCase);
+        bool needsRedirectUri = effectiveGrantTypes.Contains("AUTHORIZATION_CODE", StringComparer.OrdinalIgnoreCase);
 
         if (needsRedirectUri && request.RedirectUris.Length == 0)
             throw new DomainException("client", "At least one redirect_uri is required for clients using authorization_code grant.");
@@ -130,7 +130,7 @@ public class ClientService : IClientService
             RequireConsent = request.RequireConsent,
             RedirectUris = request.RedirectUris,
             PostLogoutRedirectUris = request.PostLogoutRedirectUris,
-            AllowedGrantTypes = effectiveGrantTypes, // already lowercased during construction above
+            AllowedGrantTypes = effectiveGrantTypes, // already uppercased during construction above
             AllowedResponseTypes = request.AllowedResponseTypes ?? new[] { "code" },
             AccessTokenLifetime = request.AccessTokenLifetime,
             RefreshTokenLifetime = request.RefreshTokenLifetime,
@@ -189,7 +189,7 @@ public class ClientService : IClientService
                 request.RefreshTokenLifetime ?? client.RefreshTokenLifetime);
 
         if (request.AllowedGrantTypes != null)
-            ValidateGrantTypes(request.AllowedGrantTypes.Select(g => g.ToLowerInvariant()).ToArray());
+            ValidateGrantTypes(request.AllowedGrantTypes.Select(g => g.ToUpperInvariant()).ToArray());
 
         if (request.RequirePkce.HasValue)
         {
@@ -211,7 +211,7 @@ public class ClientService : IClientService
                 ValidateRedirectUri(uri);
             client.PostLogoutRedirectUris = request.PostLogoutRedirectUris;
         }
-        if (request.AllowedGrantTypes != null) client.AllowedGrantTypes = request.AllowedGrantTypes.Select(g => g.ToLowerInvariant()).ToArray();
+        if (request.AllowedGrantTypes != null) client.AllowedGrantTypes = request.AllowedGrantTypes.Select(g => g.ToUpperInvariant()).ToArray();
         if (request.AllowedResponseTypes != null) client.AllowedResponseTypes = request.AllowedResponseTypes;
         if (request.AccessTokenLifetime.HasValue) client.AccessTokenLifetime = request.AccessTokenLifetime.Value;
         if (request.RefreshTokenLifetime.HasValue) client.RefreshTokenLifetime = request.RefreshTokenLifetime.Value;

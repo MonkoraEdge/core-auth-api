@@ -93,3 +93,11 @@ CREATE INDEX idx_audit_logs_result_action_created_at ON public.audit_logs (resul
 CREATE INDEX idx_audit_logs_non_success_user ON public.audit_logs (user_id, created_at DESC)
     WHERE result IN ('FAILURE', 'DENIED');
 
+-- filter actor_type (filter system vs user vs client events)
+CREATE INDEX idx_audit_logs_actor_type ON public.audit_logs (actor_type, created_at DESC);
+
+-- BRIN index on created_at for time-range scans on large (append-only) tables
+-- BRIN is ~200 × smaller than a btree for append-only workloads and handles
+-- "SELECT * WHERE created_at BETWEEN $1 AND $2" at near-btree speed on ordered data.
+CREATE INDEX idx_audit_logs_created_at_brin ON public.audit_logs USING BRIN (created_at);
+

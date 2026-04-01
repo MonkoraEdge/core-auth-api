@@ -138,7 +138,7 @@ public class OAuth2Service : IOAuth2Service
             return AuthorizeValidationResult.FailSafeRedirect("invalid_scope", $"Scope(s) not allowed: {string.Join(", ", invalidScopes)}");
 
         var allowedGrants = client.AllowedGrantTypes ?? Array.Empty<string>();
-        if (!allowedGrants.Contains("authorization_code", StringComparer.OrdinalIgnoreCase))
+        if (!allowedGrants.Contains("AUTHORIZATION_CODE", StringComparer.OrdinalIgnoreCase))
             return AuthorizeValidationResult.FailSafeRedirect("unauthorized_client", "Client is not authorized for authorization_code grant.");
 
         bool requiresConsent = client.RequireConsent;
@@ -287,16 +287,16 @@ public class OAuth2Service : IOAuth2Service
     public async Task<TokenResponse> ProcessTokenRequestAsync(
         TokenRequest request, string? clientId, string? clientSecret, string? ipAddress, string? userAgent)
     {
-        var normalizedGrantType = request.GrantType?.Trim().ToLowerInvariant();
+        var normalizedGrantType = request.GrantType?.Trim().ToUpperInvariant();
         return normalizedGrantType switch
         {
-            "authorization_code" => await ExchangeAuthorizationCodeAsync(request, clientId, clientSecret, ipAddress, userAgent),
-            "client_credentials" => await ClientCredentialsGrantAsync(request, clientId!, clientSecret, ipAddress, userAgent),
-            "refresh_token"      => await RefreshTokenGrantAsync(request, clientId, clientSecret, ipAddress, userAgent),
+            "AUTHORIZATION_CODE" => await ExchangeAuthorizationCodeAsync(request, clientId, clientSecret, ipAddress, userAgent),
+            "CLIENT_CREDENTIALS" => await ClientCredentialsGrantAsync(request, clientId!, clientSecret, ipAddress, userAgent),
+            "REFRESH_TOKEN"      => await RefreshTokenGrantAsync(request, clientId, clientSecret, ipAddress, userAgent),
             // OAuth 2.1 explicitly removes password and implicit grants.
-            "password" => throw new DomainException("token", ErrorCodeType.UNSUPPORTED_GRANT_TYPE,
+            "PASSWORD" => throw new DomainException("token", ErrorCodeType.UNSUPPORTED_GRANT_TYPE,
                 "The 'password' grant has been removed in OAuth 2.1. Use 'authorization_code' with PKCE."),
-            "urn:ietf:params:oauth:grant-type:device_code" => throw new DomainException("token", ErrorCodeType.UNSUPPORTED_GRANT_TYPE,
+            "URN:IETF:PARAMS:OAUTH:GRANT-TYPE:DEVICE_CODE" => throw new DomainException("token", ErrorCodeType.UNSUPPORTED_GRANT_TYPE,
                 "Device code grant is not supported by this server."),
             _ => throw new DomainException("token", ErrorCodeType.UNSUPPORTED_GRANT_TYPE)
         };
@@ -342,7 +342,7 @@ public class OAuth2Service : IOAuth2Service
         var scopes = authCode.Scopes;
         var expiresIn = _tokenService.GetAccessTokenLifetimeSeconds(client.AccessTokenLifetime);
         var accessToken = await _tokenService.GenerateAccessTokenAsync(
-            client.Id, authCode.UserId, scopes, "authorization_code", ipAddress, userAgent,
+            client.Id, authCode.UserId, scopes, "AUTHORIZATION_CODE", ipAddress, userAgent,
             expiresIn);
         string? refreshToken = null;
         if (scopes.Contains("offline_access", StringComparer.Ordinal))
@@ -379,7 +379,7 @@ public class OAuth2Service : IOAuth2Service
         var client = await _clientAuth.AuthenticateAsync(clientId, clientSecret);
 
         var allowedGrants = client.AllowedGrantTypes ?? Array.Empty<string>();
-        if (!allowedGrants.Contains("client_credentials", StringComparer.OrdinalIgnoreCase))
+        if (!allowedGrants.Contains("CLIENT_CREDENTIALS", StringComparer.OrdinalIgnoreCase))
             throw new DomainException("token", ErrorCodeType.UNAUTHORIZED_CLIENT, "Client is not authorized for client_credentials grant.");
 
         var requestedScopes = (request.Scope ?? "").Split(' ', StringSplitOptions.RemoveEmptyEntries);
@@ -401,7 +401,7 @@ public class OAuth2Service : IOAuth2Service
         var finalScopes = requestedScopes.Distinct(StringComparer.Ordinal).ToArray();
         var expiresIn = _tokenService.GetAccessTokenLifetimeSeconds(client.AccessTokenLifetime);
         var accessToken = await _tokenService.GenerateAccessTokenAsync(
-            client.Id, null, finalScopes, "client_credentials", ipAddress, userAgent, expiresIn);
+            client.Id, null, finalScopes, "CLIENT_CREDENTIALS", ipAddress, userAgent, expiresIn);
 
         await _unitOfWork.SaveChangesAsync();
 

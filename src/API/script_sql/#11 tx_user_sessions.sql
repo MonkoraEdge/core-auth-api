@@ -35,7 +35,15 @@ CREATE TABLE public.tx_user_sessions (
 	REFERENCES public.tx_user_sessions_devices(id) ON DELETE SET NULL,
 
     CONSTRAINT fk_tx_user_sessions_mt_authorization_clients FOREIGN KEY (client_id)
-	REFERENCES public.mt_authorization_clients(id) ON DELETE CASCADE	
+	REFERENCES public.mt_authorization_clients(id) ON DELETE CASCADE,
+
+	-- Session expiry must be after creation when set; NULL = no expiry (policy-driven)
+	CONSTRAINT chk_tx_user_sessions_expiry
+	CHECK (expires_at IS NULL OR expires_at > created_at),
+
+	-- Revocation must happen after creation
+	CONSTRAINT chk_tx_user_sessions_revoked_at
+	CHECK (revoked_at IS NULL OR revoked_at >= created_at)
 );
 
 -- Unique
