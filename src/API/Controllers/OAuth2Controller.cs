@@ -139,6 +139,8 @@ public class OAuth2Controller : MonkoraControllerBase
         try
         {
             await _oauth2Service.RevokeAsync(request, clientId ?? string.Empty, clientSecret);
+            // RFC 7009 §2.2 + RFC 6749 §5.1: token endpoint responses MUST include no-store.
+            ApplyNoStoreHeaders();
             return Ok(); // RFC 7009: always 200 for validly authenticated requests
         }
         catch (DomainException ex)

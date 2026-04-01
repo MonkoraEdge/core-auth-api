@@ -56,11 +56,20 @@ public class TokenService : ITokenService
         _signingKey = signingKey;
     }
 
-    public Task<string> GenerateAccessTokenAsync(Guid clientId, Guid? userId, string[] scopes, string? grantType, string? ipAddress, string? userAgent)
+    // ─── RFC 6749 §5.1: expires_in MUST equal actual JWT exp − iat ────────────────
+    public int GetAccessTokenLifetimeSeconds(int? requestedSeconds = null)
+    {
+        if (!requestedSeconds.HasValue || requestedSeconds.Value <= 0)
+            return _defaultAccessTokenLifetimeSeconds;
+        return Math.Min(requestedSeconds.Value, MaxAccessTokenLifetimeSeconds);
+    }
+
+    public Task<string> GenerateAccessTokenAsync(Guid clientId, Guid? userId, string[] scopes, string? grantType, string? ipAddress, string? userAgent, int? lifetimeSeconds = null)
     {
         var now = DateTime.UtcNow;
         var jti = Guid.NewGuid().ToString("N");
-        var expiry = now.AddSeconds(_defaultAccessTokenLifetimeSeconds);
+        var effectiveLifetime = GetAccessTokenLifetimeSeconds(lifetimeSeconds);
+        var expiry = now.AddSeconds(effectiveLifetime);
 
         var claims = new List<Claim>
         {
@@ -199,11 +208,13 @@ public class TokenService : ITokenService
             {
                 Active = true,
                 Sub = refreshToken.UserId.ToString(),
+                Issuer = _issuer,          // RFC 7662 §2.2: iss SHOULD be present when known
                 ClientId = refreshToken.ClientId.ToString(),
                 Scope = string.Join(" ", refreshToken.Scopes),
                 Exp = new DateTimeOffset(refreshToken.ExpiresAt).ToUnixTimeSeconds(),
-                Iat = new DateTimeOffset(refreshToken.IssuedAt).ToUnixTimeSeconds(),
-                TokenType = "refresh_token"
+                Iat = new DateTimeOffset(refreshToken.IssuedAt).ToUnixTimeSeconds()
+                // token_type omitted: "refresh_token" is not a valid OAuth token type value
+                // per RFC 6749 §7.1 — token_type only applies to access tokens.
             };
         }
 

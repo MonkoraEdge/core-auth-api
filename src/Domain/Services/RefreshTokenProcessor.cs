@@ -72,8 +72,10 @@ public sealed class RefreshTokenProcessor : IRefreshTokenProcessor
         var scopes = requestedScopes ?? refreshToken.Scopes;
         var userId = refreshToken.UserId == Guid.Empty ? (Guid?)null : refreshToken.UserId;
 
+        // RFC 6749 §5.1: expires_in MUST reflect the actual JWT lifetime, not the client config value.
+        var expiresIn = _tokenService.GetAccessTokenLifetimeSeconds(client.AccessTokenLifetime);
         var newAccessToken = await _tokenService.GenerateAccessTokenAsync(
-            client.Id, userId, scopes, "refresh_token", ipAddress, userAgent);
+            client.Id, userId, scopes, "refresh_token", ipAddress, userAgent, expiresIn);
         var newRefreshToken = await _tokenService.GenerateRefreshTokenAsync(
             Guid.Empty, client.Id, userId, refreshToken.SessionId, scopes,
             refreshTokenLifetimeSeconds, familyId: refreshToken.FamilyId,
@@ -85,7 +87,7 @@ public sealed class RefreshTokenProcessor : IRefreshTokenProcessor
         {
             AccessToken = newAccessToken,
             TokenType = "Bearer",
-            ExpiresIn = client.AccessTokenLifetime,
+            ExpiresIn = expiresIn,
             RefreshToken = newRefreshToken,
             Scope = string.Join(" ", scopes)
         };

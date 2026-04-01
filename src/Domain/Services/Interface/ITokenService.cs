@@ -4,8 +4,19 @@ namespace MonkoraEdge.Core.Auth.Domain.Services.Interface;
 
 public interface ITokenService
 {
-    /// <summary>Generate a signed JWT access token</summary>
-    Task<string> GenerateAccessTokenAsync(Guid clientId, Guid? userId, string[] scopes, string? grantType, string? ipAddress, string? userAgent);
+    /// <summary>
+    /// Generate a signed JWT access token.
+    /// <paramref name="lifetimeSeconds"/> overrides the server default and is silently
+    /// capped at the server-enforced maximum (900 s). Pass null to use the server default.
+    /// </summary>
+    Task<string> GenerateAccessTokenAsync(Guid clientId, Guid? userId, string[] scopes, string? grantType, string? ipAddress, string? userAgent, int? lifetimeSeconds = null);
+
+    /// <summary>
+    /// Return the effective access-token lifetime in seconds after applying the server cap.
+    /// Use this value for the <c>expires_in</c> field in every token response so that the
+    /// reported lifetime always matches the JWT <c>exp</c> claim.
+    /// </summary>
+    int GetAccessTokenLifetimeSeconds(int? requestedSeconds = null);
 
     /// <summary>Generate an opaque refresh token string and persist it</summary>
     Task<string> GenerateRefreshTokenAsync(Guid accessTokenId, Guid clientId, Guid? userId, Guid? sessionId, string[] scopes, int lifetimeSeconds, Guid? familyId = null, string? ipAddress = null, string? userAgent = null);

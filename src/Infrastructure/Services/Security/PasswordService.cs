@@ -66,8 +66,11 @@ public class PasswordService : IPasswordService
         if (!PkceVerifierRegex.IsMatch(codeVerifier))
             return false;
 
-        if (codeChallengeMethod?.ToUpperInvariant() == "PLAIN")
-            return codeVerifier == codeChallenge;
+        // OAuth 2.1 §7.9: the 'plain' method MUST NOT be accepted.
+        // Only S256 is permitted. Treat any non-S256 method as a failure rather than
+        // transparently falling back — silent fallback would allow a downgrade attack.
+        if (!"S256".Equals(codeChallengeMethod, StringComparison.OrdinalIgnoreCase))
+            return false;
 
         var hashBytes = SHA256.HashData(Encoding.ASCII.GetBytes(codeVerifier));
         var base64 = Convert.ToBase64String(hashBytes)

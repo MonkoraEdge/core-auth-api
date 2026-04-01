@@ -338,8 +338,10 @@ public class OAuth2Service : IOAuth2Service
             throw new DomainException("token", ErrorCodeType.INVALID_GRANT, "Authorization code is invalid, expired, or already used.");
 
         var scopes = authCode.Scopes;
+        var expiresIn = _tokenService.GetAccessTokenLifetimeSeconds(client.AccessTokenLifetime);
         var accessToken = await _tokenService.GenerateAccessTokenAsync(
-            client.Id, authCode.UserId, scopes, "authorization_code", ipAddress, userAgent);
+            client.Id, authCode.UserId, scopes, "authorization_code", ipAddress, userAgent,
+            expiresIn);
         string? refreshToken = null;
         if (scopes.Contains("offline_access", StringComparer.Ordinal))
         {
@@ -362,7 +364,7 @@ public class OAuth2Service : IOAuth2Service
         {
             AccessToken = accessToken,
             TokenType = "Bearer",
-            ExpiresIn = client.AccessTokenLifetime,
+            ExpiresIn = expiresIn,
             RefreshToken = refreshToken,
             IdToken = idToken,
             Scope = string.Join(" ", scopes)
@@ -395,8 +397,9 @@ public class OAuth2Service : IOAuth2Service
             throw new DomainException("token", ErrorCodeType.SCOPE_NOT_ALLOWED, $"Scope(s) not allowed: {string.Join(", ", invalidScopes)}");
 
         var finalScopes = requestedScopes.Distinct(StringComparer.Ordinal).ToArray();
+        var expiresIn = _tokenService.GetAccessTokenLifetimeSeconds(client.AccessTokenLifetime);
         var accessToken = await _tokenService.GenerateAccessTokenAsync(
-            client.Id, null, finalScopes, "client_credentials", ipAddress, userAgent);
+            client.Id, null, finalScopes, "client_credentials", ipAddress, userAgent, expiresIn);
 
         await _unitOfWork.SaveChangesAsync();
 
@@ -404,7 +407,7 @@ public class OAuth2Service : IOAuth2Service
         {
             AccessToken = accessToken,
             TokenType = "Bearer",
-            ExpiresIn = client.AccessTokenLifetime,
+            ExpiresIn = expiresIn,
             Scope = string.Join(" ", finalScopes)
         };
     }
