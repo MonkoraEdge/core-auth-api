@@ -36,7 +36,7 @@ builder.Services.AddCors(options =>
             // AllowAnyHeader/AllowAnyMethod are intentionally avoided here.
             policy.WithOrigins(allowedOrigins)
                   .WithHeaders("Authorization", "Content-Type", "X-Requested-With", "X-Forwarded-For")
-                  .WithMethods("GET", "POST")
+                  .WithMethods("GET", "POST", "PUT", "DELETE")
                   .SetPreflightMaxAge(TimeSpan.FromMinutes(10));
         // If no origins are configured, the policy allows nothing (deny-by-default)
     });
@@ -77,9 +77,12 @@ builder.Services.AddRateLimiter(o =>
 
     o.AddPolicy("default", context =>
     {
-        // Resolve the real client IP — check X-Forwarded-For first for reverse-proxy deployments.
-        var ip = context.Request.Headers["X-Forwarded-For"].FirstOrDefault()
-                 ?? context.Connection.RemoteIpAddress?.ToString()
+        // Use the TCP-level RemoteIpAddress as the primary partition key so that a caller
+        // cannot spoof their way to a fresh rate-limit bucket by forging X-Forwarded-For.
+        // When running behind a trusted reverse proxy, configure UseForwardedHeaders() so that
+        // RemoteIpAddress is already populated with the real client IP before this runs.
+        var ip = context.Connection.RemoteIpAddress?.ToString()
+                 ?? context.Request.Headers["X-Forwarded-For"].FirstOrDefault()
                  ?? "unknown";
 
         return RateLimitPartition.GetFixedWindowLimiter(partitionKey: ip, factory: _ =>
@@ -138,6 +141,7 @@ app.Use(async (ctx, next) =>
     ctx.Response.Headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
     ctx.Response.Headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none'";
     ctx.Response.Headers["X-XSS-Protection"] = "0"; // Modern browsers: disable legacy XSS auditor
+    ctx.Response.Headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=(), payment=(), usb=()";
     await next();
 });
 

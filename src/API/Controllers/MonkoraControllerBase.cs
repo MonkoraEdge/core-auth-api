@@ -50,8 +50,8 @@ public abstract class MonkoraControllerBase : ControllerBase
     /// Resolve the caller IP address, respecting the <c>X-Forwarded-For</c> reverse-proxy header.
     /// </summary>
     protected string GetIpAddress() =>
-        Request.Headers["X-Forwarded-For"].FirstOrDefault()
-        ?? HttpContext.Connection.RemoteIpAddress?.ToString()
+        HttpContext.Connection.RemoteIpAddress?.ToString()
+        ?? Request.Headers["X-Forwarded-For"].FirstOrDefault()
         ?? "unknown";
 
     /// <summary>
