@@ -111,7 +111,7 @@ public class TokenService : ITokenService
         return Task.FromResult(tokenString);
     }
 
-    public Task<string> GenerateRefreshTokenAsync(Guid accessTokenId, Guid clientId, Guid? userId, Guid? sessionId, string[] scopes, int lifetimeSeconds, Guid? familyId = null)
+    public Task<string> GenerateRefreshTokenAsync(Guid accessTokenId, Guid clientId, Guid? userId, Guid? sessionId, string[] scopes, int lifetimeSeconds, Guid? familyId = null, string? ipAddress = null, string? userAgent = null)
     {
         var rawToken = Convert.ToBase64String(RandomNumberGenerator.GetBytes(64))
             .TrimEnd('=').Replace('+', '-').Replace('/', '_');
@@ -125,6 +125,8 @@ public class TokenService : ITokenService
             UserId = userId ?? Guid.Empty,
             SessionId = sessionId,
             Scopes = scopes,
+            IpAddress = ipAddress,
+            UserAgent = userAgent,
             IssuedAt = DateTime.UtcNow,
             ExpiresAt = DateTime.UtcNow.AddSeconds(lifetimeSeconds)
         });
@@ -363,12 +365,44 @@ public class TokenService : ITokenService
 
     public async Task RevokeTokenFamilyAsync(Guid familyId, string reason = "refresh_token_reuse")
     {
+        var now = DateTime.UtcNow;
         var familyTokens = await _refreshTokenRepo.GetByFamilyIdAsync(familyId);
+
         foreach (var token in familyTokens.Where(t => t.RevokedAt == null))
         {
-            token.RevokedAt = DateTime.UtcNow;
+            token.RevokedAt = now;
             _refreshTokenRepo.Update(token);
         }
+
+        // Cascade: revoke all active access tokens for every user/client pair in this family.
+        // When theft is detected (or logout), the attacker must not be able to continue using
+        // any access token that was issued within the compromised rotation chain.
+        var affected = familyTokens
+            .Where(t => t.UserId != Guid.Empty)
+            .GroupBy(t => (t.UserId, t.ClientId))
+            .Select(g => g.Key)
+            .ToList();
+
+        foreach (var (userId, clientId) in affected)
+        {
+            var activeAccessTokens = await _accessTokenRepo.GetActiveByUserIdAsync(userId);
+            foreach (var at in activeAccessTokens.Where(at => at.ClientId == clientId && at.RevokedAt == null))
+            {
+                at.RevokedAt = now;
+                _accessTokenRepo.Update(at);
+                _revokedTokenRepo.Insert(new RevokedToken
+                {
+                    TokenHash = at.TokenHash,
+                    TokenType = "access_token",
+                    ClientId = at.ClientId,
+                    UserId = at.UserId,
+                    Reason = reason,
+                    RevokedAt = now,
+                    ExpiresAt = at.ExpiresAt
+                });
+            }
+        }
+
         await _unitOfWork.SaveChangesAsync();
     }
 

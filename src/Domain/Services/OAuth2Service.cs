@@ -301,7 +301,8 @@ public class OAuth2Service : IOAuth2Service
         {
             refreshToken = await _tokenService.GenerateRefreshTokenAsync(
                 Guid.Empty, client.Id, authCode.UserId, authCode.SessionId, scopes,
-                client.RefreshTokenLifetime, familyId: Guid.NewGuid());
+                client.RefreshTokenLifetime, familyId: Guid.NewGuid(),
+                ipAddress: ipAddress, userAgent: userAgent);
         }
 
         string? idToken = null;

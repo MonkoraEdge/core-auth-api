@@ -220,7 +220,14 @@ public class AuthService : IAuthService
         {
             var rt = await _refreshTokenRepo.GetByTokenHashAsync(_tokenService.HashToken(refreshToken));
             if (rt != null)
-                await _tokenService.RevokeTokenAsync(refreshToken, "refresh_token", rt.ClientId, "logout");
+            {
+                // Revoke the full rotation chain and cascade to active access tokens so
+                // that any token in the family cannot be replayed after explicit logout.
+                if (rt.FamilyId != Guid.Empty)
+                    await _tokenService.RevokeTokenFamilyAsync(rt.FamilyId, "logout");
+                else
+                    await _tokenService.RevokeTokenAsync(refreshToken, "refresh_token", rt.ClientId, "logout");
+            }
         }
 
         var user = await _userRepo.GetByIdAsync(userId);
@@ -500,9 +507,10 @@ public class AuthService : IAuthService
         var scopes = new[] { "openid", "profile", "email" };
 
         var accessToken = await _tokenService.GenerateAccessTokenAsync(
-            resolvedClientId, user.Id, scopes, "password", ipAddress, userAgent);
+            resolvedClientId, user.Id, scopes, "direct", ipAddress, userAgent);
         var refreshToken = await _tokenService.GenerateRefreshTokenAsync(
-            Guid.Empty, resolvedClientId, user.Id, null, scopes, refreshLifetime);
+            Guid.Empty, resolvedClientId, user.Id, null, scopes, refreshLifetime,
+            ipAddress: ipAddress, userAgent: userAgent);
 
         user.LastLoginAt = DateTime.UtcNow;
         user.LastActivityAt = DateTime.UtcNow;

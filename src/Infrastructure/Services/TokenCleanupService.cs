@@ -76,11 +76,17 @@ public sealed class TokenCleanupService : BackgroundService
             .Where(t => t.ExpiresAt.HasValue && t.ExpiresAt < cutoff)
             .ExecuteDeleteAsync(ct);
 
-        if (accessDeleted + refreshDeleted + codeDeleted + revokedDeleted > 0)
+        // Revoked tokens with no ExpiresAt (e.g. from family revocation cascade) — purge
+        // based on RevokedAt so they don't accumulate indefinitely in the table.
+        var revokedNullExpiryDeleted = await db.RevokedTokens
+            .Where(t => !t.ExpiresAt.HasValue && t.RevokedAt < cutoff)
+            .ExecuteDeleteAsync(ct);
+
+        if (accessDeleted + refreshDeleted + codeDeleted + revokedDeleted + revokedNullExpiryDeleted > 0)
         {
             _logger.LogInformation(
-                "Token cleanup: removed {Access} access tokens, {Refresh} refresh tokens, {Codes} auth codes, {Revoked} revoked tokens.",
-                accessDeleted, refreshDeleted, codeDeleted, revokedDeleted);
+                "Token cleanup: removed {Access} access tokens, {Refresh} refresh tokens, {Codes} auth codes, {Revoked} revoked tokens ({RevokedNullExpiry} with no expiry).",
+                accessDeleted, refreshDeleted, codeDeleted, revokedDeleted, revokedNullExpiryDeleted);
         }
     }
 }

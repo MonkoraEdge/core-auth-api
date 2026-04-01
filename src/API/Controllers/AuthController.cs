@@ -1,9 +1,12 @@
 using System.Security.Claims;
 using MonkoraEdge.Core.Auth.Domain.AggregatesModel.AuthAggregate;
 using MonkoraEdge.Core.Auth.Domain.AggregatesModel.OAuth2Aggregate;
+using MonkoraEdge.Core.Auth.Domain.Exceptions;
 using MonkoraEdge.Core.Auth.Domain.Services.Interface;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
+using MonkoraEdge.Core.DotNet.AggregatesModel.ConstantAggregate;
 
 namespace MonkoraEdge.Core.Auth.API.Controllers;
 
@@ -63,21 +66,33 @@ public class AuthController : ControllerBase
     /// Compatibility refresh endpoint that proxies to OAuth2 refresh_token grant processing.
     /// </summary>
     [HttpPost("refresh")]
+    [EnableRateLimiting("default")]
     public async Task<IActionResult> Refresh([FromBody] RefreshTokenRequest request)
     {
-        var result = await _oauth2Service.ProcessTokenRequestAsync(
-            new TokenRequest
-            {
-                GrantType = "refresh_token",
-                RefreshToken = request.RefreshToken,
-                ClientId = request.ClientId,
-                ClientSecret = request.ClientSecret
-            },
-            request.ClientId,
-            request.ClientSecret,
-            GetIpAddress(),
-            GetUserAgent());
-        return Ok(result);
+        try
+        {
+            var result = await _oauth2Service.ProcessTokenRequestAsync(
+                new TokenRequest
+                {
+                    GrantType = "refresh_token",
+                    RefreshToken = request.RefreshToken,
+                    ClientId = request.ClientId,
+                    ClientSecret = request.ClientSecret
+                },
+                request.ClientId,
+                request.ClientSecret,
+                GetIpAddress(),
+                GetUserAgent());
+            return Ok(result);
+        }
+        catch (DomainException ex)
+        {
+            var isInvalidGrant = ex.ErrorCode == ErrorCodeType.INVALID_GRANT
+                || ex.ErrorCode == ErrorCodeType.TOKEN_REVOKED
+                || ex.ErrorCode == ErrorCodeType.TOKEN_EXPIRED;
+            var error = isInvalidGrant ? "invalid_grant" : "invalid_request";
+            return BadRequest(new { error, error_description = ex.ErrorMessage });
+        }
     }
 
     // ─── Password Management ──────────────────────────────────────────────────

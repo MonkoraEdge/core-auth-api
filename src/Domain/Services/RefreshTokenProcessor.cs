@@ -76,7 +76,8 @@ public sealed class RefreshTokenProcessor : IRefreshTokenProcessor
             client.Id, userId, scopes, "refresh_token", ipAddress, userAgent);
         var newRefreshToken = await _tokenService.GenerateRefreshTokenAsync(
             Guid.Empty, client.Id, userId, refreshToken.SessionId, scopes,
-            refreshTokenLifetimeSeconds, familyId: refreshToken.FamilyId);
+            refreshTokenLifetimeSeconds, familyId: refreshToken.FamilyId,
+            ipAddress: ipAddress, userAgent: userAgent);
 
         await _unitOfWork.SaveChangesAsync();
 
