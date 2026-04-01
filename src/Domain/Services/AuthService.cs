@@ -77,29 +77,42 @@ public class AuthService : IAuthService
                 throw new DomainException("login", "Too many failed attempts from this IP. Try again later.");
         }
 
+        // Rate-limit by username (prevents targeted account lockout farming)
+        var sinceByName = DateTime.UtcNow.AddMinutes(-_signinFailedMinutes);
+        var failCountByName = await _loginAttemptRepo.CountFailedByUsernameAsync(request.Username, sinceByName);
+        if (failCountByName >= 10)
+            throw new DomainException("login", "Too many failed attempts for this account. Try again later.");
+
         var user = await _userRepo.GetByEmailAsync(request.Username);
         if (user == null)
         {
+            // Perform dummy bcrypt verify to normalise response time and prevent username enumeration
+            _passwordService.PerformDummyVerify(request.Password);
             await RecordLoginAttemptAsync(null, request.Username, null, ipAddress, userAgent, false, "user_not_found", request.ClientId);
+            await _unitOfWork.SaveChangesAsync();
             throw new DomainException("login", "Invalid username or password.");
         }
 
         var identity = await _identityRepo.GetByUserIdAsync(user.Id);
         if (identity == null || string.IsNullOrEmpty(identity.PasswordHash))
         {
+            _passwordService.PerformDummyVerify(request.Password);
             await RecordLoginAttemptAsync(user.Id, request.Username, null, ipAddress, userAgent, false, "no_password", request.ClientId);
+            await _unitOfWork.SaveChangesAsync();
             throw new DomainException("login", "Invalid username or password.");
         }
 
         if (identity.LockedUntil.HasValue && identity.LockedUntil > DateTime.UtcNow)
         {
             await RecordLoginAttemptAsync(user.Id, request.Username, null, ipAddress, userAgent, false, "account_locked", request.ClientId);
+            await _unitOfWork.SaveChangesAsync();
             throw new DomainException("login", $"Account is locked until {identity.LockedUntil:u}.");
         }
 
         if (!user.IsActive || user.Status == "SUSPENDED")
         {
             await RecordLoginAttemptAsync(user.Id, request.Username, null, ipAddress, userAgent, false, "account_inactive", request.ClientId);
+            await _unitOfWork.SaveChangesAsync();
             throw new DomainException("login", "Account is disabled.");
         }
 
@@ -280,6 +293,11 @@ public class AuthService : IAuthService
         if (history.Any(h => _passwordService.VerifyPassword(request.NewPassword, h.PasswordHash)))
             throw new DomainException("reset_password", "Cannot reuse a recent password.");
 
+        // Atomically mark the token as used — guards against concurrent replay
+        var consumed = await _passwordResetRepo.TryConsumeAsync(reset.Id, DateTime.UtcNow);
+        if (!consumed)
+            throw new DomainException("reset_password", "Reset token is invalid or has expired.");
+
         var oldHash = identity.PasswordHash ?? string.Empty;
         identity.PasswordHash = _passwordService.HashPassword(request.NewPassword);
         identity.PasswordAlgo = "BCRYPT";
@@ -287,9 +305,6 @@ public class AuthService : IAuthService
         identity.FailedAttempts = 0;
         identity.LockedUntil = null;
         _identityRepo.Update(identity);
-
-        reset.UsedAt = DateTime.UtcNow;
-        _passwordResetRepo.Update(reset);
 
         _passwordHistoryRepo.Insert(new PasswordHistory { UserId = user.Id, PasswordHash = oldHash });
 
@@ -335,6 +350,9 @@ public class AuthService : IAuthService
 
     public async Task SendVerificationEmailAsync(Guid userId, string email)
     {
+        // Invalidate any still-pending tokens so previous links cannot be reused after resend
+        await _emailVerifRepo.InvalidatePendingByUserIdAsync(userId);
+
         var rawToken = _passwordService.GenerateSecureToken(48);
         var tokenHash = _passwordService.HashSha256(rawToken);
 
@@ -360,8 +378,10 @@ public class AuthService : IAuthService
         if (!string.Equals(verif.Email, request.Email, StringComparison.OrdinalIgnoreCase))
             throw new DomainException("verify_email", "Email does not match.");
 
-        verif.VerifiedAt = DateTime.UtcNow;
-        _emailVerifRepo.Update(verif);
+        // Atomically mark as verified — guards against concurrent double-verification
+        var verified = await _emailVerifRepo.TryMarkVerifiedAsync(verif.Id, DateTime.UtcNow);
+        if (!verified)
+            throw new DomainException("verify_email", "Token is invalid or has expired.");
 
         var user = await _userRepo.GetByIdAsync(verif.UserId);
         if (user != null)

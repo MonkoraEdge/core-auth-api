@@ -15,4 +15,22 @@ public class EmailVerificationRepository : AuthRepositoryBase<EmailVerification>
 
     public async Task<IEnumerable<EmailVerification>> GetByUserIdAsync(Guid userId) =>
         await Context.EmailVerifications.Where(m => m.UserId == userId).ToListAsync();
+
+    public async Task<bool> TryMarkVerifiedAsync(Guid id, DateTime verifiedAt)
+    {
+        var affected = await Context.EmailVerifications
+            .Where(m => m.Id == id && m.VerifiedAt == null && m.ExpiresAt > DateTime.UtcNow)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(m => m.VerifiedAt, verifiedAt));
+        return affected == 1;
+    }
+
+    public async Task InvalidatePendingByUserIdAsync(Guid userId)
+    {
+        var now = DateTime.UtcNow;
+        await Context.EmailVerifications
+            .Where(m => m.UserId == userId && m.VerifiedAt == null && m.ExpiresAt > now)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(m => m.ExpiresAt, now));
+    }
 }

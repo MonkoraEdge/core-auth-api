@@ -15,5 +15,8 @@ public class LoginAttemptEntityTypeConfiguration : IEntityTypeConfiguration<Logi
 
         // Composite index for rate-limit queries: find recent failed attempts by IP
         builder.HasIndex(m => new { m.IpAddress, m.Success, m.CreatedAt });
+
+        // Composite index for rate-limit queries: find recent failed attempts by username
+        builder.HasIndex(m => new { m.Username, m.Success, m.CreatedAt });
     }
 }

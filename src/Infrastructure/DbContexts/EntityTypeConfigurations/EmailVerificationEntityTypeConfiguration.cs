@@ -12,5 +12,8 @@ public class EmailVerificationEntityTypeConfiguration : IEntityTypeConfiguration
         builder.HasKey(m => m.Id);
 
         builder.Property(m => m.VerificationType).HasDefaultValue("REGISTRATION");
+
+        builder.HasIndex(m => m.TokenHash).IsUnique(); // GetByTokenHashAsync lookup
+        builder.HasIndex(m => m.UserId);               // GetByUserIdAsync + InvalidatePendingByUserIdAsync
     }
 }

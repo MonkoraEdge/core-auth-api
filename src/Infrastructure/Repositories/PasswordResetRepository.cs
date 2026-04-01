@@ -15,4 +15,13 @@ public class PasswordResetRepository : AuthRepositoryBase<PasswordReset>, IPassw
 
     public async Task<IEnumerable<PasswordReset>> GetByUserIdAsync(Guid userId) =>
         await Context.PasswordResets.Where(m => m.UserId == userId).ToListAsync();
+
+    public async Task<bool> TryConsumeAsync(Guid id, DateTime usedAt)
+    {
+        var affected = await Context.PasswordResets
+            .Where(m => m.Id == id && m.UsedAt == null && m.ExpiresAt > DateTime.UtcNow)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(m => m.UsedAt, usedAt));
+        return affected == 1;
+    }
 }

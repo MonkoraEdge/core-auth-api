@@ -9,7 +9,14 @@ public interface IPasswordService
     bool VerifyPassword(string password, string hash);
 
     /// <summary>Check if password meets policy requirements</summary>
-    bool MeetsPasswordPolicy(string password, int minLength = 8, bool requireUpper = true, bool requireNumber = true, bool requireSpecial = false);
+    bool MeetsPasswordPolicy(string password, int minLength = 8, bool requireUpper = true, bool requireNumber = true, bool requireSpecial = true);
+
+    /// <summary>
+    /// Run a dummy bcrypt verification that always returns false but takes the same time as a
+    /// real bcrypt check. Call this when a user is not found to prevent username enumeration
+    /// via response-time side-channel.
+    /// </summary>
+    void PerformDummyVerify(string password);
 
     /// <summary>Generate a cryptographically secure random token</summary>
     string GenerateSecureToken(int length = 64);

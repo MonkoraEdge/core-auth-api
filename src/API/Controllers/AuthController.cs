@@ -34,6 +34,7 @@ public class AuthController : ControllerBase
     /// Returns access/refresh tokens, or a 2FA challenge response when required.
     /// </summary>
     [HttpPost("login")]
+    [EnableRateLimiting("default")]
     public async Task<IActionResult> Login([FromBody] LoginRequest request)
     {
         var result = await _authService.LoginAsync(request, GetIpAddress(), GetUserAgent());
@@ -44,6 +45,7 @@ public class AuthController : ControllerBase
     /// Register a new local account and trigger verification workflow.
     /// </summary>
     [HttpPost("register")]
+    [EnableRateLimiting("default")]
     public async Task<IActionResult> Register([FromBody] RegisterRequest request)
     {
         var result = await _authService.RegisterAsync(request, GetIpAddress());
@@ -101,6 +103,7 @@ public class AuthController : ControllerBase
     /// Start forgot-password flow and send reset instructions (email/link) if account exists.
     /// </summary>
     [HttpPost("forgot-password")]
+    [EnableRateLimiting("default")]
     public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordRequest request)
     {
         await _authService.ForgotPasswordAsync(request);
@@ -111,6 +114,7 @@ public class AuthController : ControllerBase
     /// Complete password reset using a valid reset token issued by forgot-password flow.
     /// </summary>
     [HttpPost("reset-password")]
+    [EnableRateLimiting("default")]
     public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordRequest request)
     {
         await _authService.ResetPasswordAsync(request);
@@ -122,6 +126,7 @@ public class AuthController : ControllerBase
     /// </summary>
     [HttpPost("change-password")]
     [Authorize]
+    [EnableRateLimiting("default")]
     public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest request)
     {
         var result = await _authService.ChangePasswordAsync(GetUserId(), request);
@@ -134,6 +139,7 @@ public class AuthController : ControllerBase
     /// Verify ownership of email address via verification token.
     /// </summary>
     [HttpPost("verify-email")]
+    [EnableRateLimiting("default")]
     public async Task<IActionResult> VerifyEmail([FromBody] VerifyEmailRequest request)
     {
         var result = await _authService.VerifyEmailAsync(request);
@@ -145,6 +151,7 @@ public class AuthController : ControllerBase
     /// </summary>
     [HttpPost("resend-verification")]
     [Authorize]
+    [EnableRateLimiting("default")]
     public async Task<IActionResult> ResendVerification([FromBody] ResendVerificationEmailRequest request)
     {
         await _authService.SendVerificationEmailAsync(GetUserId(), request.Email);
@@ -191,6 +198,7 @@ public class AuthController : ControllerBase
     /// Finalize login when account is protected by 2FA challenge.
     /// </summary>
     [HttpPost("2fa/verify")]
+    [EnableRateLimiting("default")]
     public async Task<IActionResult> TwoFactorVerify([FromBody] TwoFactorLoginRequest request)
     {
         var result = await _authService.VerifyTwoFactorLoginAsync(

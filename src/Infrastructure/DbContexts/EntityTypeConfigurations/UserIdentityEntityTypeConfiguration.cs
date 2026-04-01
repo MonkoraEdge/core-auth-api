@@ -13,5 +13,7 @@ public class UserIdentityEntityTypeConfiguration : IEntityTypeConfiguration<User
 
         builder.Property(m => m.ProviderType).HasDefaultValue("LOCAL");
         builder.Property(m => m.PasswordAlgo).HasColumnName("hash_algorithm");
+
+        builder.HasIndex(m => m.UserId); // GetByUserIdAsync called on every login
     }
 }

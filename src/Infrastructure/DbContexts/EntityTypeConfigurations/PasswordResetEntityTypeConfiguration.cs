@@ -12,5 +12,8 @@ public class PasswordResetEntityTypeConfiguration : IEntityTypeConfiguration<Pas
         builder.HasKey(m => m.Id);
 
         builder.Property(m => m.IpAddress).HasColumnName("ip_address");
+
+        builder.HasIndex(m => m.TokenHash).IsUnique(); // GetByTokenHashAsync lookup
+        builder.HasIndex(m => m.UserId);               // GetByUserIdAsync + TryConsumeAsync
     }
 }

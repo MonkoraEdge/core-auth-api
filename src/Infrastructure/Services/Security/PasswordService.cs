@@ -10,15 +10,25 @@ public class PasswordService : IPasswordService
     private static readonly System.Text.RegularExpressions.Regex PkceVerifierRegex =
         new("^[A-Za-z0-9\\-._~]{43,128}$", System.Text.RegularExpressions.RegexOptions.Compiled);
 
+    // Pre-computed bcrypt hash used solely for timing normalization when a user is not found.
+    // Running a full bcrypt verify here ensures the response time matches a real password check,
+    // preventing username enumeration via timing side-channel (the comparison always returns false).
+    private static readonly string _dummyPasswordHash =
+        BCrypt.Net.BCrypt.HashPassword("__timing_normalization_sentinel__", workFactor: 12);
+
     public string HashPassword(string password) =>
         BCrypt.Net.BCrypt.HashPassword(password, workFactor: 12);
 
     public bool VerifyPassword(string password, string hash) =>
         BCrypt.Net.BCrypt.Verify(password, hash);
 
-    public bool MeetsPasswordPolicy(string password, int minLength = 8, bool requireUpper = true, bool requireNumber = true, bool requireSpecial = false)
+    public bool MeetsPasswordPolicy(string password, int minLength = 8, bool requireUpper = true, bool requireNumber = true, bool requireSpecial = true)
     {
         if (string.IsNullOrWhiteSpace(password) || password.Length < minLength)
+            return false;
+        // Passwords with spaces are rejected — they cause issues with some OAuth clients
+        // and are inconsistent with the complexity requirements below.
+        if (password.Contains(' '))
             return false;
         if (requireUpper && !password.Any(char.IsUpper))
             return false;
@@ -103,4 +113,7 @@ public class PasswordService : IPasswordService
         }
         return codes;
     }
+
+    public void PerformDummyVerify(string password) =>
+        BCrypt.Net.BCrypt.Verify(password, _dummyPasswordHash);
 }

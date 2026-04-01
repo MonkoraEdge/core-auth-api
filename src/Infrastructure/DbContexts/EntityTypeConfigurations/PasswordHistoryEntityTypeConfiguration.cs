@@ -10,5 +10,7 @@ public class PasswordHistoryEntityTypeConfiguration : IEntityTypeConfiguration<P
     {
         builder.ToTable("tx_password_history");
         builder.HasKey(m => m.Id);
+
+        builder.HasIndex(m => new { m.UserId, m.CreatedAt }); // GetByUserIdAsync with ORDER BY + LIMIT
     }
 }
