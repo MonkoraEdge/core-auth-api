@@ -315,7 +315,7 @@ public class TokenService : ITokenService
 
     public string GetIssuer() => _issuer;
 
-    public async Task<string> GenerateIdTokenAsync(Guid clientId, Guid userId, string[] scopes, string? nonce, DateTime authTime)
+    public async Task<string> GenerateIdTokenAsync(string clientId, Guid userId, string[] scopes, string? nonce, DateTime authTime, string? accessToken = null)
     {
         var now = DateTime.UtcNow;
         var expiry = now.AddMinutes(5);
@@ -326,7 +326,8 @@ public class TokenService : ITokenService
         {
             new Claim(JwtRegisteredClaimNames.Sub, userId.ToString()),
             new Claim(JwtRegisteredClaimNames.Iss, _issuer),
-            new Claim(JwtRegisteredClaimNames.Aud, clientId.ToString()),
+            // OIDC Core §2: aud MUST be the client_id string, not an internal identifier.
+            new Claim(JwtRegisteredClaimNames.Aud, clientId),
             new Claim(JwtRegisteredClaimNames.Iat, new DateTimeOffset(now).ToUnixTimeSeconds().ToString(), ClaimValueTypes.Integer64),
             new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString("N")),
             new Claim("auth_time", new DateTimeOffset(authTime).ToUnixTimeSeconds().ToString(), ClaimValueTypes.Integer64),
@@ -334,6 +335,14 @@ public class TokenService : ITokenService
 
         if (!string.IsNullOrEmpty(nonce))
             claims.Add(new Claim("nonce", nonce));
+
+        // OIDC Core §3.1.3.6: at_hash MUST be present when ID token is co-issued with an access token.
+        // at_hash = base64url( left-half of SHA-256( ASCII(access_token) ) )
+        if (!string.IsNullOrEmpty(accessToken))
+        {
+            var hashBytes = SHA256.HashData(Encoding.ASCII.GetBytes(accessToken));
+            claims.Add(new Claim("at_hash", Base64UrlEncoder.Encode(hashBytes, 0, hashBytes.Length / 2)));
+        }
 
         if (user != null)
         {
@@ -345,6 +354,8 @@ public class TokenService : ITokenService
                     claims.Add(new Claim("locale", user.LocaleCode));
                 if (!string.IsNullOrEmpty(user.Zoneinfo))
                     claims.Add(new Claim("zoneinfo", user.Zoneinfo));
+                claims.Add(new Claim("updated_at",
+                    new DateTimeOffset(user.UpdatedAt).ToUnixTimeSeconds().ToString(), ClaimValueTypes.Integer64));
             }
             if (scopes.Contains("email"))
             {

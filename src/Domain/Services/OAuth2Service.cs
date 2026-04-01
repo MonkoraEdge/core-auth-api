@@ -308,8 +308,9 @@ public class OAuth2Service : IOAuth2Service
         string? idToken = null;
         if (scopes.Contains("openid"))
             idToken = await _tokenService.GenerateIdTokenAsync(
-                client.Id, authCode.UserId, scopes,
-                authCode.Nonce, authCode.AuthTime ?? DateTime.UtcNow);
+                client.ClientId, authCode.UserId, scopes,
+                authCode.Nonce, authCode.AuthTime ?? DateTime.UtcNow,
+                accessToken: accessToken);  // OIDC Core §3.1.3.6: at_hash requires the access token
 
         await _unitOfWork.SaveChangesAsync(); // single atomic commit
 
@@ -444,8 +445,13 @@ public class OAuth2Service : IOAuth2Service
             Email = grantedScopes.Contains("email", StringComparer.Ordinal) ? user.Email : null,
             EmailVerified = grantedScopes.Contains("email", StringComparer.Ordinal) ? user.EmailVerified : null,
             PhoneNumber = grantedScopes.Contains("phone", StringComparer.Ordinal) ? user.PhoneNumber : null,
+            PhoneNumberVerified = grantedScopes.Contains("phone", StringComparer.Ordinal) ? user.PhoneVerified : null,
             Locale = grantedScopes.Contains("profile", StringComparer.Ordinal) ? user.LocaleCode : null,
-            Zoneinfo = grantedScopes.Contains("profile", StringComparer.Ordinal) ? user.Zoneinfo : null
+            Zoneinfo = grantedScopes.Contains("profile", StringComparer.Ordinal) ? user.Zoneinfo : null,
+            // OIDC Core §5.1: updated_at is a Unix timestamp
+            UpdatedAt = grantedScopes.Contains("profile", StringComparer.Ordinal)
+                ? new DateTimeOffset(user.UpdatedAt).ToUnixTimeSeconds()
+                : null
         };
     }
 
@@ -460,15 +466,33 @@ public class OAuth2Service : IOAuth2Service
             JwksUri = $"{baseUrl}/.well-known/jwks.json",
             RevocationEndpoint = $"{baseUrl}/revoke",
             IntrospectionEndpoint = $"{baseUrl}/introspect",
+            EndSessionEndpoint = $"{baseUrl}/oauth2/end-session",
             ResponseTypesSupported = new[] { "code" },
+            // OIDC Core §3.1.2.1: only 'query' is supported for code flow
+            ResponseModesSupported = new[] { "query" },
             GrantTypesSupported = new[] { "authorization_code", "client_credentials", "refresh_token" },
             SubjectTypesSupported = new[] { "public" },
             IdTokenSigningAlgValuesSupported = new[] { "RS256" },
-            ScopesSupported = new[] { "openid", "profile", "email", "phone", "address", "offline_access" },
-            ClaimsSupported = new[] { "sub", "iss", "iat", "exp", "aud", "client_id", "scope", "email", "name", "phone_number" },
+            // 'none' is required for PUBLIC clients (OAuth2.1 §2.1)
+            TokenEndpointAuthMethodsSupported = new[] { "none", "client_secret_basic", "client_secret_post" },
+            ScopesSupported = new[] { "openid", "profile", "email", "phone", "offline_access" },
+            ClaimsSupported = new[]
+            {
+                // JWT registered claims
+                "sub", "iss", "aud", "iat", "exp", "jti",
+                // OIDC protocol claims
+                "auth_time", "nonce", "at_hash",
+                // profile scope (OIDC Core §5.1)
+                "name", "locale", "zoneinfo", "updated_at",
+                // email scope
+                "email", "email_verified",
+                // phone scope
+                "phone_number", "phone_number_verified"
+            },
             CodeChallengeMethodsSupported = new[] { "S256" },
-            TokenEndpointAuthMethodsSupported = new[] { "client_secret_basic", "client_secret_post" },
-            EndSessionEndpoint = $"{baseUrl}/oauth2/end-session"
+            // PKCE is mandatory on this server for all public clients
+            RequirePkce = true,
+            RequestParameterSupported = false
         };
     }
 
@@ -484,7 +508,8 @@ public class OAuth2Service : IOAuth2Service
             IntrospectionEndpoint = $"{baseUrl}/introspect",
             ResponseTypesSupported = new[] { "code" },
             GrantTypesSupported = new[] { "authorization_code", "client_credentials", "refresh_token" },
-            TokenEndpointAuthMethodsSupported = new[] { "client_secret_basic", "client_secret_post" },
+            // 'none' is required for PUBLIC clients (OAuth2.1 §2.1)
+            TokenEndpointAuthMethodsSupported = new[] { "none", "client_secret_basic", "client_secret_post" },
             CodeChallengeMethodsSupported = new[] { "S256" }
         };
     }

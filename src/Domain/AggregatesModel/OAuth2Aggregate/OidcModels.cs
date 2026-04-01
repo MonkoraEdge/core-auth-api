@@ -57,6 +57,15 @@ public class OpenIdConfigurationResponse
 
     [JsonPropertyName("code_challenge_methods_supported")]
     public string[] CodeChallengeMethodsSupported { get; set; }
+
+    [JsonPropertyName("response_modes_supported")]
+    public string[] ResponseModesSupported { get; set; }
+
+    [JsonPropertyName("request_parameter_supported")]
+    public bool RequestParameterSupported { get; set; }
+
+    [JsonPropertyName("require_pkce")]
+    public bool RequirePkce { get; set; }
 }
 
 public class JwksResponse

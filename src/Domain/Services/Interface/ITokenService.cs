@@ -10,8 +10,9 @@ public interface ITokenService
     /// <summary>Generate an opaque refresh token string and persist it</summary>
     Task<string> GenerateRefreshTokenAsync(Guid accessTokenId, Guid clientId, Guid? userId, Guid? sessionId, string[] scopes, int lifetimeSeconds, Guid? familyId = null, string? ipAddress = null, string? userAgent = null);
 
-    /// <summary>Generate a signed OIDC ID token — audience is the client_id, nonce prevents replay</summary>
-    Task<string> GenerateIdTokenAsync(Guid clientId, Guid userId, string[] scopes, string? nonce, DateTime authTime);
+    /// <summary>Generate a signed OIDC ID token — audience is the client_id string, nonce prevents replay.
+    /// Pass <paramref name="accessToken"/> to include the required at_hash claim (OIDC Core §3.1.3.6).</summary>
+    Task<string> GenerateIdTokenAsync(string clientId, Guid userId, string[] scopes, string? nonce, DateTime authTime, string? accessToken = null);
 
     /// <summary>Generate a short-lived authorization code with PKCE</summary>
     Task<string> GenerateAuthorizationCodeAsync(Guid clientId, Guid userId, Guid? sessionId, string[] scopes, string redirectUri, string? codeChallenge, string? codeChallengeMethod, string? nonce);
