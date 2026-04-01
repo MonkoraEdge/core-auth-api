@@ -64,9 +64,32 @@ public class ClientService : IClientService
 
     public async Task<(ClientResponse Client, ClientSecretResponse Secret)> CreateAsync(ClientCreateRequest request, string? createdBy)
     {
-        var rawSecret = GenerateClientSecret();
-        // Client secrets must use bcrypt — SHA-256 is not suitable for secret storage
-        var secretHash = _passwordService.HashPassword(rawSecret);
+        var clientType = (request.ClientType ?? "CONFIDENTIAL").ToUpperInvariant();
+        bool isPublic = clientType == "PUBLIC";
+
+        // Redirect URI requirements
+        var effectiveGrantTypes = request.AllowedGrantTypes ?? new[] { "authorization_code", "refresh_token" };
+        bool needsRedirectUri = effectiveGrantTypes.Contains("authorization_code", StringComparer.OrdinalIgnoreCase);
+
+        if (needsRedirectUri && request.RedirectUris.Length == 0)
+            throw new DomainException("client", "At least one redirect_uri is required for clients using authorization_code grant.");
+
+        foreach (var uri in request.RedirectUris)
+            ValidateRedirectUri(uri);
+
+        if (request.PostLogoutRedirectUris != null)
+            foreach (var uri in request.PostLogoutRedirectUris)
+                ValidateRedirectUri(uri);
+
+        // PUBLIC clients must never hold a secret and must enforce PKCE (RFC 6749 §2.1 / OAuth 2.1).
+        // CONFIDENTIAL clients use bcrypt — SHA-256 is not suitable for secret storage.
+        string? rawSecret = null;
+        string? secretHash = null;
+        if (!isPublic)
+        {
+            rawSecret = GenerateClientSecret();
+            secretHash = _passwordService.HashPassword(rawSecret);
+        }
 
         var client = new AuthorizationClient
         {
@@ -74,13 +97,14 @@ public class ClientService : IClientService
             ClientId = GenerateClientId(),
             ClientSecretHash = secretHash,
             ClientName = request.ClientName,
-            ClientType = request.ClientType,
-            TokenEndpointAuthMethod = request.TokenEndpointAuthMethod,
-            RequirePkce = request.RequirePkce,
+            ClientType = clientType,
+            // PUBLIC clients MUST use "NONE" auth method and MUST require PKCE.
+            TokenEndpointAuthMethod = isPublic ? "NONE" : request.TokenEndpointAuthMethod,
+            RequirePkce = isPublic || request.RequirePkce,
             RequireConsent = request.RequireConsent,
             RedirectUris = request.RedirectUris,
             PostLogoutRedirectUris = request.PostLogoutRedirectUris,
-            AllowedGrantTypes = request.AllowedGrantTypes ?? new[] { "authorization_code", "refresh_token" },
+            AllowedGrantTypes = effectiveGrantTypes,
             AllowedResponseTypes = request.AllowedResponseTypes ?? new[] { "code" },
             AccessTokenLifetime = request.AccessTokenLifetime,
             RefreshTokenLifetime = request.RefreshTokenLifetime,
@@ -113,7 +137,8 @@ public class ClientService : IClientService
         var secret = new ClientSecretResponse
         {
             ClientId = client.ClientId,
-            ClientSecret = rawSecret,
+            // null for PUBLIC clients — they have no secret to return
+            ClientSecret = rawSecret!,
             ExpiresAt = null
         };
 
@@ -126,10 +151,26 @@ public class ClientService : IClientService
         if (client == null) throw new DomainException("client", "Client not found.");
 
         if (request.ClientName != null) client.ClientName = request.ClientName;
-        if (request.RequirePkce.HasValue) client.RequirePkce = request.RequirePkce.Value;
+        if (request.RequirePkce.HasValue)
+        {
+            // If the client is PUBLIC, PKCE can only be strengthened, never removed.
+            if (client.ClientType == "PUBLIC" && !request.RequirePkce.Value)
+                throw new DomainException("client", "PKCE cannot be disabled for public clients.");
+            client.RequirePkce = request.RequirePkce.Value;
+        }
         if (request.RequireConsent.HasValue) client.RequireConsent = request.RequireConsent.Value;
-        if (request.RedirectUris != null) client.RedirectUris = request.RedirectUris;
-        if (request.PostLogoutRedirectUris != null) client.PostLogoutRedirectUris = request.PostLogoutRedirectUris;
+        if (request.RedirectUris != null)
+        {
+            foreach (var uri in request.RedirectUris)
+                ValidateRedirectUri(uri);
+            client.RedirectUris = request.RedirectUris;
+        }
+        if (request.PostLogoutRedirectUris != null)
+        {
+            foreach (var uri in request.PostLogoutRedirectUris)
+                ValidateRedirectUri(uri);
+            client.PostLogoutRedirectUris = request.PostLogoutRedirectUris;
+        }
         if (request.AllowedGrantTypes != null) client.AllowedGrantTypes = request.AllowedGrantTypes;
         if (request.AllowedResponseTypes != null) client.AllowedResponseTypes = request.AllowedResponseTypes;
         if (request.AccessTokenLifetime.HasValue) client.AccessTokenLifetime = request.AccessTokenLifetime.Value;
@@ -180,6 +221,9 @@ public class ClientService : IClientService
         var client = await _clientRepo.GetByIdAsync(id);
         if (client == null) throw new DomainException("client", "Client not found.");
 
+        if (client.ClientType == "PUBLIC")
+            throw new DomainException("client", "Public clients do not have secrets to rotate.");
+
         var rawSecret = GenerateClientSecret();
         client.ClientSecretHash = _passwordService.HashPassword(rawSecret);
         client.ClientSecretExpiresAt = null;
@@ -216,12 +260,9 @@ public class ClientService : IClientService
     private async Task<ClientResponse> MapToResponseAsync(AuthorizationClient client)
     {
         var clientScopes = await _clientScopeRepo.GetByClientIdAsync(client.Id);
-        var scopeNames = new List<string>();
-        foreach (var cs in clientScopes)
-        {
-            var scope = await _scopeRepo.GetByIdAsync(cs.ScopeId);
-            if (scope != null) scopeNames.Add(scope.ScopeName);
-        }
+        var scopeIds = clientScopes.Select(cs => cs.ScopeId);
+        var scopes = await _scopeRepo.GetByIdsAsync(scopeIds);
+        var scopeNames = scopes.Where(s => s.IsActive).Select(s => s.ScopeName).ToList();
 
         return new ClientResponse
         {
@@ -253,4 +294,39 @@ public class ClientService : IClientService
     private static string GenerateClientSecret() =>
         Convert.ToBase64String(RandomNumberGenerator.GetBytes(48))
             .TrimEnd('=').Replace('+', '-').Replace('/', '_');
+
+    /// <summary>
+    /// Validate a single redirect URI at registration time (RFC 6749 §3.1.2 + OAuth 2.1).
+    /// Rules:
+    ///   - Must be an absolute URI.
+    ///   - Must not contain a fragment component (#).
+    ///   - Must not contain wildcards (*).
+    ///   - Must use https, OR http://localhost / http://127.0.0.1 (native-app dev — RFC 8252),
+    ///     OR a custom non-http scheme (mobile/native apps).
+    /// </summary>
+    private static void ValidateRedirectUri(string uri)
+    {
+        if (string.IsNullOrWhiteSpace(uri))
+            throw new DomainException("client", "Redirect URI must not be empty.");
+
+        if (uri.Contains('*'))
+            throw new DomainException("client", $"Wildcard redirect URIs are not permitted: {uri}");
+
+        if (uri.Contains('#'))
+            throw new DomainException("client", $"Redirect URI must not contain a fragment (#): {uri}");
+
+        if (!Uri.TryCreate(uri, UriKind.Absolute, out var parsed))
+            throw new DomainException("client", $"Redirect URI must be an absolute URI: {uri}");
+
+        var scheme = parsed.Scheme.ToLowerInvariant();
+        bool isHttps = scheme == "https";
+        bool isHttpLocalhost = scheme == "http"
+            && (parsed.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase)
+                || parsed.Host == "127.0.0.1");
+        bool isCustomScheme = scheme != "http" && scheme != "https";
+
+        if (!isHttps && !isHttpLocalhost && !isCustomScheme)
+            throw new DomainException("client",
+                $"Redirect URI must use https (or http://localhost for development): {uri}");
+    }
 }

@@ -22,5 +22,9 @@ public class AuthorizationClientEntityTypeConfiguration : IEntityTypeConfigurati
         builder.Property(m => m.RefreshTokenLifetime).HasDefaultValue(2592000);
 
         builder.HasIndex(m => m.ClientId).IsUnique();
+
+        // Support tenant-scoped and active-only client queries.
+        builder.HasIndex(m => m.TenantId);
+        builder.HasIndex(m => m.IsActive);
     }
 }
