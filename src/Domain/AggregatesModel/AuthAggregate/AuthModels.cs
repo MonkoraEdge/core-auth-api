@@ -153,3 +153,17 @@ public class TwoFactorDisableRequest
     [MaxLength(128)]
     public string Password { get; set; }
 }
+
+/// <summary>Request model for completing a 2FA login challenge.</summary>
+public class TwoFactorLoginRequest
+{
+    /// <summary>User ID returned in the initial login response when 2FA is required.</summary>
+    public Guid UserId { get; set; }
+
+    [Required]
+    [MaxLength(12)]
+    public string Code { get; set; } = string.Empty;
+
+    [RegularExpression("^(TOTP|SMS|EMAIL)$", ErrorMessage = "DeviceType must be TOTP, SMS, or EMAIL.")]
+    public string DeviceType { get; set; } = "TOTP";
+}

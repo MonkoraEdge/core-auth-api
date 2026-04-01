@@ -97,7 +97,6 @@ public static class ServiceCollectionExtensions
 
         services.AddTransient<ITenantService>(m => new TenantService(
             m.GetService<DomainIUnitOfWork>(),
-            m.GetService<IHttpContextAccessor>(),
             m.GetService<ITenanttRepository>()));
 
         // Stateless utility services

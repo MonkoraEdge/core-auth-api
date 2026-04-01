@@ -11,22 +11,13 @@ namespace MonkoraEdge.Core.Auth.API.Controllers;
 [Route("roles")]
 [ApiController]
 [Authorize]
-public class RoleController : ControllerBase
+public class RoleController : MonkoraControllerBase
 {
     private readonly IRoleService _roleService;
 
     public RoleController(IRoleService roleService)
     {
         _roleService = roleService;
-    }
-
-    /// <summary>
-    /// Resolve caller id for auditing role changes.
-    /// </summary>
-    private string GetUserIdString()
-    {
-        var sub = User.FindFirst("sub")?.Value ?? User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
-        return sub ?? "system";
     }
 
     /// <summary>

@@ -12,22 +12,13 @@ namespace MonkoraEdge.Core.Auth.API.Controllers;
 [Route("clients")]
 [ApiController]
 [Authorize]
-public class ClientController : ControllerBase
+public class ClientController : MonkoraControllerBase
 {
     private readonly IClientService _clientService;
 
     public ClientController(IClientService clientService)
     {
         _clientService = clientService;
-    }
-
-    /// <summary>
-    /// Resolve caller id for auditing fields when writing client changes.
-    /// </summary>
-    private string GetUserIdString()
-    {
-        var sub = User.FindFirst("sub")?.Value ?? User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
-        return sub ?? "system";
     }
 
     /// <summary>

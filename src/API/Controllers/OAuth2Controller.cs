@@ -16,7 +16,7 @@ namespace MonkoraEdge.Core.Auth.API.Controllers;
 /// </summary>
 [Route("oauth2")]
 [ApiController]
-public class OAuth2Controller : ControllerBase
+public class OAuth2Controller : MonkoraControllerBase
 {
     private readonly IOAuth2Service _oauth2Service;
 
@@ -252,14 +252,7 @@ public class OAuth2Controller : ControllerBase
 
     // ─── Helpers ────────────────────────────────────────────────────────────────
 
-    /// <summary>
-    /// Resolve authenticated subject id from JWT claims when available.
-    /// </summary>
-    private Guid? GetAuthenticatedUserId()
-    {
-        var sub = User.FindFirst("sub")?.Value ?? User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
-        return Guid.TryParse(sub, out var id) ? id : null;
-    }
+
 
     /// <summary>
     /// Extract OAuth client credentials from request body and Authorization basic header.
@@ -288,14 +281,6 @@ public class OAuth2Controller : ControllerBase
     }
 
     /// <summary>
-    /// Resolve caller IP address using reverse-proxy header fallback.
-    /// </summary>
-    private string GetIpAddress() =>
-        Request.Headers["X-Forwarded-For"].FirstOrDefault()
-        ?? HttpContext.Connection.RemoteIpAddress?.ToString()
-        ?? "unknown";
-
-    /// <summary>
     /// Same-origin guard for browser cookie requests to reduce CSRF risk on consent POST.
     /// </summary>
     private bool IsSameOriginBrowserPost()
@@ -318,11 +303,6 @@ public class OAuth2Controller : ControllerBase
 
         return false;
     }
-
-    /// <summary>
-    /// Resolve caller user-agent for security telemetry and token issuance context.
-    /// </summary>
-    private string? GetUserAgent() => Request.Headers.UserAgent.ToString();
 
     /// <summary>
     /// Convert domain-level authorize result into API response shape.

@@ -1,4 +1,3 @@
-using System.Security.Claims;
 using MonkoraEdge.Core.Auth.Domain.AggregatesModel.AuthAggregate;
 using MonkoraEdge.Core.Auth.Domain.AggregatesModel.OAuth2Aggregate;
 using MonkoraEdge.Core.Auth.Domain.Exceptions;
@@ -16,7 +15,7 @@ namespace MonkoraEdge.Core.Auth.API.Controllers;
 /// </summary>
 [Route("auth")]
 [ApiController]
-public class AuthController : ControllerBase
+public class AuthController : MonkoraControllerBase
 {
     private readonly IAuthService _authService;
     private readonly IOAuth2Service _oauth2Service;
@@ -206,37 +205,4 @@ public class AuthController : ControllerBase
         return Ok(result);
     }
 
-    // ─── Helpers ──────────────────────────────────────────────────────────────
-
-    /// <summary>
-    /// Resolve authenticated user id from JWT claims (sub/nameidentifier).
-    /// </summary>
-    private Guid GetUserId()
-    {
-        var sub = User.FindFirstValue("sub") ?? User.FindFirstValue(ClaimTypes.NameIdentifier);
-        if (!Guid.TryParse(sub, out var id)) throw new UnauthorizedAccessException("Invalid user token.");
-        return id;
-    }
-
-    /// <summary>
-    /// Resolve caller IP address using reverse-proxy header fallback.
-    /// </summary>
-    private string GetIpAddress() =>
-        Request.Headers["X-Forwarded-For"].FirstOrDefault()
-        ?? HttpContext.Connection.RemoteIpAddress?.ToString()
-        ?? "unknown";
-
-    /// <summary>
-    /// Resolve caller user-agent for security telemetry and anomaly checks.
-    /// </summary>
-    private string? GetUserAgent() => Request.Headers.UserAgent.ToString();
-}
-
-/// <summary>Request model for completing 2FA login challenge</summary>
-public class TwoFactorLoginRequest
-{
-    /// <summary>User ID returned in the initial login response when 2FA is required</summary>
-    public Guid UserId { get; set; }
-    public string Code { get; set; } = string.Empty;
-    public string DeviceType { get; set; } = "TOTP";
 }

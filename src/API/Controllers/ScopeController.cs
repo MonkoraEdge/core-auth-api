@@ -11,22 +11,13 @@ namespace MonkoraEdge.Core.Auth.API.Controllers;
 [Route("scopes")]
 [ApiController]
 [Authorize]
-public class ScopeController : ControllerBase
+public class ScopeController : MonkoraControllerBase
 {
     private readonly IScopeService _scopeService;
 
     public ScopeController(IScopeService scopeService)
     {
         _scopeService = scopeService;
-    }
-
-    /// <summary>
-    /// Resolve caller id for auditing scope changes.
-    /// </summary>
-    private string GetUserIdString()
-    {
-        var sub = User.FindFirst("sub")?.Value ?? User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
-        return sub ?? "system";
     }
 
     /// <summary>

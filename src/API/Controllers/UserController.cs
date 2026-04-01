@@ -12,7 +12,7 @@ namespace MonkoraEdge.Core.Auth.API.Controllers;
 [Route("users")]
 [ApiController]
 [Authorize]
-public class UserController : ControllerBase
+public class UserController : MonkoraControllerBase
 {
     private readonly IUserService _userService;
 
@@ -123,18 +123,4 @@ public class UserController : ControllerBase
 
     // ─── Helpers ──────────────────────────────────────────────────────────────
 
-    /// <summary>
-    /// Resolve caller user id from token claims.
-    /// </summary>
-    private Guid GetUserId()
-    {
-        var sub = User.FindFirstValue("sub") ?? User.FindFirstValue(ClaimTypes.NameIdentifier);
-        if (!Guid.TryParse(sub, out var id)) throw new UnauthorizedAccessException("Invalid user token.");
-        return id;
-    }
-
-    /// <summary>
-    /// Resolve caller user id as string for auditing metadata.
-    /// </summary>
-    private string GetUserIdString() => GetUserId().ToString();
 }

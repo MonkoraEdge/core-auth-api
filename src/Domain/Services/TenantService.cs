@@ -9,23 +9,19 @@ using MonkoraEdge.Core.DotNet.AggregatesModel.CommonAggregate;
 using MonkoraEdge.Core.DotNet.AggregatesModel.DataSourceAggregate;
 using MonkoraEdge.Core.DotNet.Extensions;
 using MonkoraEdge.Core.DotNet.Extensions.Validations;
-using Microsoft.AspNetCore.Http;
 
 namespace MonkoraEdge.Core.Auth.Domain.Services;
 
 public class TenantService : ITenantService
 {
     private readonly IUnitOfWork _unitOfWork;
-    private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly ITenanttRepository _tenanttRepository;
 
     public TenantService(IUnitOfWork unitOfWork,
-        IHttpContextAccessor httpContextAccessor,
         ITenanttRepository tenanttRepository
     )
     {
         _unitOfWork = unitOfWork ?? throw new ArgumentNullException(nameof(unitOfWork));
-        _httpContextAccessor = httpContextAccessor ?? throw new ArgumentNullException(nameof(httpContextAccessor));
         _tenanttRepository = tenanttRepository ?? throw new ArgumentNullException(nameof(tenanttRepository));
         DateTimeExtensions.SetCultureInfo("en-US");
     }
