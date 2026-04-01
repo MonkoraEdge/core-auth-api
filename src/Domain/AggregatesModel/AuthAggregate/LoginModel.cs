@@ -1,13 +1,30 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace MonkoraEdge.Core.Auth.Domain.AggregatesModel.AuthAggregate;
 
 public class LoginRequest
 {
+    [Required]
+    [MaxLength(256)]
     public string Username { get; set; }
+
+    [Required]
+    [MaxLength(128)]
     public string Password { get; set; }
+
+    [MaxLength(100)]
     public string? ClientId { get; set; }
+
+    [MaxLength(12)]
     public string? TwoFactorCode { get; set; }
+
+    [MaxLength(64)]
     public string? TwoFactorRecoveryCode { get; set; }
+
+    [MaxLength(256)]
     public string? DeviceFingerprint { get; set; }
+
+    [MaxLength(200)]
     public string? DeviceName { get; set; }
 }
 
