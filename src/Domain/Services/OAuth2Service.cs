@@ -345,8 +345,8 @@ public class OAuth2Service : IOAuth2Service
         string? refreshToken = null;
         if (scopes.Contains("offline_access", StringComparer.Ordinal))
         {
-            refreshToken = await _tokenService.GenerateRefreshTokenAsync(
-                Guid.Empty, client.Id, authCode.UserId, authCode.SessionId, scopes,
+            (refreshToken, _) = await _tokenService.GenerateRefreshTokenAsync(
+                client.Id, authCode.UserId, authCode.SessionId, scopes,
                 client.RefreshTokenLifetime, familyId: Guid.NewGuid(),
                 ipAddress: ipAddress, userAgent: userAgent);
         }

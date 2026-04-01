@@ -18,8 +18,12 @@ public interface ITokenService
     /// </summary>
     int GetAccessTokenLifetimeSeconds(int? requestedSeconds = null);
 
-    /// <summary>Generate an opaque refresh token string and persist it</summary>
-    Task<string> GenerateRefreshTokenAsync(Guid accessTokenId, Guid clientId, Guid? userId, Guid? sessionId, string[] scopes, int lifetimeSeconds, Guid? familyId = null, string? ipAddress = null, string? userAgent = null);
+    /// <summary>
+    /// Generate an opaque refresh token, persist it, and return both the raw token string
+    /// and the newly created entity ID. The ID is used by the caller to link
+    /// <c>ReplacedByTokenId</c> on the rotated-out token, preserving the rotation chain.
+    /// </summary>
+    Task<(string Token, Guid Id)> GenerateRefreshTokenAsync(Guid clientId, Guid? userId, Guid? sessionId, string[] scopes, int lifetimeSeconds, Guid? familyId = null, string? ipAddress = null, string? userAgent = null);
 
     /// <summary>Generate a signed OIDC ID token — audience is the client_id string, nonce prevents replay.
     /// Pass <paramref name="accessToken"/> to include the required at_hash claim (OIDC Core §3.1.3.6).</summary>

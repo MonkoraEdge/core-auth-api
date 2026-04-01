@@ -120,14 +120,16 @@ public class TokenService : ITokenService
         return Task.FromResult(tokenString);
     }
 
-    public Task<string> GenerateRefreshTokenAsync(Guid accessTokenId, Guid clientId, Guid? userId, Guid? sessionId, string[] scopes, int lifetimeSeconds, Guid? familyId = null, string? ipAddress = null, string? userAgent = null)
+    public Task<(string Token, Guid Id)> GenerateRefreshTokenAsync(Guid clientId, Guid? userId, Guid? sessionId, string[] scopes, int lifetimeSeconds, Guid? familyId = null, string? ipAddress = null, string? userAgent = null)
     {
         var rawToken = Convert.ToBase64String(RandomNumberGenerator.GetBytes(64))
             .TrimEnd('=').Replace('+', '-').Replace('/', '_');
         var tokenHash = HashToken(rawToken);
+        var tokenId = Guid.NewGuid(); // generated here so the caller can link ReplacedByTokenId
 
         _refreshTokenRepo.Insert(new RefreshToken
         {
+            Id = tokenId,
             RefreshTokenHash = tokenHash,
             FamilyId = familyId ?? Guid.NewGuid(),
             ClientId = clientId,
@@ -140,7 +142,7 @@ public class TokenService : ITokenService
             ExpiresAt = DateTime.UtcNow.AddSeconds(lifetimeSeconds)
         });
 
-        return Task.FromResult(rawToken);
+        return Task.FromResult((rawToken, tokenId));
     }
 
     public Task<string> GenerateAuthorizationCodeAsync(Guid clientId, Guid userId, Guid? sessionId, string[] scopes, string redirectUri, string? codeChallenge, string? codeChallengeMethod, string? nonce)

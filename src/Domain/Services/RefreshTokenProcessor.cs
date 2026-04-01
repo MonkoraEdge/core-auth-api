@@ -58,16 +58,6 @@ public sealed class RefreshTokenProcessor : IRefreshTokenProcessor
         if (refreshToken.ClientId != client.Id)
             throw new DomainException("refresh_token", "Client mismatch.");
 
-        var revoked = await _refreshTokenRepo.TryRevokeAsync(refreshToken.Id, DateTime.UtcNow);
-        if (!revoked)
-        {
-            if (refreshToken.FamilyId != Guid.Empty)
-                await _tokenService.RevokeTokenFamilyAsync(refreshToken.FamilyId, "refresh_token_reuse_detected");
-
-            throw new DomainException("refresh_token", ErrorCodeType.TOKEN_REVOKED,
-                "The refresh token has already been used. All sessions in this chain have been revoked for security.");
-        }
-
         // Use narrowed scope if the client requested it (RFC 6749 §6); fall back to original grant scopes.
         var scopes = requestedScopes ?? refreshToken.Scopes;
         var userId = refreshToken.UserId == Guid.Empty ? (Guid?)null : refreshToken.UserId;
@@ -76,10 +66,25 @@ public sealed class RefreshTokenProcessor : IRefreshTokenProcessor
         var expiresIn = _tokenService.GetAccessTokenLifetimeSeconds(client.AccessTokenLifetime);
         var newAccessToken = await _tokenService.GenerateAccessTokenAsync(
             client.Id, userId, scopes, "refresh_token", ipAddress, userAgent, expiresIn);
-        var newRefreshToken = await _tokenService.GenerateRefreshTokenAsync(
-            Guid.Empty, client.Id, userId, refreshToken.SessionId, scopes,
+        // Generate the new refresh token first so we know its ID before we write anything.
+        var (newRefreshToken, newRefreshTokenId) = await _tokenService.GenerateRefreshTokenAsync(
+            client.Id, userId, refreshToken.SessionId, scopes,
             refreshTokenLifetimeSeconds, familyId: refreshToken.FamilyId,
             ipAddress: ipAddress, userAgent: userAgent);
+
+        // Atomically revoke the old token and record its replacement in a single UPDATE.
+        // - If this returns false, a concurrent rotation or reuse beat us here.
+        // - ExecuteUpdateAsync bypasses EF change tracking so no in-memory state conflict.
+        var revoked = await _refreshTokenRepo.TryRevokeWithRotationAsync(
+            refreshToken.Id, DateTime.UtcNow, newRefreshTokenId);
+        if (!revoked)
+        {
+            if (refreshToken.FamilyId != Guid.Empty)
+                await _tokenService.RevokeTokenFamilyAsync(refreshToken.FamilyId, "refresh_token_reuse_detected");
+
+            throw new DomainException("refresh_token", ErrorCodeType.TOKEN_REVOKED,
+                "The refresh token has already been used. All sessions in this chain have been revoked for security.");
+        }
 
         await _unitOfWork.SaveChangesAsync();
 

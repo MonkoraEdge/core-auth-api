@@ -529,8 +529,8 @@ public class AuthService : IAuthService
 
         var accessToken = await _tokenService.GenerateAccessTokenAsync(
             resolvedClientId, user.Id, scopes, "direct", ipAddress, userAgent);
-        var refreshToken = await _tokenService.GenerateRefreshTokenAsync(
-            Guid.Empty, resolvedClientId, user.Id, null, scopes, refreshLifetime,
+        var (refreshToken, _) = await _tokenService.GenerateRefreshTokenAsync(
+            resolvedClientId, user.Id, null, scopes, refreshLifetime,
             ipAddress: ipAddress, userAgent: userAgent);
 
         user.LastLoginAt = DateTime.UtcNow;

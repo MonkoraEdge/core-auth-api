@@ -28,4 +28,15 @@ public class RefreshTokenRepository : AuthRepositoryBase<RefreshToken>, IRefresh
 
         return affected == 1;
     }
+
+    public async Task<bool> TryRevokeWithRotationAsync(Guid id, DateTime revokedAtUtc, Guid replacedByTokenId)
+    {
+        var affected = await Context.RefreshTokens
+            .Where(m => m.Id == id && m.RevokedAt == null && m.ExpiresAt > DateTime.UtcNow)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(m => m.RevokedAt, revokedAtUtc)
+                .SetProperty(m => m.ReplacedByTokenId, replacedByTokenId));
+
+        return affected == 1;
+    }
 }
