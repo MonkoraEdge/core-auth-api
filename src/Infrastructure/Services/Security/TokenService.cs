@@ -21,7 +21,11 @@ public class TokenService : ITokenService
     private readonly IUserRepository _userRepo;
     private readonly RsaSecurityKey _signingKey;
     private readonly string _issuer;
+    private readonly string _audience;
     private readonly int _defaultAccessTokenLifetimeSeconds;
+
+    // OAuth 2.1 recommends short-lived access tokens; 15 minutes is the hard ceiling enforced here.
+    private const int MaxAccessTokenLifetimeSeconds = 900;
 
     public TokenService(
         IUnitOfWork unitOfWork,
@@ -30,10 +34,15 @@ public class TokenService : ITokenService
         IAuthorizationCodeRepository authCodeRepo,
         IRevokedTokenRepository revokedTokenRepo,
         IUserRepository userRepo,
-        string privateKeyPem,
+        RsaSecurityKey signingKey,
         string issuer,
-        int defaultAccessTokenLifetimeSeconds = 3600)
+        string audience,
+        int defaultAccessTokenLifetimeSeconds = 900)
     {
+        if (signingKey.Rsa.KeySize < 2048)
+            throw new InvalidOperationException(
+                $"RSA signing key is {signingKey.Rsa.KeySize} bits. RS256 requires a minimum of 2048 bits.");
+
         _unitOfWork = unitOfWork;
         _accessTokenRepo = accessTokenRepo;
         _refreshTokenRepo = refreshTokenRepo;
@@ -41,11 +50,10 @@ public class TokenService : ITokenService
         _revokedTokenRepo = revokedTokenRepo;
         _userRepo = userRepo;
         _issuer = issuer;
-        _defaultAccessTokenLifetimeSeconds = defaultAccessTokenLifetimeSeconds;
-
-        var rsa = RSA.Create();
-        rsa.ImportFromPem(privateKeyPem);
-        _signingKey = new RsaSecurityKey(rsa) { KeyId = ComputeKeyId(rsa) };
+        _audience = audience;
+        // Silently cap rather than throw — prevents a misconfigured env var from hard-crashing startup.
+        _defaultAccessTokenLifetimeSeconds = Math.Min(defaultAccessTokenLifetimeSeconds, MaxAccessTokenLifetimeSeconds);
+        _signingKey = signingKey;
     }
 
     public Task<string> GenerateAccessTokenAsync(Guid clientId, Guid? userId, string[] scopes, string? grantType, string? ipAddress, string? userAgent)
@@ -57,29 +65,33 @@ public class TokenService : ITokenService
         var claims = new List<Claim>
         {
             new Claim(JwtRegisteredClaimNames.Jti, jti),
-            new Claim(JwtRegisteredClaimNames.Iss, _issuer),
-            new Claim(JwtRegisteredClaimNames.Aud, _issuer),
-            new Claim(JwtRegisteredClaimNames.Iat, DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString(), ClaimValueTypes.Integer64),
             new Claim("client_id", clientId.ToString()),
             new Claim("scope", string.Join(" ", scopes)),
+            // RFC 9068 §2.2: sub REQUIRED. Use user subject for delegation grants;
+            // fall back to client_id for machine-to-machine (client_credentials).
+            new Claim(JwtRegisteredClaimNames.Sub,
+                userId.HasValue ? userId.Value.ToString() : clientId.ToString()),
         };
-
-        if (userId.HasValue)
-            claims.Add(new Claim(JwtRegisteredClaimNames.Sub, userId.Value.ToString()));
 
         if (!string.IsNullOrEmpty(grantType))
             claims.Add(new Claim("grant_type", grantType));
 
+        // RFC 9068 §2.1: JOSE header typ MUST be "at+JWT" for access tokens.
+        // This prevents ID tokens and other JWTs from being accepted as access tokens.
         var credentials = new SigningCredentials(_signingKey, SecurityAlgorithms.RsaSha256);
-        var token = new JwtSecurityToken(
+        var header = new JwtHeader(credentials);
+        header["typ"] = "at+JWT";
+
+        // iss/aud/iat/nbf/exp are handled by JwtPayload constructor — no duplicate claims.
+        var payload = new JwtPayload(
             issuer: _issuer,
+            audience: _audience,
             claims: claims,
             notBefore: now,
             expires: expiry,
-            signingCredentials: credentials
-        );
+            issuedAt: now);
 
-        var tokenString = new JwtSecurityTokenHandler().WriteToken(token);
+        var tokenString = new JwtSecurityTokenHandler().WriteToken(new JwtSecurityToken(header, payload));
         var tokenHash = HashToken(tokenString);
 
         _accessTokenRepo.Insert(new AccessToken
@@ -360,12 +372,4 @@ public class TokenService : ITokenService
         await _unitOfWork.SaveChangesAsync();
     }
 
-    private static string ComputeKeyId(RSA rsa)
-    {
-        var parameters = rsa.ExportParameters(false);
-        var combined = (parameters.Modulus ?? Array.Empty<byte>())
-            .Concat(parameters.Exponent ?? Array.Empty<byte>()).ToArray();
-        var hash = SHA256.HashData(combined);
-        return Base64UrlEncoder.Encode(hash[..16]);
-    }
 }

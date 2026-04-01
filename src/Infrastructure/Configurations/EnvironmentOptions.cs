@@ -41,4 +41,11 @@ public class EnvironmentOptions
     [Required] public string? AMQP_SYNC_DELETE_ACCOUNT_EXCHANGE_KEY { get; set; }
     [Required] public string HASH_SECRET_KEY { get; init; }
     [Required] public string HASH_SECRET_IV { get; init; }
+
+    /// <summary>
+    /// Audience claim (<c>aud</c>) embedded in access tokens. Must match <c>ValidAudience</c>
+    /// on every resource server that validates tokens from this AS.
+    /// Falls back to <see cref="AUTH_ISSUER"/> when not set (backward-compatible).
+    /// </summary>
+    public string? OAUTH2_AUDIENCE { get; init; }
 }

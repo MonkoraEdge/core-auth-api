@@ -19,8 +19,10 @@ using MonkoraEdge.Core.DotNet.Infrastructure;
 using MonkoraEdge.Core.DotNet.Infrastructure.Interfaces;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Distributed;
+using Microsoft.IdentityModel.Tokens;
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
+using System.Security.Cryptography;
 using DomainIUnitOfWork = MonkoraEdge.Core.Auth.Domain.Services.Interface.IUnitOfWork;
 using DotNetIUnitOfWork = MonkoraEdge.Core.DotNet.Infrastructure.Interfaces.IUnitOfWork;
 
@@ -106,10 +108,38 @@ public static class ServiceCollectionExtensions
             m.GetRequiredService<IRefreshTokenRepository>(),
             m.GetRequiredService<ITokenService>()));
 
-        // Token service (scoped — one per request, reads RSA key from env)
+        // ── JWT signing key ──────────────────────────────────────────────────────
+        // Registered as singleton: RSA key material is loaded from PEM once at startup,
+        // validated for minimum key size, and shared across all requests.
+        services.AddSingleton(m =>
+        {
+            var opts = m.GetRequiredService<EnvironmentOptions>();
+            var rsa = RSA.Create();
+            rsa.ImportFromPem(opts.OAUTH2_SIGNED_PRIVATE_KEY);
+            if (rsa.KeySize < 2048)
+                throw new InvalidOperationException(
+                    $"OAUTH2_SIGNED_PRIVATE_KEY is {rsa.KeySize} bits. RS256 requires at least 2048 bits.");
+
+            // Compute key identifier from public key material (first 16 bytes of SHA-256(N || e)).
+            var p = rsa.ExportParameters(false);
+            var keyMaterial = (p.Modulus ?? []).Concat(p.Exponent ?? []).ToArray();
+            var kid = Convert.ToBase64String(SHA256.HashData(keyMaterial), 0, 16)
+                .TrimEnd('=').Replace('+', '-').Replace('/', '_');
+
+            return new RsaSecurityKey(rsa) { KeyId = kid };
+        });
+
+        // Token service (scoped — depends on scoped repositories)
         services.AddScoped<ITokenService>(m =>
         {
             var opts = m.GetRequiredService<EnvironmentOptions>();
+            // OAUTH2_AUDIENCE separates the AS issuer from the resource server audience.
+            // Falls back to AUTH_ISSUER for backward compatibility with deployments that
+            // have not yet set this variable.
+            var audience = !string.IsNullOrWhiteSpace(opts.OAUTH2_AUDIENCE)
+                ? opts.OAUTH2_AUDIENCE
+                : opts.AUTH_ISSUER;
+
             return new TokenService(
                 m.GetRequiredService<DomainIUnitOfWork>(),
                 m.GetRequiredService<IAccessTokenRepository>(),
@@ -117,8 +147,9 @@ public static class ServiceCollectionExtensions
                 m.GetRequiredService<IAuthorizationCodeRepository>(),
                 m.GetRequiredService<IRevokedTokenRepository>(),
                 m.GetRequiredService<IUserRepository>(),
-                opts.OAUTH2_SIGNED_PRIVATE_KEY,
+                m.GetRequiredService<RsaSecurityKey>(),
                 opts.AUTH_ISSUER,
+                audience,
                 opts.TOKEN_EXPIRES_IN_MINUTES * 60);
         });
 
