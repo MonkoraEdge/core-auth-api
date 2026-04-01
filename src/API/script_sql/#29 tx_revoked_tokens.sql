@@ -75,3 +75,14 @@ CREATE INDEX idx_tx_revoked_tokens_created_at ON public.tx_revoked_tokens (creat
 
 -- filter expires_at
 CREATE INDEX idx_tx_revoked_tokens_expires_at ON public.tx_revoked_tokens (expires_at);
+
+-- partial: only rows with a future expires_at (TTL cleanup scans)
+-- Token cleanup jobs delete expired revoked tokens; partial index keeps the scan very small
+CREATE INDEX idx_tx_revoked_tokens_expires_at_cleanup ON public.tx_revoked_tokens (expires_at)
+    WHERE expires_at IS NOT NULL;
+
+-- filter token_type (find all revoked access vs refresh tokens per user/client)
+CREATE INDEX idx_tx_revoked_tokens_token_type ON public.tx_revoked_tokens (token_type);
+
+-- composite: user_id + token_type + revoked_at (security dashboard: user token revocation history)
+CREATE INDEX idx_tx_revoked_tokens_user_type_revoked ON public.tx_revoked_tokens (user_id, token_type, revoked_at DESC);

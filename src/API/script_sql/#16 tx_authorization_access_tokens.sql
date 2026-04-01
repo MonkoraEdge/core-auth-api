@@ -44,13 +44,12 @@ CREATE TABLE public.tx_authorization_access_tokens (
     CHECK (
         grant_type IS NULL OR
         grant_type IN (
-            'AUTHORIZATION_CODE',
-            'CLIENT_CREDENTIALS',
-            'REFRESH_TOKEN',
-            'IMPLICIT',
-            'PASSWORD',
-            'DEVICE_CODE',
-            'JWT_BEARER'
+            'AUTHORIZATION_CODE',   -- OAuth2.1 §4.1
+            'CLIENT_CREDENTIALS',   -- OAuth2.1 §4.2
+            'REFRESH_TOKEN',        -- OAuth2.1 §6
+            'DEVICE_CODE'           -- RFC 8628
+            -- IMPLICIT removed: OAuth2.1 §2.1 prohibits implicit grant
+            -- PASSWORD removed: OAuth2.1 §2.1 prohibits ROPC grant
         )
     ),
 

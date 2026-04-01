@@ -83,3 +83,13 @@ CREATE INDEX idx_audit_logs_entity ON public.audit_logs(entity_name, entity_id);
 -- filter result
 CREATE INDEX idx_audit_logs_result ON public.audit_logs(result);
 
+-- composite: result + action + created_at
+-- Security monitoring queries typically filter by result + action ordered by time
+CREATE INDEX idx_audit_logs_result_action_created_at ON public.audit_logs (result, action, created_at DESC);
+
+-- partial: non-success events only
+-- Incident review dashboards almost exclusively query FAILURE and DENIED events;
+-- partial index keeps this very small (only the minority of rows that are failures)
+CREATE INDEX idx_audit_logs_non_success_user ON public.audit_logs (user_id, created_at DESC)
+    WHERE result IN ('FAILURE', 'DENIED');
+

@@ -244,7 +244,7 @@ SELECT
     NULL,
     'Monkora Demo SPA',
     'PUBLIC',
-    'CLIENT_SECRET_BASIC',
+    'NONE',  -- PUBLIC clients must use token_endpoint_auth_method = NONE (OAuth2.1 §2.1)
     TRUE,
     'S256',
     TRUE,

@@ -8,6 +8,8 @@ CREATE TABLE public.tx_authorization_refresh_tokens (
 	user_id UUID NOT NULL,   -- FK mt_users (denormalized for self-contained token)
 	session_id UUID, -- FK tx_user_sessions (nullable: refresh tokens can outlive sessions)
     replaced_by_token_id UUID, -- FK tx_authorization_refresh_tokens (rotation chain)
+    family_id UUID NOT NULL,   -- shared by all tokens in one rotation chain;
+                               -- reuse of a rotated token triggers full-family revocation (theft detection)
 
 	scopes TEXT[] NOT NULL,  -- scopes granted with this refresh token
 
@@ -57,6 +59,12 @@ CREATE INDEX idx_tx_authorization_refresh_tokens_user_id ON public.tx_authorizat
 
 -- filter client_id
 CREATE INDEX idx_tx_authorization_refresh_tokens_client_id ON public.tx_authorization_refresh_tokens (client_id);
+
+-- filter family_id (revoke entire token family on theft detection)
+CREATE INDEX idx_tx_authorization_refresh_tokens_family_id ON public.tx_authorization_refresh_tokens (family_id);
+
+-- composite: user_id + client_id (list active sessions per user per client)
+CREATE INDEX idx_tx_authorization_refresh_tokens_user_client_id ON public.tx_authorization_refresh_tokens (user_id, client_id);
 
 -- filter expires_at
 CREATE INDEX idx_tx_authorization_refresh_tokens_expires_at ON public.tx_authorization_refresh_tokens(expires_at);

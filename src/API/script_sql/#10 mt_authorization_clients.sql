@@ -10,7 +10,7 @@ CREATE TABLE public.mt_authorization_clients (
     client_name TEXT NOT NULL,
 	client_type TEXT NOT NULL DEFAULT 'CONFIDENTIAL', -- ENUM --> CONFIDENTIAL, PUBLIC
 
-	token_endpoint_auth_method TEXT NOT NULL DEFAULT 'CLIENT_SECRET_BASIC', -- ENUM --> CLIENT_SECRET_BASIC, CLIENT_SECRET_POST, CLIENT_SECRET_JWT, PRIVATE_KEY_JWT
+	token_endpoint_auth_method TEXT NOT NULL DEFAULT 'CLIENT_SECRET_BASIC', -- ENUM --> NONE, CLIENT_SECRET_BASIC, CLIENT_SECRET_POST, CLIENT_SECRET_JWT, PRIVATE_KEY_JWT
 	
     require_pkce BOOLEAN NOT NULL DEFAULT TRUE,
 	pkce_code_challenge_method TEXT DEFAULT 'S256',	-- ENUM --> PLAIN, S256
@@ -50,7 +50,9 @@ CREATE TABLE public.mt_authorization_clients (
 	REFERENCES public.mt_tenants(id) ON DELETE SET NULL,
 	
     CONSTRAINT chk_mt_authorization_clients_access_token_lifetime 
-        CHECK (access_token_lifetime > 0),
+        CHECK (access_token_lifetime > 0 AND access_token_lifetime <= 86400),
+	-- OAuth2.1 recommends short-lived access tokens (≤ 900 s). The application layer
+	-- caps issuance at 900 s; the DB enforces an absolute ceiling of 86 400 s (24 h).
 
     CONSTRAINT chk_mt_authorization_clients_refresh_token_lifetime 
         CHECK (refresh_token_lifetime > 0),
@@ -66,10 +68,11 @@ CREATE TABLE public.mt_authorization_clients (
 	CONSTRAINT chk_mt_authorization_clients_token_endpoint_auth_method
 	CHECK (
 	    token_endpoint_auth_method IN (
-	        'CLIENT_SECRET_BASIC',
-	        'CLIENT_SECRET_POST',			
-			'CLIENT_SECRET_JWT',
-			'PRIVATE_KEY_JWT'
+		    'NONE',                -- PUBLIC clients (OAuth2.1 §2.1 — no client secret)
+	        'CLIENT_SECRET_BASIC', -- HTTP Basic auth header
+	        'CLIENT_SECRET_POST',  -- credentials in request body
+			'CLIENT_SECRET_JWT',   -- JWT signed with shared secret
+			'PRIVATE_KEY_JWT'      -- JWT signed with private key (RFC 7523)
 	    )
 	),	
 
@@ -85,13 +88,13 @@ CREATE TABLE public.mt_authorization_clients (
 	CHECK (
 	    allowed_grant_types IS NULL OR
 	    allowed_grant_types <@ ARRAY[
-	        'AUTHORIZATION_CODE',
-	        'CLIENT_CREDENTIALS',
-	        'REFRESH_TOKEN',
-	        'IMPLICIT',
-	        'PASSWORD',
-	        'DEVICE_CODE',
-	        'JWT_BEARER'
+	        'AUTHORIZATION_CODE',   -- OAuth2.1 §4.1
+	        'CLIENT_CREDENTIALS',   -- OAuth2.1 §4.2
+	        'REFRESH_TOKEN',        -- OAuth2.1 §6
+	        'DEVICE_CODE',          -- RFC 8628
+	        'JWT_BEARER'            -- RFC 7523
+	        -- IMPLICIT removed: OAuth2.1 §2.1 prohibits implicit grant
+	        -- PASSWORD removed: OAuth2.1 §2.1 prohibits ROPC grant
 	    ]::TEXT[]
 	),
 

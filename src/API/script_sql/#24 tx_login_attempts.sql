@@ -3,7 +3,7 @@
 CREATE TABLE public.tx_login_attempts (
     id UUID NOT NULL DEFAULT gen_random_uuid(),
 
-	client_id UUID NOT NULL, -- FK mt_authorization_clients
+	client_id UUID, -- FK mt_authorization_clients (nullable: SET NULL on client delete preserves audit trail)
     user_id UUID, -- FK mt_users (nullable: unknown user on failed attempts)
 	session_id UUID, -- FK tx_user_sessions (nullable: no session exists before successful login)
 	
@@ -38,7 +38,8 @@ CREATE TABLE public.tx_login_attempts (
 
     -- Foreign Key	
     CONSTRAINT fk_tx_login_attempts_mt_authorization_clients FOREIGN KEY (client_id)
-	REFERENCES public.mt_authorization_clients(id) ON DELETE CASCADE,	
+	REFERENCES public.mt_authorization_clients(id) ON DELETE SET NULL,
+	-- SET NULL (not CASCADE): deleting a client must not erase the security audit trail
 	
     CONSTRAINT fk_tx_login_attempts_mt_users FOREIGN KEY (user_id)
 	REFERENCES public.mt_users(id) ON DELETE SET NULL,
@@ -118,4 +119,12 @@ CREATE INDEX idx_tx_login_attempts_success ON public.tx_login_attempts(success);
 
 -- filter provider_id
 CREATE INDEX idx_tx_login_attempts_provider ON public.tx_login_attempts(provider_id);
+
+-- composite: ip_address + success + created_at
+-- CountFailedByIpAddressAsync uses all three predicates; covering index avoids table scan
+CREATE INDEX idx_tx_login_attempts_ip_success_created_at ON public.tx_login_attempts (ip_address, success, created_at DESC);
+
+-- composite: username + success + created_at
+-- CountFailedByUsernameAsync uses all three predicates; covering index avoids table scan
+CREATE INDEX idx_tx_login_attempts_username_success_created_at ON public.tx_login_attempts (username, success, created_at DESC);
 
