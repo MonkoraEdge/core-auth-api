@@ -66,10 +66,6 @@ builder.Services.AddControllers()
 builder.WebHost.ConfigureKestrel(k =>
     k.Limits.MaxRequestBodySize = 65_536); // 64 KB
 
-builder.Services.AddSingleton<IPostConfigureOptions<JwtBearerAuthenticationOptions>, JwtBearerAuthenticationPostConfigureOptions>();
-builder.Services.AddSingleton<IPostConfigureOptions<BasicAuthenticationOptions>, BasicAuthenticationPostConfigureOptions>();
-builder.Services.AddSingleton<IPostConfigureOptions<ApiKeyAuthenticationOptions>, ApiKeyAuthenticationPostConfigureOptions>();
-
 builder.Services.AddMemoryCache();
 
 // Per-IP fixed-window rate limiting.

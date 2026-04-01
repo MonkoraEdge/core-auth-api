@@ -17,8 +17,11 @@ using MonkoraEdge.Core.Auth.Infrastructure.Services.Security;
 using MonkoraEdge.Core.Auth.Infrastructure.Repositories;
 using MonkoraEdge.Core.DotNet.Infrastructure;
 using MonkoraEdge.Core.DotNet.Infrastructure.Interfaces;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Distributed;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
@@ -151,6 +154,53 @@ public static class ServiceCollectionExtensions
                 audience,
                 opts.TOKEN_EXPIRES_IN_MINUTES * 60);
         });
+
+        // ── JWT Bearer authentication ──────────────────────────────────────────────────
+        // Validates JWT access tokens on [Authorize] endpoints.
+        // The RsaSecurityKey singleton is resolved via Configure<T> DI binding so the
+        // validation key is always the same object that signs tokens — no double PEM load.
+        services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+            .AddJwtBearer();
+
+        services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)
+            .Configure<RsaSecurityKey>((jwtOptions, rsaKey) =>
+            {
+                var audience = !string.IsNullOrWhiteSpace(options.OAUTH2_AUDIENCE)
+                    ? options.OAUTH2_AUDIENCE
+                    : options.AUTH_ISSUER;
+
+                jwtOptions.MapInboundClaims = false; // keep claims as-is; do not remap to WS-Security URIs
+
+                jwtOptions.TokenValidationParameters = new TokenValidationParameters
+                {
+                    ValidateIssuerSigningKey = true,
+                    IssuerSigningKey        = rsaKey,            // RS256 key from the singleton
+
+                    // Restrict accepted algorithms — prevents alg=none and HS256 confusion attacks.
+                    ValidAlgorithms         = new[] { SecurityAlgorithms.RsaSha256 },
+
+                    // RFC 9068 §2.1: only accept tokens with typ=at+JWT; rejects ID tokens /
+                    // generic JWTs from being used as access tokens on protected endpoints.
+                    ValidTypes              = new[] { "at+JWT" },
+
+                    ValidateIssuer          = true,
+                    ValidIssuer             = options.AUTH_ISSUER,
+
+                    ValidateAudience        = true,
+                    ValidAudience           = audience,
+
+                    ValidateLifetime        = true,
+                    // Zero clock skew: access tokens are capped at 900 s.
+                    // A default 5-minute grace window would extend effective lifetime by 33%.
+                    ClockSkew               = TimeSpan.Zero,
+
+                    // Map JWT sub → User.Identity.Name and keep role claim readable.
+                    NameClaimType           = "sub",
+                    RoleClaimType           = "roles"
+                };
+            });
+
+        services.AddAuthorization();
 
         // Auth service
         services.AddScoped<IAuthService>(m =>
