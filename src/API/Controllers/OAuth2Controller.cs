@@ -220,14 +220,16 @@ public class OAuth2Controller : MonkoraControllerBase
         catch (DomainException ex)
             when (ex.ErrorCode == ErrorCodeType.SCOPE_NOT_ALLOWED || ex.ErrorCode == ErrorCodeType.INVALID_SCOPE)
         {
+            // Sanitize error_description — strip any characters that break the header field-value
+            // per RFC 7235 §2.1 (quoted-string must not contain bare CR/LF or unescaped double-quotes).
             Response.Headers[HeaderNames.WWWAuthenticate] =
-                $"Bearer realm=\"oauth2/userinfo\", error=\"insufficient_scope\", error_description=\"{ex.ErrorMessage}\"";
+                $"Bearer realm=\"oauth2/userinfo\", error=\"insufficient_scope\", error_description=\"{SanitizeHeaderValue(ex.ErrorMessage)}\"";
             return StatusCode(StatusCodes.Status403Forbidden);
         }
         catch (DomainException ex)
         {
             Response.Headers[HeaderNames.WWWAuthenticate] =
-                $"Bearer realm=\"oauth2/userinfo\", error=\"invalid_token\", error_description=\"{ex.ErrorMessage}\"";
+                $"Bearer realm=\"oauth2/userinfo\", error=\"invalid_token\", error_description=\"{SanitizeHeaderValue(ex.ErrorMessage)}\"";
             return Unauthorized();
         }
     }
@@ -393,6 +395,19 @@ public class OAuth2Controller : MonkoraControllerBase
     private static bool IsInvalidClientError(DomainException ex)
         => ex.ErrorCode == ErrorCodeType.INVALID_CLIENT
            || ex.ErrorCode == ErrorCodeType.INVALID_CLIENT_SECRET;
+
+    /// <summary>
+    /// Strip characters that are illegal inside an HTTP quoted-string header value (RFC 7235 §2.1).
+    /// Prevents header injection via error messages that travel into WWW-Authenticate.
+    /// </summary>
+    private static string SanitizeHeaderValue(string? value)
+    {
+        if (string.IsNullOrEmpty(value)) return string.Empty;
+        // Remove CR, LF (header splitting) and bare double-quotes (quoted-string delimiter).
+        return value.Replace("\r", string.Empty)
+                    .Replace("\n", string.Empty)
+                    .Replace("\"", "'");
+    }
 
     private void ApplyNoStoreHeaders()
     {

@@ -199,6 +199,43 @@ public static class ServiceCollectionExtensions
                     NameClaimType           = "sub",
                     RoleClaimType           = "roles"
                 };
+
+                // ── Token revocation check ────────────────────────────────────────────
+                // JWT signature + lifetime validation alone cannot detect a token that was
+                // explicitly revoked via POST /revoke before its natural expiry (up to 900 s).
+                // OnTokenValidated runs after cryptographic validation succeeds — we look up
+                // the token hash in the DB revocation list to close the replay window.
+                jwtOptions.Events = new JwtBearerEvents
+                {
+                    OnTokenValidated = async ctx =>
+                    {
+                        // Resolve scoped repository from the per-request service container.
+                        var revokedRepo = ctx.HttpContext.RequestServices
+                            .GetRequiredService<IRevokedTokenRepository>();
+                        var accessTokenRepo = ctx.HttpContext.RequestServices
+                            .GetRequiredService<IAccessTokenRepository>();
+
+                        var rawToken = ctx.SecurityToken.UnsafeToString();
+                        var tokenHash = System.Convert.ToHexString(
+                            System.Security.Cryptography.SHA256.HashData(
+                                System.Text.Encoding.UTF8.GetBytes(rawToken))).ToLowerInvariant();
+
+                        // Check explicit revocation list first (covers RFC 7009 POST /revoke).
+                        if (await revokedRepo.IsRevokedAsync(tokenHash))
+                        {
+                            ctx.Fail("Token has been revoked.");
+                            return;
+                        }
+
+                        // Also check access token table for soft-delete via RevokedAt column —
+                        // covers mass logout (RevokeAllUserTokensAsync) and session termination.
+                        var accessToken = await accessTokenRepo.GetByTokenHashAsync(tokenHash);
+                        if (accessToken?.RevokedAt.HasValue == true)
+                        {
+                            ctx.Fail("Token has been revoked.");
+                        }
+                    }
+                };
             });
 
         services.AddAuthorization();

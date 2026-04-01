@@ -392,6 +392,16 @@ public class OAuth2Service : IOAuth2Service
             throw new DomainException("token", ErrorCodeType.INVALID_SCOPE,
                 "offline_access scope is not permitted for the client_credentials grant.");
 
+        // OIDC scopes (openid, profile, email, phone) require a human subject (sub = user).
+        // client_credentials tokens have sub = client_id — there is no user to authenticate or describe.
+        // Allowing these scopes would produce a token indistinguishable from a user-delegated token
+        // on resource servers that inspect scope names alone.
+        var oidcOnlyScopes = new[] { "openid", "profile", "email", "phone" };
+        var oidcRequested = requestedScopes.Intersect(oidcOnlyScopes, StringComparer.Ordinal).ToArray();
+        if (oidcRequested.Any())
+            throw new DomainException("token", ErrorCodeType.INVALID_SCOPE,
+                $"OIDC scopes ({string.Join(", ", oidcRequested)}) are not permitted for the client_credentials grant. They require a human subject.");
+
         var allowedScopes = await _clientAuth.GetAllowedScopeNamesAsync(client.Id);
 
         var invalidScopes = requestedScopes.Except(allowedScopes).ToArray();

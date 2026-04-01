@@ -34,8 +34,10 @@ builder.Services.AddCors(options =>
         if (allowedOrigins.Length > 0)
             // Restrict to the specific set of allowed origins, methods, and headers.
             // AllowAnyHeader/AllowAnyMethod are intentionally avoided here.
+            // X-Forwarded-For is intentionally excluded: allowing browsers to set it
+            // would let scripts from allowed origins inject a forged client IP header.
             policy.WithOrigins(allowedOrigins)
-                  .WithHeaders("Authorization", "Content-Type", "X-Requested-With", "X-Forwarded-For")
+                  .WithHeaders("Authorization", "Content-Type", "X-Requested-With")
                   .WithMethods("GET", "POST", "PUT", "DELETE")
                   .SetPreflightMaxAge(TimeSpan.FromMinutes(10));
         // If no origins are configured, the policy allows nothing (deny-by-default)
