@@ -97,36 +97,48 @@ public class UserInfoResponse
     [JsonPropertyName("sub")]
     public string Sub { get; set; }
 
+    // OIDC Core §5.3: claims that are unavailable MUST be omitted, not null-serialized.
     [JsonPropertyName("name")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Name { get; set; }
 
     [JsonPropertyName("given_name")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? GivenName { get; set; }
 
     [JsonPropertyName("family_name")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? FamilyName { get; set; }
 
     [JsonPropertyName("email")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Email { get; set; }
 
     [JsonPropertyName("email_verified")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public bool? EmailVerified { get; set; }
 
     [JsonPropertyName("phone_number")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? PhoneNumber { get; set; }
 
     [JsonPropertyName("phone_number_verified")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public bool? PhoneNumberVerified { get; set; }
 
     [JsonPropertyName("picture")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Picture { get; set; }
 
     [JsonPropertyName("locale")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Locale { get; set; }
 
     [JsonPropertyName("zoneinfo")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Zoneinfo { get; set; }
 
     [JsonPropertyName("updated_at")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public long? UpdatedAt { get; set; }
 }
