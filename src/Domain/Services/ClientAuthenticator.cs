@@ -37,11 +37,11 @@ public sealed class ClientAuthenticator : IClientAuthenticator
     public async Task<AuthorizationClient> LoadAsync(string clientId)
     {
         if (string.IsNullOrEmpty(clientId))
-            throw new DomainException("authorize", "client_id is required.");
+            throw new DomainException("authorize", ErrorCodeType.INVALID_CLIENT, "client_id is required.");
 
         var client = await _clientRepo.GetByClientIdAsync(clientId);
         if (client == null || !client.IsActive)
-            throw new DomainException("authorize", "Client not found or inactive.");
+            throw new DomainException("authorize", ErrorCodeType.INVALID_CLIENT, "Client not found or inactive.");
 
         return client;
     }

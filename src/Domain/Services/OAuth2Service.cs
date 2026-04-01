@@ -47,7 +47,11 @@ public class OAuth2Service : IOAuth2Service
         var validation = await ValidateAuthorizeRequestAsync(request, authenticatedUserId ?? Guid.Empty);
         if (!validation.IsValid)
         {
-            if (!string.IsNullOrEmpty(request.RedirectUri))
+            // RFC 6749 §4.1.2.1: only redirect the error back when redirect_uri was already
+            // validated against the client's registered list. For errors that occur before that
+            // check (missing/bad client_id, bad response_type) the redirect_uri is still
+            // attacker-controlled — redirecting would be an open redirect vulnerability.
+            if (validation.RedirectUriValidated && !string.IsNullOrEmpty(request.RedirectUri))
             {
                 return new AuthorizeEndpointResponse
                 {
@@ -120,12 +124,10 @@ public class OAuth2Service : IOAuth2Service
             return AuthorizeValidationResult.Fail("invalid_request", "redirect_uri does not exactly match a registered URI.");
 
         if (string.IsNullOrEmpty(request.CodeChallenge))
-        {
-            return AuthorizeValidationResult.Fail("invalid_request", "code_challenge is required.");
-        }
+            return AuthorizeValidationResult.FailSafeRedirect("invalid_request", "code_challenge is required.");
 
         if (request.CodeChallengeMethod != "S256")
-            return AuthorizeValidationResult.Fail("invalid_request", "code_challenge_method must be S256.");
+            return AuthorizeValidationResult.FailSafeRedirect("invalid_request", "code_challenge_method must be S256.");
 
         var requestedScopes = (request.Scope ?? "openid")
             .Split(' ', StringSplitOptions.RemoveEmptyEntries);
@@ -133,11 +135,11 @@ public class OAuth2Service : IOAuth2Service
 
         var invalidScopes = requestedScopes.Except(allowedScopes).ToArray();
         if (invalidScopes.Any())
-            return AuthorizeValidationResult.Fail("invalid_scope", $"Scope(s) not allowed: {string.Join(", ", invalidScopes)}");
+            return AuthorizeValidationResult.FailSafeRedirect("invalid_scope", $"Scope(s) not allowed: {string.Join(", ", invalidScopes)}");
 
         var allowedGrants = client.AllowedGrantTypes ?? Array.Empty<string>();
         if (!allowedGrants.Contains("authorization_code", StringComparer.OrdinalIgnoreCase))
-            return AuthorizeValidationResult.Fail("unauthorized_client", "Client is not authorized for authorization_code grant.");
+            return AuthorizeValidationResult.FailSafeRedirect("unauthorized_client", "Client is not authorized for authorization_code grant.");
 
         bool requiresConsent = client.RequireConsent;
         if (requiresConsent && authenticatedUserId != Guid.Empty)
@@ -161,10 +163,10 @@ public class OAuth2Service : IOAuth2Service
                     // prompt=none: server MUST NOT display any interactive UI.
                     // Return error codes from OIDC Core §3.1.2.6 instead of requiring interaction.
                     if (authenticatedUserId == Guid.Empty)
-                        return AuthorizeValidationResult.Fail("login_required",
+                        return AuthorizeValidationResult.FailSafeRedirect("login_required",
                             "Authentication is required. Re-authenticate and retry.");
                     if (requiresConsent)
-                        return AuthorizeValidationResult.Fail("consent_required",
+                        return AuthorizeValidationResult.FailSafeRedirect("consent_required",
                             "Consent has not been granted for the requested scopes.");
                     break;
                 case "login":
@@ -416,7 +418,7 @@ public class OAuth2Service : IOAuth2Service
         TokenRequest request, string? clientId, string? clientSecret, string? ipAddress, string? userAgent)
     {
         if (string.IsNullOrEmpty(request.RefreshToken))
-            throw new DomainException("token", "refresh_token is required.");
+            throw new DomainException("token", ErrorCodeType.INVALID_REQUEST, "refresh_token is required.");
 
         var client = await _clientAuth.AuthenticateAsync(clientId ?? request.ClientId, clientSecret);
         var rt = await _refreshTokenProcessor.ValidateActiveAsync(

@@ -15,8 +15,19 @@ public sealed class AuthorizeValidationResult
     public AuthorizationClientInfo? Client { get; init; }
     public string[] RequestedScopes { get; init; } = Array.Empty<string>();
 
+    /// <summary>
+    /// True only when redirect_uri has been verified against the registered client URI list.
+    /// Must be false for errors that occur before that check — prevents open-redirect abuse.
+    /// </summary>
+    public bool RedirectUriValidated { get; init; }
+
+    /// <summary>Failure before redirect_uri validation — caller must NOT redirect back to client.</summary>
     public static AuthorizeValidationResult Fail(string error, string description) =>
-        new() { IsValid = false, Error = error, ErrorDescription = description };
+        new() { IsValid = false, Error = error, ErrorDescription = description, RedirectUriValidated = false };
+
+    /// <summary>Failure after redirect_uri was validated — safe to redirect error back to client.</summary>
+    public static AuthorizeValidationResult FailSafeRedirect(string error, string description) =>
+        new() { IsValid = false, Error = error, ErrorDescription = description, RedirectUriValidated = true };
 }
 
 /// <summary>Safe public projection of an AuthorizationClient — no secret material.</summary>
