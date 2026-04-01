@@ -16,8 +16,12 @@
 	</PropertyGroup>
 
 	<ItemGroup>
+		<PackageReference Include="Asp.Versioning.Http" Version="8.1.0" />
+		<PackageReference Include="AspNetCore.HealthChecks.NpgSql" Version="8.0.2" />
+		<PackageReference Include="AspNetCore.HealthChecks.Redis" Version="8.0.1" />
 		<PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="9.0.2" />
 		<PackageReference Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="9.0.10" />
+		<PackageReference Include="Serilog.AspNetCore" Version="9.0.0" />
 		<PackageReference Include="Swashbuckle.AspNetCore" Version="9.0.6" />
 	</ItemGroup>
 

@@ -1,3 +1,4 @@
+using MonkoraEdge.Core.Auth.Domain.AggregatesModel.AuditAggregate.Interfaces;
 using MonkoraEdge.Core.Auth.Domain.AggregatesModel.EntityAggregate;
 using MonkoraEdge.Core.Auth.Domain.AggregatesModel.OAuth2Aggregate;
 using MonkoraEdge.Core.Auth.Domain.AggregatesModel.AuthorizationAggregate.Interfaces;
@@ -19,6 +20,7 @@ public class OAuth2Service : IOAuth2Service
     private readonly IClientAuthenticator _clientAuth;
     private readonly IPasswordService _passwordService;
     private readonly IRefreshTokenProcessor _refreshTokenProcessor;
+    private readonly IAuditLogRepository _auditLogRepo;
 
     public OAuth2Service(
         IUnitOfWork unitOfWork,
@@ -29,7 +31,8 @@ public class OAuth2Service : IOAuth2Service
         ITokenService tokenService,
         IClientAuthenticator clientAuth,
         IPasswordService passwordService,
-        IRefreshTokenProcessor refreshTokenProcessor)
+        IRefreshTokenProcessor refreshTokenProcessor,
+        IAuditLogRepository auditLogRepo)
     {
         _unitOfWork = unitOfWork;
         _authCodeRepo = authCodeRepo;
@@ -40,6 +43,7 @@ public class OAuth2Service : IOAuth2Service
         _clientAuth = clientAuth;
         _passwordService = passwordService;
         _refreshTokenProcessor = refreshTokenProcessor;
+        _auditLogRepo = auditLogRepo;
     }
 
     public async Task<AuthorizeEndpointResponse> ProcessAuthorizeRequestAsync(AuthorizeRequest request, Guid? authenticatedUserId)
@@ -280,6 +284,16 @@ public class OAuth2Service : IOAuth2Service
             client.Id, userId, null, scopes, request.RedirectUri!,
             request.CodeChallenge, request.CodeChallengeMethod, request.Nonce);
 
+        _auditLogRepo.Insert(new AuditLog
+        {
+            ClientId = client.Id,
+            UserId = userId,
+            ActorType = "user",
+            Action = "auth_code_issued",
+            EntityName = "AuthorizationCode",
+            Result = "success"
+        });
+
         await _unitOfWork.SaveChangesAsync();
         return code;
     }
@@ -360,6 +374,20 @@ public class OAuth2Service : IOAuth2Service
                 authCode.Nonce, authCode.AuthTime ?? DateTime.UtcNow,
                 accessToken: accessToken);  // OIDC Core §3.1.3.6: at_hash requires the access token
 
+        _auditLogRepo.Insert(new AuditLog
+        {
+            ClientId = client.Id,
+            UserId = authCode.UserId,
+            SessionId = authCode.SessionId,
+            ActorType = "user",
+            Action = "token_issued",
+            EntityName = "AccessToken",
+            IpAddress = ipAddress,
+            UserAgent = userAgent,
+            Result = "success",
+            Metadata = $"{{\"grant\":\"authorization_code\",\"scopes\":\"{string.Join(" ", scopes)}\"}}"
+        });
+
         await _unitOfWork.SaveChangesAsync(); // single atomic commit
 
         return new TokenResponse
@@ -413,6 +441,18 @@ public class OAuth2Service : IOAuth2Service
         var accessToken = await _tokenService.GenerateAccessTokenAsync(
             client.Id, null, finalScopes, "CLIENT_CREDENTIALS", ipAddress, userAgent, expiresIn);
 
+        _auditLogRepo.Insert(new AuditLog
+        {
+            ClientId = client.Id,
+            ActorType = "client",
+            Action = "token_issued",
+            EntityName = "AccessToken",
+            IpAddress = ipAddress,
+            UserAgent = userAgent,
+            Result = "success",
+            Metadata = $"{{\"grant\":\"client_credentials\",\"scopes\":\"{string.Join(" ", finalScopes)}\"}}"
+        });
+
         await _unitOfWork.SaveChangesAsync();
 
         return new TokenResponse
@@ -452,13 +492,29 @@ public class OAuth2Service : IOAuth2Service
             narrowedScopes = requestedScopes;
         }
 
-        return await _refreshTokenProcessor.RotateAsync(
+        var tokenResponse = await _refreshTokenProcessor.RotateAsync(
             rt,
             client,
             client.RefreshTokenLifetime,
             ipAddress,
             userAgent,
             narrowedScopes);
+
+        _auditLogRepo.Insert(new AuditLog
+        {
+            ClientId = client.Id,
+            UserId = rt.UserId != Guid.Empty ? rt.UserId : null,
+            SessionId = rt.SessionId,
+            ActorType = rt.UserId != Guid.Empty ? "user" : "client",
+            Action = "token_refreshed",
+            EntityName = "AccessToken",
+            IpAddress = ipAddress,
+            UserAgent = userAgent,
+            Result = "success"
+        });
+
+        await _unitOfWork.SaveChangesAsync();
+        return tokenResponse;
     }
 
     public async Task RevokeAsync(RevocationRequest request, string clientId, string? clientSecret)
@@ -470,6 +526,18 @@ public class OAuth2Service : IOAuth2Service
 
         var client = await _clientAuth.LoadAsync(clientId);
         await _tokenService.RevokeTokenAsync(request.Token, request.TokenTypeHint, client.Id, "revoked_by_client");
+
+        _auditLogRepo.Insert(new AuditLog
+        {
+            ClientId = client.Id,
+            ActorType = "client",
+            Action = "token_revoked",
+            EntityName = "Token",
+            Result = "success",
+            Metadata = request.TokenTypeHint != null ? $"{{\"token_type_hint\":\"{request.TokenTypeHint}\"}}" : null
+        });
+
+        await _unitOfWork.SaveChangesAsync();
     }
 
     public async Task<IntrospectResponse> IntrospectAsync(IntrospectRequest request, string clientId, string? clientSecret)

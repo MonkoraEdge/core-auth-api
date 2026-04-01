@@ -281,7 +281,8 @@ public static class ServiceCollectionExtensions
             m.GetRequiredService<ITokenService>(),
             m.GetRequiredService<IClientAuthenticator>(),
             m.GetRequiredService<IPasswordService>(),
-            m.GetRequiredService<IRefreshTokenProcessor>()));
+            m.GetRequiredService<IRefreshTokenProcessor>(),
+            m.GetRequiredService<IAuditLogRepository>()));
 
         // User service
         services.AddScoped<IUserService>(m => new UserService(

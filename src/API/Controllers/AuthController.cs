@@ -2,6 +2,7 @@ using MonkoraEdge.Core.Auth.Domain.AggregatesModel.AuthAggregate;
 using MonkoraEdge.Core.Auth.Domain.AggregatesModel.OAuth2Aggregate;
 using MonkoraEdge.Core.Auth.Domain.Exceptions;
 using MonkoraEdge.Core.Auth.Domain.Services.Interface;
+using Asp.Versioning;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
@@ -15,6 +16,7 @@ namespace MonkoraEdge.Core.Auth.API.Controllers;
 /// </summary>
 [Route("auth")]
 [ApiController]
+[ApiVersion("1.0")]
 public class AuthController : MonkoraControllerBase
 {
     private readonly IAuthService _authService;

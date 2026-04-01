@@ -6,15 +6,36 @@ using MonkoraEdge.Core.DotNet;
 using MonkoraEdge.Core.DotNet.AggregatesModel.AuthAggregate;
 using MonkoraEdge.Core.DotNet.AggregatesModel.ExceptionAggregate.ErrorModel;
 using MonkoraEdge.Core.DotNet.Extensions.Middlewares;
+using MonkoraEdge.Core.DotNet.Middleware;
+using Asp.Versioning;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Options;
 using Microsoft.OpenApi.Models;
+using Serilog;
 using System.Threading.RateLimiting;
+
+// Bootstrap Serilog early so startup errors are captured before the host is built.
+Log.Logger = new LoggerConfiguration()
+    .WriteTo.Console()
+    .CreateBootstrapLogger();
+
+try
+{
 
 // Allowed origins loaded from configuration — never use wildcard in production
 const string corsPolicyName = "OAuthCors";
 var builder = WebApplication.CreateBuilder(args);
+
+// Replace default logging with Serilog. Configuration is read from the "Serilog" section
+// in appsettings.json so sinks and enrichers can be changed without code changes.
+builder.Host.UseSerilog((ctx, services, lc) => lc
+    .ReadFrom.Configuration(ctx.Configuration)
+    .ReadFrom.Services(services)
+    .Enrich.FromLogContext()
+    .Enrich.WithProperty("MachineName", Environment.MachineName)
+    .Enrich.WithProperty("Environment", ctx.HostingEnvironment.EnvironmentName));
+
 var environmentOptions = builder.Services.AddCustomOptions<EnvironmentOptions>(builder.Configuration);
 
 builder.Services.AddCustomConfigurations(environmentOptions);
@@ -63,6 +84,16 @@ builder.Services.Configure<CookiePolicyOptions>(o =>
 builder.Services.AddControllers()
     .AddResponseJsonOptions();
 
+// API versioning — uses header/query-string negotiation.
+// AssumeDefaultVersionWhenUnspecified keeps existing clients working (no routes changed).
+// ReportApiVersions advertises supported versions via the api-supported-versions response header.
+builder.Services.AddApiVersioning(o =>
+{
+    o.DefaultApiVersion = new ApiVersion(1, 0);
+    o.AssumeDefaultVersionWhenUnspecified = true;
+    o.ReportApiVersions = true;
+});
+
 // Enforce a tight request body size limit for all controllers (64 KB is ample for auth payloads).
 // Individual OAuth2 form-post endpoints inherit this limit automatically.
 builder.WebHost.ConfigureKestrel(k =>
@@ -96,6 +127,24 @@ builder.Services.AddRateLimiter(o =>
                 QueueLimit = 0
             });
     });
+
+    // Stricter policy for authentication endpoints (token, revoke, introspect).
+    // 10 requests/min per IP prevents brute-force and credential stuffing attacks.
+    o.AddPolicy("auth", context =>
+    {
+        var ip = context.Connection.RemoteIpAddress?.ToString()
+                 ?? context.Request.Headers["X-Forwarded-For"].FirstOrDefault()
+                 ?? "unknown";
+
+        return RateLimitPartition.GetFixedWindowLimiter(partitionKey: $"auth:{ip}", factory: _ =>
+            new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 10,
+                Window = TimeSpan.FromMinutes(1),
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                QueueLimit = 0
+            });
+    });
 });
 
 builder.Services.AddStackExchangeRedisCache(options =>
@@ -103,7 +152,15 @@ builder.Services.AddStackExchangeRedisCache(options =>
     options.Configuration = environmentOptions.REDIS_CONNECTIONSTRING;
 });
 
-builder.Services.AddHealthChecks();
+builder.Services.AddHealthChecks()
+    .AddNpgSql(
+        connectionString: environmentOptions.POSTGRES_CONNECTIONSTRING,
+        name: "postgres",
+        tags: new[] { "ready", "db" })
+    .AddRedis(
+        redisConnectionString: environmentOptions.REDIS_CONNECTIONSTRING,
+        name: "redis",
+        tags: new[] { "ready", "cache" });
 
 builder.Services.AddEndpointsApiExplorer();
 
@@ -135,6 +192,10 @@ if (app.Environment.IsDevelopment())
 app.UseErrorHandling(new ErrorHandlingOptions("authentication"));
 app.UseMiddleware<DomainExceptionHandlingMiddleware>();
 
+// Assign / propagate X-Correlation-Id on every request.
+// Must run early so all subsequent log entries include the CorrelationId enricher.
+app.UseMiddleware<CorrelationIdMiddleware>();
+
 // Security headers — prevent clickjacking, MIME sniffing, and information leakage
 app.Use(async (ctx, next) =>
 {
@@ -162,7 +223,24 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
-app.MapHealthChecks("/health/ready", new HealthCheckOptions()).AllowAnonymous();
-app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false }).AllowAnonymous();
+app.MapHealthChecks("/health/ready", new HealthCheckOptions
+{
+    Predicate = hc => hc.Tags.Contains("ready"),
+    AllowCachingResponses = false
+}).AllowAnonymous();
+app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false, AllowCachingResponses = false }).AllowAnonymous();
 
 app.Run();
+
+} // end try
+catch (Exception ex)
+{
+    Log.Fatal(ex, "Host terminated unexpectedly.");
+    return 1;
+}
+finally
+{
+    Log.CloseAndFlush();
+}
+
+return 0;

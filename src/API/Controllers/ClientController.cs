@@ -1,5 +1,6 @@
 using MonkoraEdge.Core.Auth.Domain.AggregatesModel.ClientAggregate;
 using MonkoraEdge.Core.Auth.Domain.Services.Interface;
+using Asp.Versioning;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -11,6 +12,7 @@ namespace MonkoraEdge.Core.Auth.API.Controllers;
 /// </summary>
 [Route("clients")]
 [ApiController]
+[ApiVersion("1.0")]
 [Authorize]
 public class ClientController : MonkoraControllerBase
 {

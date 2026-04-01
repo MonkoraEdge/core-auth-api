@@ -1,5 +1,6 @@
 using MonkoraEdge.Core.Auth.Domain.AggregatesModel.OAuth2Aggregate;
 using MonkoraEdge.Core.Auth.Domain.Services.Interface;
+using Asp.Versioning;
 using Microsoft.AspNetCore.Mvc;
 
 namespace MonkoraEdge.Core.Auth.API.Controllers;
@@ -8,6 +9,7 @@ namespace MonkoraEdge.Core.Auth.API.Controllers;
 /// Discovery endpoints for OAuth2/OIDC clients to bootstrap server metadata and keys.
 /// </summary>
 [ApiController]
+[ApiVersionNeutral]
 public class WellKnownController : ControllerBase
 {
     private readonly IOAuth2Service _oauth2Service;

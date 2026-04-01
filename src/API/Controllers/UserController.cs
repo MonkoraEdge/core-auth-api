@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using MonkoraEdge.Core.Auth.Domain.AggregatesModel.UserAggregate;
 using MonkoraEdge.Core.Auth.Domain.Services.Interface;
+using Asp.Versioning;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -11,6 +12,7 @@ namespace MonkoraEdge.Core.Auth.API.Controllers;
 /// </summary>
 [Route("users")]
 [ApiController]
+[ApiVersion("1.0")]
 [Authorize]
 public class UserController : MonkoraControllerBase
 {

@@ -2,6 +2,7 @@ using System.Text;
 using MonkoraEdge.Core.Auth.Domain.AggregatesModel.OAuth2Aggregate;
 using MonkoraEdge.Core.Auth.Domain.Exceptions;
 using MonkoraEdge.Core.Auth.Domain.Services.Interface;
+using Asp.Versioning;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.RateLimiting;
@@ -16,6 +17,7 @@ namespace MonkoraEdge.Core.Auth.API.Controllers;
 /// </summary>
 [Route("oauth2")]
 [ApiController]
+[ApiVersionNeutral]
 public class OAuth2Controller : MonkoraControllerBase
 {
     private readonly IOAuth2Service _oauth2Service;
@@ -86,7 +88,7 @@ public class OAuth2Controller : MonkoraControllerBase
     [HttpPost("/token")]
     [Consumes("application/x-www-form-urlencoded")]
     [Produces("application/json")]
-    [EnableRateLimiting("default")]
+    [EnableRateLimiting("auth")]
     public async Task<IActionResult> Token([FromForm] TokenFormRequest formRequest)
     {
         if (string.IsNullOrWhiteSpace(formRequest.GrantType))
@@ -116,7 +118,7 @@ public class OAuth2Controller : MonkoraControllerBase
     [HttpPost("revoke")]
     [HttpPost("/revoke")]
     [Consumes("application/x-www-form-urlencoded")]
-    [EnableRateLimiting("default")]
+    [EnableRateLimiting("auth")]
     public async Task<IActionResult> Revoke([FromForm] RevocationFormRequest formRequest)
     {
         if (string.IsNullOrWhiteSpace(formRequest.Token))
@@ -160,7 +162,7 @@ public class OAuth2Controller : MonkoraControllerBase
     [HttpPost("introspect")]
     [HttpPost("/introspect")]
     [Consumes("application/x-www-form-urlencoded")]
-    [EnableRateLimiting("default")]
+    [EnableRateLimiting("auth")]
     public async Task<IActionResult> Introspect([FromForm] IntrospectFormRequest formRequest)
     {
         if (string.IsNullOrWhiteSpace(formRequest.Token))
