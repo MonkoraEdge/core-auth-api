@@ -62,13 +62,39 @@ public class ClientService : IClientService
         return (responses, total);
     }
 
+    // Permitted lowercase grant type values — matches the DB CHECK constraint and OAuth 2.1.
+    private static readonly HashSet<string> AllowedGrantTypeValues = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "authorization_code", "client_credentials", "refresh_token", "device_code", "jwt_bearer"
+    };
+
+    // Permitted token endpoint auth method values — matches the DB CHECK constraint.
+    private static readonly HashSet<string> AllowedAuthMethods = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "NONE", "CLIENT_SECRET_BASIC", "CLIENT_SECRET_POST", "CLIENT_SECRET_JWT", "PRIVATE_KEY_JWT"
+    };
+
     public async Task<(ClientResponse Client, ClientSecretResponse Secret)> CreateAsync(ClientCreateRequest request, string? createdBy)
     {
         var clientType = (request.ClientType ?? "CONFIDENTIAL").ToUpperInvariant();
         bool isPublic = clientType == "PUBLIC";
 
+        if (string.IsNullOrWhiteSpace(request.ClientName))
+            throw new DomainException("client", "client_name must not be empty.");
+
+        ValidateLifetimes(request.AccessTokenLifetime, request.RefreshTokenLifetime);
+
         // Redirect URI requirements
-        var effectiveGrantTypes = request.AllowedGrantTypes ?? new[] { "authorization_code", "refresh_token" };
+        var effectiveGrantTypes = (request.AllowedGrantTypes ?? new[] { "authorization_code", "refresh_token" })
+            .Select(g => g.ToLowerInvariant()).ToArray();
+
+        ValidateGrantTypes(effectiveGrantTypes);
+
+        var authMethod = (request.TokenEndpointAuthMethod ?? (isPublic ? "NONE" : "CLIENT_SECRET_BASIC")).ToUpperInvariant();
+        if (!AllowedAuthMethods.Contains(authMethod))
+            throw new DomainException("client",
+                $"token_endpoint_auth_method '{authMethod}' is not supported. Allowed: {string.Join(", ", AllowedAuthMethods)}.");
+
         bool needsRedirectUri = effectiveGrantTypes.Contains("authorization_code", StringComparer.OrdinalIgnoreCase);
 
         if (needsRedirectUri && request.RedirectUris.Length == 0)
@@ -99,12 +125,12 @@ public class ClientService : IClientService
             ClientName = request.ClientName,
             ClientType = clientType,
             // PUBLIC clients MUST use "NONE" auth method and MUST require PKCE.
-            TokenEndpointAuthMethod = isPublic ? "NONE" : request.TokenEndpointAuthMethod,
+            TokenEndpointAuthMethod = isPublic ? "NONE" : authMethod,
             RequirePkce = isPublic || request.RequirePkce,
             RequireConsent = request.RequireConsent,
             RedirectUris = request.RedirectUris,
             PostLogoutRedirectUris = request.PostLogoutRedirectUris,
-            AllowedGrantTypes = effectiveGrantTypes,
+            AllowedGrantTypes = effectiveGrantTypes, // already lowercased during construction above
             AllowedResponseTypes = request.AllowedResponseTypes ?? new[] { "code" },
             AccessTokenLifetime = request.AccessTokenLifetime,
             RefreshTokenLifetime = request.RefreshTokenLifetime,
@@ -150,7 +176,21 @@ public class ClientService : IClientService
         var client = await _clientRepo.GetByIdAsync(id);
         if (client == null) throw new DomainException("client", "Client not found.");
 
-        if (request.ClientName != null) client.ClientName = request.ClientName;
+        if (request.ClientName != null)
+        {
+            if (string.IsNullOrWhiteSpace(request.ClientName))
+                throw new DomainException("client", "client_name must not be empty.");
+            client.ClientName = request.ClientName;
+        }
+
+        if (request.AccessTokenLifetime.HasValue || request.RefreshTokenLifetime.HasValue)
+            ValidateLifetimes(
+                request.AccessTokenLifetime ?? client.AccessTokenLifetime,
+                request.RefreshTokenLifetime ?? client.RefreshTokenLifetime);
+
+        if (request.AllowedGrantTypes != null)
+            ValidateGrantTypes(request.AllowedGrantTypes.Select(g => g.ToLowerInvariant()).ToArray());
+
         if (request.RequirePkce.HasValue)
         {
             // If the client is PUBLIC, PKCE can only be strengthened, never removed.
@@ -171,7 +211,7 @@ public class ClientService : IClientService
                 ValidateRedirectUri(uri);
             client.PostLogoutRedirectUris = request.PostLogoutRedirectUris;
         }
-        if (request.AllowedGrantTypes != null) client.AllowedGrantTypes = request.AllowedGrantTypes;
+        if (request.AllowedGrantTypes != null) client.AllowedGrantTypes = request.AllowedGrantTypes.Select(g => g.ToLowerInvariant()).ToArray();
         if (request.AllowedResponseTypes != null) client.AllowedResponseTypes = request.AllowedResponseTypes;
         if (request.AccessTokenLifetime.HasValue) client.AccessTokenLifetime = request.AccessTokenLifetime.Value;
         if (request.RefreshTokenLifetime.HasValue) client.RefreshTokenLifetime = request.RefreshTokenLifetime.Value;
@@ -286,6 +326,25 @@ public class ClientService : IClientService
             IsActive = client.IsActive,
             CreatedAt = client.CreatedAt
         };
+    }
+
+    private static void ValidateLifetimes(int accessTokenLifetime, int refreshTokenLifetime)
+    {
+        if (accessTokenLifetime <= 0 || accessTokenLifetime > 86400)
+            throw new DomainException("client",
+                "access_token_lifetime must be between 1 and 86400 seconds (24 h).");
+        if (refreshTokenLifetime <= 0)
+            throw new DomainException("client",
+                "refresh_token_lifetime must be greater than 0 seconds.");
+    }
+
+    private static void ValidateGrantTypes(string[] grantTypes)
+    {
+        var invalid = grantTypes.Where(g => !AllowedGrantTypeValues.Contains(g)).ToArray();
+        if (invalid.Length > 0)
+            throw new DomainException("client",
+                $"Unsupported grant type(s): {string.Join(", ", invalid)}. " +
+                $"Allowed: {string.Join(", ", AllowedGrantTypeValues)}.");
     }
 
     private static string GenerateClientId() =>

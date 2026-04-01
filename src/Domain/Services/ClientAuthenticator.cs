@@ -55,18 +55,27 @@ public sealed class ClientAuthenticator : IClientAuthenticator
         if (client == null || !client.IsActive)
             throw new DomainException("token", ErrorCodeType.INVALID_CLIENT, "Client authentication failed.");
 
-        if (client.ClientType == "CONFIDENTIAL")
+        if (client.ClientType == "PUBLIC")
         {
-            if (string.IsNullOrEmpty(clientSecret))
+            // RFC 6749 §2.1 / OAuth 2.1 §2.1: public clients MUST NOT be issued client credentials.
+            // Reject any request that presents a secret for a public client — it is either a
+            // misconfigured client or a probing attempt.
+            if (!string.IsNullOrEmpty(clientSecret))
                 throw new DomainException("token", ErrorCodeType.INVALID_CLIENT, "Client authentication failed.");
 
-            // bcrypt constant-time comparison — prevents timing-based enumeration
-            if (!_passwordService.VerifyPassword(clientSecret, client.ClientSecretHash))
-                throw new DomainException("token", ErrorCodeType.INVALID_CLIENT, "Client authentication failed.");
-
-            if (client.ClientSecretExpiresAt.HasValue && client.ClientSecretExpiresAt < DateTime.UtcNow)
-                throw new DomainException("token", ErrorCodeType.INVALID_CLIENT, "Client authentication failed.");
+            return client;
         }
+
+        // CONFIDENTIAL client — secret required.
+        if (string.IsNullOrEmpty(clientSecret))
+            throw new DomainException("token", ErrorCodeType.INVALID_CLIENT, "Client authentication failed.");
+
+        // bcrypt constant-time comparison — prevents timing-based enumeration
+        if (!_passwordService.VerifyPassword(clientSecret, client.ClientSecretHash))
+            throw new DomainException("token", ErrorCodeType.INVALID_CLIENT, "Client authentication failed.");
+
+        if (client.ClientSecretExpiresAt.HasValue && client.ClientSecretExpiresAt < DateTime.UtcNow)
+            throw new DomainException("token", ErrorCodeType.INVALID_CLIENT, "Client authentication failed.");
 
         return client;
     }
