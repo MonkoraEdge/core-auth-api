@@ -179,6 +179,11 @@ namespace MonkoraEdge.Core.DotNet.AggregatesModel.ConstantAggregate
                 "The requested scope format is invalid.",
                 "OAuth2.1", "Error");
 
+        public static readonly ErrorCodeType UNAUTHORIZED_CLIENT =
+            Create(3113, "ERR_UNAUTHORIZED_CLIENT",
+                "The client is not authorized for the requested grant type.",
+                "OAuth2.1", "Error");
+
         // ========================================================================
         // 4000 API KEY
         // ========================================================================

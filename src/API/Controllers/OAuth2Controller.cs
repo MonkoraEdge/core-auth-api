@@ -1,10 +1,12 @@
 using System.Text;
 using MonkoraEdge.Core.Auth.Domain.AggregatesModel.OAuth2Aggregate;
+using MonkoraEdge.Core.Auth.Domain.Exceptions;
 using MonkoraEdge.Core.Auth.Domain.Services.Interface;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Net.Http.Headers;
+using MonkoraEdge.Core.DotNet.AggregatesModel.ConstantAggregate;
 
 namespace MonkoraEdge.Core.Auth.API.Controllers;
 
@@ -29,11 +31,20 @@ public class OAuth2Controller : ControllerBase
     /// </summary>
     [HttpGet("authorize")]
     [HttpPost("authorize")]
+    [HttpGet("/authorize")]
+    [HttpPost("/authorize")]
     [EnableRateLimiting("default")]
     public async Task<IActionResult> Authorize([FromQuery] AuthorizeRequest request)
     {
-        var response = await _oauth2Service.ProcessAuthorizeRequestAsync(request, GetAuthenticatedUserId());
-        return ToActionResult(response);
+        try
+        {
+            var response = await _oauth2Service.ProcessAuthorizeRequestAsync(request, GetAuthenticatedUserId());
+            return ToActionResult(response);
+        }
+        catch (DomainException ex)
+        {
+            return OAuthError("invalid_request", ex.ErrorMessage, StatusCodes.Status400BadRequest);
+        }
     }
 
     /// <summary>
@@ -72,17 +83,30 @@ public class OAuth2Controller : ControllerBase
     /// Supports authorization_code, refresh_token, and client_credentials grants.
     /// </summary>
     [HttpPost("token")]
+    [HttpPost("/token")]
     [Consumes("application/x-www-form-urlencoded")]
     [Produces("application/json")]
     [EnableRateLimiting("default")]
     public async Task<IActionResult> Token([FromForm] TokenFormRequest formRequest)
     {
+        if (string.IsNullOrWhiteSpace(formRequest.GrantType))
+            return OAuthError("invalid_request", "grant_type is required.", StatusCodes.Status400BadRequest);
+
         var request = MapFormToTokenRequest(formRequest);
         ExtractClientCredentials(out var clientId, out var clientSecret, request);
 
-        var response = await _oauth2Service.ProcessTokenRequestAsync(
-            request, clientId, clientSecret, GetIpAddress(), GetUserAgent());
-        return Ok(response);
+        try
+        {
+            var response = await _oauth2Service.ProcessTokenRequestAsync(
+                request, clientId, clientSecret, GetIpAddress(), GetUserAgent());
+
+            ApplyNoStoreHeaders();
+            return Ok(response);
+        }
+        catch (DomainException ex)
+        {
+            return MapTokenDomainException(ex);
+        }
     }
 
     /// <summary>
@@ -90,18 +114,41 @@ public class OAuth2Controller : ControllerBase
     /// Revokes caller-owned token and always responds HTTP 200 per RFC behavior.
     /// </summary>
     [HttpPost("revoke")]
+    [HttpPost("/revoke")]
     [Consumes("application/x-www-form-urlencoded")]
     [EnableRateLimiting("default")]
     public async Task<IActionResult> Revoke([FromForm] RevocationFormRequest formRequest)
     {
+        if (string.IsNullOrWhiteSpace(formRequest.Token))
+            return OAuthError("invalid_request", "token is required.", StatusCodes.Status400BadRequest);
+
+        if (!string.IsNullOrWhiteSpace(formRequest.TokenTypeHint)
+            && !IsSupportedTokenTypeHint(formRequest.TokenTypeHint))
+        {
+            return OAuthError("unsupported_token_type", "token_type_hint must be access_token or refresh_token.",
+                StatusCodes.Status400BadRequest);
+        }
+
         var request = new RevocationRequest
         {
             Token = formRequest.Token,
             TokenTypeHint = formRequest.TokenTypeHint
         };
         ExtractClientCredentials(out var clientId, out var clientSecret, null);
-        await _oauth2Service.RevokeAsync(request, clientId ?? string.Empty, clientSecret);
-        return Ok(); // RFC 7009: always 200
+
+        try
+        {
+            await _oauth2Service.RevokeAsync(request, clientId ?? string.Empty, clientSecret);
+            return Ok(); // RFC 7009: always 200 for validly authenticated requests
+        }
+        catch (DomainException ex)
+        {
+            if (IsInvalidClientError(ex))
+                return OAuthError("invalid_client", "Client authentication failed.", StatusCodes.Status401Unauthorized,
+                    "Basic realm=\"oauth2/revoke\", error=\"invalid_client\"");
+
+            return OAuthError("invalid_request", ex.ErrorMessage, StatusCodes.Status400BadRequest);
+        }
     }
 
     /// <summary>
@@ -109,18 +156,41 @@ public class OAuth2Controller : ControllerBase
     /// Returns active/inactive token metadata for authorized clients.
     /// </summary>
     [HttpPost("introspect")]
+    [HttpPost("/introspect")]
     [Consumes("application/x-www-form-urlencoded")]
     [EnableRateLimiting("default")]
     public async Task<IActionResult> Introspect([FromForm] IntrospectFormRequest formRequest)
     {
+        if (string.IsNullOrWhiteSpace(formRequest.Token))
+            return OAuthError("invalid_request", "token is required.", StatusCodes.Status400BadRequest);
+
+        if (!string.IsNullOrWhiteSpace(formRequest.TokenTypeHint)
+            && !IsSupportedTokenTypeHint(formRequest.TokenTypeHint))
+        {
+            return OAuthError("invalid_request", "token_type_hint must be access_token or refresh_token.",
+                StatusCodes.Status400BadRequest);
+        }
+
         var request = new IntrospectRequest
         {
             Token = formRequest.Token,
             TokenTypeHint = formRequest.TokenTypeHint
         };
         ExtractClientCredentials(out var clientId, out var clientSecret, null);
-        var result = await _oauth2Service.IntrospectAsync(request, clientId ?? string.Empty, clientSecret);
-        return Ok(result);
+
+        try
+        {
+            var result = await _oauth2Service.IntrospectAsync(request, clientId ?? string.Empty, clientSecret);
+            return Ok(result);
+        }
+        catch (DomainException ex)
+        {
+            if (IsInvalidClientError(ex))
+                return OAuthError("invalid_client", "Client authentication failed.", StatusCodes.Status401Unauthorized,
+                    "Basic realm=\"oauth2/introspect\", error=\"invalid_client\"");
+
+            return OAuthError("invalid_request", ex.ErrorMessage, StatusCodes.Status400BadRequest);
+        }
     }
 
     /// <summary>
@@ -134,9 +204,30 @@ public class OAuth2Controller : ControllerBase
         var token = headerValue.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)
             ? headerValue["Bearer ".Length..].Trim()
             : string.Empty;
-        if (string.IsNullOrEmpty(token)) return Unauthorized();
-        var result = await _oauth2Service.GetUserInfoAsync(token);
-        return Ok(result);
+        if (string.IsNullOrEmpty(token))
+        {
+            Response.Headers[HeaderNames.WWWAuthenticate] = "Bearer realm=\"oauth2/userinfo\"";
+            return Unauthorized();
+        }
+
+        try
+        {
+            var result = await _oauth2Service.GetUserInfoAsync(token);
+            return Ok(result);
+        }
+        catch (DomainException ex)
+            when (ex.ErrorCode == ErrorCodeType.SCOPE_NOT_ALLOWED || ex.ErrorCode == ErrorCodeType.INVALID_SCOPE)
+        {
+            Response.Headers[HeaderNames.WWWAuthenticate] =
+                $"Bearer realm=\"oauth2/userinfo\", error=\"insufficient_scope\", error_description=\"{ex.ErrorMessage}\"";
+            return StatusCode(StatusCodes.Status403Forbidden);
+        }
+        catch (DomainException ex)
+        {
+            Response.Headers[HeaderNames.WWWAuthenticate] =
+                $"Bearer realm=\"oauth2/userinfo\", error=\"invalid_token\", error_description=\"{ex.ErrorMessage}\"";
+            return Unauthorized();
+        }
     }
 
     /// <summary>
@@ -271,4 +362,71 @@ public class OAuth2Controller : ControllerBase
         ClientId = f.ClientId,
         ClientSecret = f.ClientSecret
     };
+
+    private IActionResult MapTokenDomainException(DomainException ex)
+    {
+        if (IsInvalidClientError(ex))
+        {
+            return OAuthError("invalid_client", "Client authentication failed.", StatusCodes.Status401Unauthorized,
+                "Basic realm=\"oauth2/token\", error=\"invalid_client\"");
+        }
+
+        if (ex.ErrorCode == ErrorCodeType.UNAUTHORIZED_CLIENT)
+            return OAuthError("unauthorized_client", ex.ErrorMessage, StatusCodes.Status400BadRequest);
+
+        if (ex.ErrorCode == ErrorCodeType.UNSUPPORTED_GRANT_TYPE)
+            return OAuthError("unsupported_grant_type", ex.ErrorMessage, StatusCodes.Status400BadRequest);
+
+        if (ex.ErrorCode == ErrorCodeType.INVALID_SCOPE || ex.ErrorCode == ErrorCodeType.SCOPE_NOT_ALLOWED)
+            return OAuthError("invalid_scope", ex.ErrorMessage, StatusCodes.Status400BadRequest);
+
+        if (ex.ErrorCode == ErrorCodeType.INVALID_GRANT
+            || ex.ErrorCode == ErrorCodeType.TOKEN_EXPIRED
+            || ex.ErrorCode == ErrorCodeType.TOKEN_REVOKED
+            || ex.ErrorCode == ErrorCodeType.INVALID_TOKEN
+            || ex.ErrorCode == ErrorCodeType.INVALID_PKCE_CODE_VERIFIER
+            || ex.ErrorCode == ErrorCodeType.INVALID_REDIRECT_URI)
+        {
+            return OAuthError("invalid_grant", ex.ErrorMessage, StatusCodes.Status400BadRequest);
+        }
+
+        if (ex.ErrorCode == ErrorCodeType.INVALID_REQUEST)
+            return OAuthError("invalid_request", ex.ErrorMessage, StatusCodes.Status400BadRequest);
+
+        var message = ex.ErrorMessage.ToLowerInvariant();
+        if (message.Contains("scope"))
+            return OAuthError("invalid_scope", ex.ErrorMessage, StatusCodes.Status400BadRequest);
+        if (message.Contains("grant"))
+            return OAuthError("invalid_grant", ex.ErrorMessage, StatusCodes.Status400BadRequest);
+
+        return OAuthError("invalid_request", ex.ErrorMessage, StatusCodes.Status400BadRequest);
+    }
+
+    private static bool IsSupportedTokenTypeHint(string tokenTypeHint)
+        => tokenTypeHint.Equals("access_token", StringComparison.OrdinalIgnoreCase)
+           || tokenTypeHint.Equals("refresh_token", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsInvalidClientError(DomainException ex)
+        => ex.ErrorCode == ErrorCodeType.INVALID_CLIENT
+           || ex.ErrorCode == ErrorCodeType.INVALID_CLIENT_SECRET;
+
+    private void ApplyNoStoreHeaders()
+    {
+        Response.Headers[HeaderNames.CacheControl] = "no-store";
+        Response.Headers[HeaderNames.Pragma] = "no-cache";
+    }
+
+    private IActionResult OAuthError(string error, string? description, int statusCode, string? wwwAuthenticate = null)
+    {
+        ApplyNoStoreHeaders();
+
+        if (!string.IsNullOrWhiteSpace(wwwAuthenticate))
+            Response.Headers[HeaderNames.WWWAuthenticate] = wwwAuthenticate;
+
+        return StatusCode(statusCode, new
+        {
+            error,
+            error_description = description
+        });
+    }
 }

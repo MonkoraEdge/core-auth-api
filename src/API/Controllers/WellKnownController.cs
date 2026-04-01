@@ -48,6 +48,7 @@ public class WellKnownController : ControllerBase
     [Produces("application/json")]
     public IActionResult GetJwks()
     {
+        Response.Headers[Microsoft.Net.Http.Headers.HeaderNames.CacheControl] = "public, max-age=3600";
         return Ok(_tokenService.GetJwks());
     }
 }

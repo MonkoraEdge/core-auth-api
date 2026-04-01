@@ -47,7 +47,7 @@ public class OAuth2Service : IOAuth2Service
         var validation = await ValidateAuthorizeRequestAsync(request, authenticatedUserId ?? Guid.Empty);
         if (!validation.IsValid)
         {
-            if (!string.IsNullOrEmpty(request.RedirectUri) && !string.IsNullOrEmpty(request.State))
+            if (!string.IsNullOrEmpty(request.RedirectUri))
             {
                 return new AuthorizeEndpointResponse
                 {
@@ -111,9 +111,6 @@ public class OAuth2Service : IOAuth2Service
 
         if (!client.RedirectUris.Any(r => string.Equals(r, request.RedirectUri, StringComparison.Ordinal)))
             return AuthorizeValidationResult.Fail("invalid_request", "redirect_uri does not exactly match a registered URI.");
-
-        if (string.IsNullOrWhiteSpace(request.State))
-            return AuthorizeValidationResult.Fail("invalid_request", "state parameter is required.");
 
         if (string.IsNullOrEmpty(request.CodeChallenge))
         {
@@ -253,36 +250,36 @@ public class OAuth2Service : IOAuth2Service
         var client = await _clientAuth.AuthenticateAsync(clientId ?? request.ClientId, clientSecret);
 
         if (string.IsNullOrEmpty(request.Code))
-            throw new DomainException("token", "code is required.");
+            throw new DomainException("token", ErrorCodeType.INVALID_REQUEST, "code is required.");
 
         if (string.IsNullOrEmpty(request.RedirectUri))
-            throw new DomainException("token", "redirect_uri is required.");
+            throw new DomainException("token", ErrorCodeType.INVALID_REQUEST, "redirect_uri is required.");
 
         var codeHash = _tokenService.HashToken(request.Code);
         var authCode = await _authCodeRepo.GetByCodeHashAsync(codeHash);
 
         if (authCode == null || authCode.ConsumedAt.HasValue || authCode.ExpiresAt <= DateTime.UtcNow)
-            throw new DomainException("token", "Authorization code is invalid, expired, or already used.");
+            throw new DomainException("token", ErrorCodeType.INVALID_GRANT, "Authorization code is invalid, expired, or already used.");
 
         if (authCode.ClientId != client.Id)
-            throw new DomainException("token", "Code was not issued to this client.");
+            throw new DomainException("token", ErrorCodeType.INVALID_GRANT, "Code was not issued to this client.");
 
         if (!string.Equals(authCode.RedirectUri, request.RedirectUri, StringComparison.Ordinal))
-            throw new DomainException("token", "redirect_uri mismatch.");
+            throw new DomainException("token", ErrorCodeType.INVALID_GRANT, "redirect_uri mismatch.");
 
         if (!string.IsNullOrEmpty(authCode.CodeChallenge))
         {
             if (string.IsNullOrEmpty(request.CodeVerifier))
-                throw new DomainException("token", "code_verifier is required.");
+                throw new DomainException("token", ErrorCodeType.INVALID_REQUEST, "code_verifier is required.");
 
             if (!_passwordService.VerifyPkceCodeVerifier(request.CodeVerifier, authCode.CodeChallenge, authCode.CodeChallengeMethod ?? "S256"))
-                throw new DomainException("token", "code_verifier is invalid.");
+                throw new DomainException("token", ErrorCodeType.INVALID_PKCE_CODE_VERIFIER, "code_verifier is invalid.");
         }
 
         // Ensure one-time code use under concurrency.
         var consumed = await _authCodeRepo.TryConsumeAsync(authCode.Id, DateTime.UtcNow);
         if (!consumed)
-            throw new DomainException("token", "Authorization code is invalid, expired, or already used.");
+            throw new DomainException("token", ErrorCodeType.INVALID_GRANT, "Authorization code is invalid, expired, or already used.");
 
         var scopes = authCode.Scopes;
         var accessToken = await _tokenService.GenerateAccessTokenAsync(
@@ -321,17 +318,17 @@ public class OAuth2Service : IOAuth2Service
 
         var allowedGrants = client.AllowedGrantTypes ?? Array.Empty<string>();
         if (!allowedGrants.Contains("client_credentials", StringComparer.OrdinalIgnoreCase))
-            throw new DomainException("token", "Client is not authorized for client_credentials grant.");
+            throw new DomainException("token", ErrorCodeType.UNAUTHORIZED_CLIENT, "Client is not authorized for client_credentials grant.");
 
         var requestedScopes = (request.Scope ?? "").Split(' ', StringSplitOptions.RemoveEmptyEntries);
         if (!requestedScopes.Any())
-            throw new DomainException("token", "scope is required for client_credentials grant.");
+            throw new DomainException("token", ErrorCodeType.INVALID_REQUEST, "scope is required for client_credentials grant.");
 
         var allowedScopes = await _clientAuth.GetAllowedScopeNamesAsync(client.Id);
 
         var invalidScopes = requestedScopes.Except(allowedScopes).ToArray();
         if (invalidScopes.Any())
-            throw new DomainException("token", $"Scope(s) not allowed: {string.Join(", ", invalidScopes)}");
+            throw new DomainException("token", ErrorCodeType.SCOPE_NOT_ALLOWED, $"Scope(s) not allowed: {string.Join(", ", invalidScopes)}");
 
         var finalScopes = requestedScopes.Distinct(StringComparer.Ordinal).ToArray();
         var accessToken = await _tokenService.GenerateAccessTokenAsync(
@@ -362,7 +359,7 @@ public class OAuth2Service : IOAuth2Service
             "The refresh token has expired.");
 
         if (rt.ClientId != client.Id)
-            throw new DomainException("token", "Refresh token was not issued to this client.");
+            throw new DomainException("token", ErrorCodeType.INVALID_GRANT, "Refresh token was not issued to this client.");
 
         return await _refreshTokenProcessor.RotateAsync(
             rt,
@@ -393,20 +390,20 @@ public class OAuth2Service : IOAuth2Service
     {
         var introspect = await _tokenService.IntrospectTokenAsync(accessToken, "access_token");
         if (!introspect.Active || string.IsNullOrEmpty(introspect.Sub))
-            throw new DomainException("userinfo", "Invalid or expired access token.");
+            throw new DomainException("userinfo", ErrorCodeType.INVALID_TOKEN, "Invalid or expired access token.");
 
         var grantedScopes = (introspect.Scope ?? string.Empty)
             .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
         if (!grantedScopes.Contains("openid", StringComparer.Ordinal))
-            throw new DomainException("userinfo", "openid scope is required for the UserInfo endpoint.");
+            throw new DomainException("userinfo", ErrorCodeType.SCOPE_NOT_ALLOWED, "openid scope is required for the UserInfo endpoint.");
 
         if (!Guid.TryParse(introspect.Sub, out var userId))
-            throw new DomainException("userinfo", "Invalid subject claim.");
+            throw new DomainException("userinfo", ErrorCodeType.INVALID_TOKEN, "Invalid subject claim.");
 
         var user = await _userRepo.GetByIdAsync(userId);
         if (user == null)
-            throw new DomainException("userinfo", "User not found.");
+            throw new DomainException("userinfo", ErrorCodeType.INVALID_TOKEN, "User not found.");
 
         return new UserInfoResponse
         {
@@ -425,12 +422,12 @@ public class OAuth2Service : IOAuth2Service
         return new OpenIdConfigurationResponse
         {
             Issuer = _tokenService.GetIssuer(),
-            AuthorizationEndpoint = $"{baseUrl}/oauth2/authorize",
-            TokenEndpoint = $"{baseUrl}/oauth2/token",
+            AuthorizationEndpoint = $"{baseUrl}/authorize",
+            TokenEndpoint = $"{baseUrl}/token",
             UserInfoEndpoint = $"{baseUrl}/oauth2/userinfo",
             JwksUri = $"{baseUrl}/.well-known/jwks.json",
-            RevocationEndpoint = $"{baseUrl}/oauth2/revoke",
-            IntrospectionEndpoint = $"{baseUrl}/oauth2/introspect",
+            RevocationEndpoint = $"{baseUrl}/revoke",
+            IntrospectionEndpoint = $"{baseUrl}/introspect",
             ResponseTypesSupported = new[] { "code" },
             GrantTypesSupported = new[] { "authorization_code", "client_credentials", "refresh_token" },
             SubjectTypesSupported = new[] { "public" },
@@ -448,11 +445,11 @@ public class OAuth2Service : IOAuth2Service
         return new AuthorizationServerMetadataResponse
         {
             Issuer = _tokenService.GetIssuer(),
-            AuthorizationEndpoint = $"{baseUrl}/oauth2/authorize",
-            TokenEndpoint = $"{baseUrl}/oauth2/token",
+            AuthorizationEndpoint = $"{baseUrl}/authorize",
+            TokenEndpoint = $"{baseUrl}/token",
             JwksUri = $"{baseUrl}/.well-known/jwks.json",
-            RevocationEndpoint = $"{baseUrl}/oauth2/revoke",
-            IntrospectionEndpoint = $"{baseUrl}/oauth2/introspect",
+            RevocationEndpoint = $"{baseUrl}/revoke",
+            IntrospectionEndpoint = $"{baseUrl}/introspect",
             ResponseTypesSupported = new[] { "code" },
             GrantTypesSupported = new[] { "authorization_code", "client_credentials", "refresh_token" },
             TokenEndpointAuthMethodsSupported = new[] { "client_secret_basic", "client_secret_post" },

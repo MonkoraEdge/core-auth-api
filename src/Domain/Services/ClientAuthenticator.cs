@@ -2,6 +2,7 @@ using MonkoraEdge.Core.Auth.Domain.AggregatesModel.AuthorizationAggregate.Interf
 using MonkoraEdge.Core.Auth.Domain.AggregatesModel.EntityAggregate;
 using MonkoraEdge.Core.Auth.Domain.Exceptions;
 using MonkoraEdge.Core.Auth.Domain.Services.Interface;
+using MonkoraEdge.Core.DotNet.AggregatesModel.ConstantAggregate;
 
 namespace MonkoraEdge.Core.Auth.Domain.Services;
 
@@ -48,25 +49,23 @@ public sealed class ClientAuthenticator : IClientAuthenticator
     public async Task<AuthorizationClient> AuthenticateAsync(string? clientId, string? clientSecret)
     {
         if (string.IsNullOrEmpty(clientId))
-            throw new DomainException("token", "client_id is required.");
+            throw new DomainException("token", ErrorCodeType.INVALID_CLIENT, "Client authentication failed.");
 
         var client = await _clientRepo.GetByClientIdAsync(clientId);
         if (client == null || !client.IsActive)
-            throw new DomainException("token", "Invalid client.");
+            throw new DomainException("token", ErrorCodeType.INVALID_CLIENT, "Client authentication failed.");
 
         if (client.ClientType == "CONFIDENTIAL")
         {
             if (string.IsNullOrEmpty(clientSecret))
-                throw new DomainException("token",
-                    "client_secret is required for confidential clients.");
+                throw new DomainException("token", ErrorCodeType.INVALID_CLIENT, "Client authentication failed.");
 
             // bcrypt constant-time comparison — prevents timing-based enumeration
             if (!_passwordService.VerifyPassword(clientSecret, client.ClientSecretHash))
-                throw new DomainException("token", "Invalid client credentials.");
+                throw new DomainException("token", ErrorCodeType.INVALID_CLIENT, "Client authentication failed.");
 
             if (client.ClientSecretExpiresAt.HasValue && client.ClientSecretExpiresAt < DateTime.UtcNow)
-                throw new DomainException("token",
-                    "Client secret has expired. Please rotate the secret.");
+                throw new DomainException("token", ErrorCodeType.INVALID_CLIENT, "Client authentication failed.");
         }
 
         return client;
