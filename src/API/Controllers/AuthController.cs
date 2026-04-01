@@ -201,7 +201,7 @@ public class AuthController : MonkoraControllerBase
     public async Task<IActionResult> TwoFactorVerify([FromBody] TwoFactorLoginRequest request)
     {
         var result = await _authService.VerifyTwoFactorLoginAsync(
-            request.UserId, request.Code, request.DeviceType, GetIpAddress(), GetUserAgent());
+            request.TwoFactorToken, request.Code, request.DeviceType, GetIpAddress(), GetUserAgent());
         return Ok(result);
     }
 

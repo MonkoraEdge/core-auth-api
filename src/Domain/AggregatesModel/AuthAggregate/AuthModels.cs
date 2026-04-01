@@ -157,8 +157,13 @@ public class TwoFactorDisableRequest
 /// <summary>Request model for completing a 2FA login challenge.</summary>
 public class TwoFactorLoginRequest
 {
-    /// <summary>User ID returned in the initial login response when 2FA is required.</summary>
-    public Guid UserId { get; set; }
+    /// <summary>
+    /// Opaque challenge token returned in <see cref="LoginResponse.TwoFactorToken"/> when 2FA is required.
+    /// The server resolves the user identity from this token — do not supply UserId separately.
+    /// </summary>
+    [Required]
+    [MaxLength(512)]
+    public string TwoFactorToken { get; set; } = string.Empty;
 
     [Required]
     [MaxLength(12)]

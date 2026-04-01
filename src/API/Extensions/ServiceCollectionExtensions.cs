@@ -104,6 +104,7 @@ public static class ServiceCollectionExtensions
 
         // Stateless utility services
         services.AddSingleton<IPasswordService, PasswordService>();
+        services.AddSingleton<ITwoFactorChallengeStore, MemoryTwoFactorChallengeStore>();
 
         services.AddScoped<IRefreshTokenProcessor>(m => new RefreshTokenProcessor(
             m.GetRequiredService<DomainIUnitOfWork>(),
@@ -222,6 +223,7 @@ public static class ServiceCollectionExtensions
                 m.GetRequiredService<ITokenService>(),
                 m.GetRequiredService<IPasswordService>(),
                 m.GetRequiredService<IAuthorizationClientRepository>(),
+                m.GetRequiredService<ITwoFactorChallengeStore>(),
                 opts.SIGNIN_FAILED_IN_MINUTES);
         });
 

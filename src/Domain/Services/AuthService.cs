@@ -28,7 +28,11 @@ public class AuthService : IAuthService
     private readonly ITokenService _tokenService;
     private readonly IPasswordService _passwordService;
     private readonly IAuthorizationClientRepository _clientRepo;
+    private readonly ITwoFactorChallengeStore _twoFactorChallengeStore;
     private readonly int _signinFailedMinutes;
+
+    // How long a 2FA challenge token is valid after the password step.
+    private static readonly TimeSpan TwoFactorChallengeExpiry = TimeSpan.FromMinutes(5);
 
     public AuthService(
         IUnitOfWork unitOfWork,
@@ -46,6 +50,7 @@ public class AuthService : IAuthService
         ITokenService tokenService,
         IPasswordService passwordService,
         IAuthorizationClientRepository clientRepo,
+        ITwoFactorChallengeStore twoFactorChallengeStore,
         int signinFailedMinutes = 15)
     {
         _unitOfWork = unitOfWork;
@@ -63,6 +68,7 @@ public class AuthService : IAuthService
         _tokenService = tokenService;
         _passwordService = passwordService;
         _clientRepo = clientRepo;
+        _twoFactorChallengeStore = twoFactorChallengeStore;
         _signinFailedMinutes = signinFailedMinutes;
     }
 
@@ -88,7 +94,7 @@ public class AuthService : IAuthService
         {
             // Perform dummy bcrypt verify to normalise response time and prevent username enumeration
             _passwordService.PerformDummyVerify(request.Password);
-            await RecordLoginAttemptAsync(null, request.Username, null, ipAddress, userAgent, false, "user_not_found", request.ClientId);
+            await RecordLoginAttemptAsync(null, request.Username, null, ipAddress, userAgent, false, "USER_NOT_FOUND", request.ClientId);
             await _unitOfWork.SaveChangesAsync();
             throw new DomainException("login", "Invalid username or password.");
         }
@@ -97,21 +103,21 @@ public class AuthService : IAuthService
         if (identity == null || string.IsNullOrEmpty(identity.PasswordHash))
         {
             _passwordService.PerformDummyVerify(request.Password);
-            await RecordLoginAttemptAsync(user.Id, request.Username, null, ipAddress, userAgent, false, "no_password", request.ClientId);
+            await RecordLoginAttemptAsync(user.Id, request.Username, null, ipAddress, userAgent, false, "USER_NOT_FOUND", request.ClientId);
             await _unitOfWork.SaveChangesAsync();
             throw new DomainException("login", "Invalid username or password.");
         }
 
         if (identity.LockedUntil.HasValue && identity.LockedUntil > DateTime.UtcNow)
         {
-            await RecordLoginAttemptAsync(user.Id, request.Username, null, ipAddress, userAgent, false, "account_locked", request.ClientId);
+            await RecordLoginAttemptAsync(user.Id, request.Username, null, ipAddress, userAgent, false, "ACCOUNT_LOCKED", request.ClientId);
             await _unitOfWork.SaveChangesAsync();
             throw new DomainException("login", $"Account is locked until {identity.LockedUntil:u}.");
         }
 
         if (!user.IsActive || user.Status == "SUSPENDED")
         {
-            await RecordLoginAttemptAsync(user.Id, request.Username, null, ipAddress, userAgent, false, "account_inactive", request.ClientId);
+            await RecordLoginAttemptAsync(user.Id, request.Username, null, ipAddress, userAgent, false, "ACCOUNT_DISABLED", request.ClientId);
             await _unitOfWork.SaveChangesAsync();
             throw new DomainException("login", "Account is disabled.");
         }
@@ -123,7 +129,7 @@ public class AuthService : IAuthService
                 identity.LockedUntil = DateTime.UtcNow.AddMinutes(_signinFailedMinutes);
             _identityRepo.Update(identity);
 
-            await RecordLoginAttemptAsync(user.Id, request.Username, null, ipAddress, userAgent, false, "invalid_password", request.ClientId);
+            await RecordLoginAttemptAsync(user.Id, request.Username, null, ipAddress, userAgent, false, "INVALID_PASSWORD", request.ClientId);
             await _unitOfWork.SaveChangesAsync();
             throw new DomainException("login", "Invalid username or password.");
         }
@@ -144,10 +150,15 @@ public class AuthService : IAuthService
                 _userRepo.Update(user);
                 await _unitOfWork.SaveChangesAsync();
 
+                // Store the challenge token so VerifyTwoFactorLoginAsync can resolve the userId
+                // without trusting a client-supplied identifier.
+                var challengeToken = _passwordService.GenerateSecureToken(32);
+                _twoFactorChallengeStore.Store(challengeToken, user.Id, TwoFactorChallengeExpiry);
+
                 return new LoginResponse
                 {
                     RequiresTwoFactor = true,
-                    TwoFactorToken = _passwordService.GenerateSecureToken(32)
+                    TwoFactorToken = challengeToken
                 };
             }
 
@@ -174,7 +185,7 @@ public class AuthService : IAuthService
 
             if (!twoFactorValid)
             {
-                await RecordLoginAttemptAsync(user.Id, request.Username, null, ipAddress, userAgent, false, "invalid_2fa_code", request.ClientId);
+                await RecordLoginAttemptAsync(user.Id, request.Username, null, ipAddress, userAgent, false, "INVALID_OTP", request.ClientId);
                 await _unitOfWork.SaveChangesAsync();
                 throw new DomainException("login", "Invalid two-factor authentication code.");
             }
@@ -486,8 +497,14 @@ public class AuthService : IAuthService
         return new UpdateResponse { Id = userId, IsSuccess = true, Message = "Two-factor authentication disabled." };
     }
 
-    public async Task<LoginResponse> VerifyTwoFactorLoginAsync(Guid userId, string code, string deviceType, string? ipAddress, string? userAgent)
+    public async Task<LoginResponse> VerifyTwoFactorLoginAsync(
+        string twoFactorToken, string code, string deviceType, string? ipAddress, string? userAgent)
     {
+        // Validate the opaque token issued during the password-correct + 2FA-required step.
+        // Consuming removes it — tokens are single-use with a 5-minute TTL.
+        var userId = _twoFactorChallengeStore.Consume(twoFactorToken)
+            ?? throw new DomainException("2fa_verify", "2FA session has expired or is invalid. Please sign in again.");
+
         var settings = await _twoFactorRepo.GetByUserIdAsync(userId);
         var setting = settings.FirstOrDefault(s => s.DeviceType == deviceType && s.IsActive);
         if (setting == null)
@@ -527,8 +544,10 @@ public class AuthService : IAuthService
 
         var scopes = new[] { "openid", "profile", "email" };
 
+        // RFC 6749 §5.1: ExpiresIn MUST reflect the actual JWT lifetime.
+        var expiresIn = _tokenService.GetAccessTokenLifetimeSeconds(accessLifetime);
         var accessToken = await _tokenService.GenerateAccessTokenAsync(
-            resolvedClientId, user.Id, scopes, "direct", ipAddress, userAgent);
+            resolvedClientId, user.Id, scopes, "direct", ipAddress, userAgent, expiresIn);
         var (refreshToken, _) = await _tokenService.GenerateRefreshTokenAsync(
             resolvedClientId, user.Id, null, scopes, refreshLifetime,
             ipAddress: ipAddress, userAgent: userAgent);
@@ -555,7 +574,7 @@ public class AuthService : IAuthService
             RequiresTwoFactor = false,
             AccessToken = accessToken,
             RefreshToken = refreshToken,
-            ExpiresIn = accessLifetime,
+            ExpiresIn = expiresIn,
             User = new UserInfoResult
             {
                 Id = user.Id.ToString(),
@@ -591,7 +610,7 @@ public class AuthService : IAuthService
             UserAgent = userAgent,
             Success = success,
             FailureReason = failureReason,
-            LoginMethod = "PASSWORD"
+            LoginMethod = "LOCAL"
         });
     }
 }

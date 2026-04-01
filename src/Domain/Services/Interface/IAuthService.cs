@@ -38,6 +38,6 @@ public interface IAuthService
     /// <summary>Disable 2FA</summary>
     Task<UpdateResponse> DisableTwoFactorAsync(Guid userId, TwoFactorDisableRequest request);
 
-    /// <summary>Verify 2FA code during login</summary>
-    Task<LoginResponse> VerifyTwoFactorLoginAsync(Guid userId, string code, string deviceType, string? ipAddress, string? userAgent);
+    /// <summary>Verify 2FA code during login using the opaque challenge token issued in the login response</summary>
+    Task<LoginResponse> VerifyTwoFactorLoginAsync(string twoFactorToken, string code, string deviceType, string? ipAddress, string? userAgent);
 }
