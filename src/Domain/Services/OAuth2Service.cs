@@ -101,8 +101,15 @@ public class OAuth2Service : IOAuth2Service
         if (string.IsNullOrEmpty(request.ResponseType))
             return AuthorizeValidationResult.Fail("invalid_request", "response_type is required.");
 
+        // OAuth 2.1 §4.1.2: Only 'code' is supported. Implicit ('token') and hybrid ('code token')
+        // flows are explicitly prohibited. Return error BEFORE validating redirect_uri to prevent
+        // open-redirect abuse via attacker-controlled redirect_uri.
+        if (request.ResponseType.Split(' ').Any(t => t.Equals("token", StringComparison.OrdinalIgnoreCase)))
+            return AuthorizeValidationResult.Fail("unsupported_response_type",
+                "Implicit grant and hybrid flows are not supported. Use response_type=code with PKCE.");
+
         if (request.ResponseType != "code")
-            return AuthorizeValidationResult.Fail("unsupported_response_type", "Only 'code' response_type is supported.");
+            return AuthorizeValidationResult.Fail("unsupported_response_type", "Only response_type=code is supported.");
 
         var client = await _clientAuth.LoadAsync(request.ClientId);
 
@@ -239,7 +246,12 @@ public class OAuth2Service : IOAuth2Service
         {
             "authorization_code" => await ExchangeAuthorizationCodeAsync(request, clientId, clientSecret, ipAddress, userAgent),
             "client_credentials" => await ClientCredentialsGrantAsync(request, clientId!, clientSecret, ipAddress, userAgent),
-            "refresh_token" => await RefreshTokenGrantAsync(request, clientId, clientSecret, ipAddress, userAgent),
+            "refresh_token"      => await RefreshTokenGrantAsync(request, clientId, clientSecret, ipAddress, userAgent),
+            // OAuth 2.1 explicitly removes password and implicit grants.
+            "password" => throw new DomainException("token", ErrorCodeType.UNSUPPORTED_GRANT_TYPE,
+                "The 'password' grant has been removed in OAuth 2.1. Use 'authorization_code' with PKCE."),
+            "urn:ietf:params:oauth:grant-type:device_code" => throw new DomainException("token", ErrorCodeType.UNSUPPORTED_GRANT_TYPE,
+                "Device code grant is not supported by this server."),
             _ => throw new DomainException("token", ErrorCodeType.UNSUPPORTED_GRANT_TYPE)
         };
     }
@@ -324,6 +336,12 @@ public class OAuth2Service : IOAuth2Service
         if (!requestedScopes.Any())
             throw new DomainException("token", ErrorCodeType.INVALID_REQUEST, "scope is required for client_credentials grant.");
 
+        // RFC 6749 §4.4 / OAuth 2.1 §4.4.3: MUST NOT issue refresh tokens for client_credentials.
+        // Reject offline_access explicitly so clients are not misled by a scope that silently does nothing.
+        if (requestedScopes.Contains("offline_access", StringComparer.Ordinal))
+            throw new DomainException("token", ErrorCodeType.INVALID_SCOPE,
+                "offline_access scope is not permitted for the client_credentials grant.");
+
         var allowedScopes = await _clientAuth.GetAllowedScopeNamesAsync(client.Id);
 
         var invalidScopes = requestedScopes.Except(allowedScopes).ToArray();
@@ -361,12 +379,25 @@ public class OAuth2Service : IOAuth2Service
         if (rt.ClientId != client.Id)
             throw new DomainException("token", ErrorCodeType.INVALID_GRANT, "Refresh token was not issued to this client.");
 
+        // RFC 6749 §6: client MAY request a narrower scope on refresh; expansion is not permitted.
+        string[]? narrowedScopes = null;
+        if (!string.IsNullOrWhiteSpace(request.Scope))
+        {
+            var requestedScopes = request.Scope.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            var exceeded = requestedScopes.Except(rt.Scopes, StringComparer.Ordinal).ToArray();
+            if (exceeded.Any())
+                throw new DomainException("token", ErrorCodeType.INVALID_SCOPE,
+                    $"Requested scope exceeds the scope of the original grant: {string.Join(", ", exceeded)}");
+            narrowedScopes = requestedScopes;
+        }
+
         return await _refreshTokenProcessor.RotateAsync(
             rt,
             client,
             client.RefreshTokenLifetime,
             ipAddress,
-            userAgent);
+            userAgent,
+            narrowedScopes);
     }
 
     public async Task RevokeAsync(RevocationRequest request, string clientId, string? clientSecret)

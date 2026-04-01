@@ -3,6 +3,7 @@ using MonkoraEdge.Core.Auth.Domain.AggregatesModel.EntityAggregate;
 using MonkoraEdge.Core.Auth.Domain.AggregatesModel.OAuth2Aggregate;
 using MonkoraEdge.Core.Auth.Domain.Exceptions;
 using MonkoraEdge.Core.Auth.Domain.Services.Interface;
+using MonkoraEdge.Core.DotNet.AggregatesModel.ConstantAggregate;
 
 namespace MonkoraEdge.Core.Auth.Domain.Services;
 
@@ -29,30 +30,30 @@ public sealed class RefreshTokenProcessor : IRefreshTokenProcessor
     public async Task<RefreshToken> ValidateActiveAsync(string refreshToken, string errorSource, string invalidMessage, string expiredMessage)
     {
         if (string.IsNullOrWhiteSpace(refreshToken))
-            throw new DomainException(errorSource, invalidMessage);
+            throw new DomainException(errorSource, ErrorCodeType.INVALID_GRANT, invalidMessage);
 
         var tokenHash = _tokenService.HashToken(refreshToken);
         var storedToken = await _refreshTokenRepo.GetByTokenHashAsync(tokenHash);
 
         if (storedToken == null)
-            throw new DomainException(errorSource, invalidMessage);
+            throw new DomainException(errorSource, ErrorCodeType.INVALID_GRANT, invalidMessage);
 
         if (storedToken.RevokedAt.HasValue)
         {
             if (storedToken.FamilyId != Guid.Empty)
                 await _tokenService.RevokeTokenFamilyAsync(storedToken.FamilyId, "refresh_token_reuse_detected");
 
-            throw new DomainException(errorSource,
+            throw new DomainException(errorSource, ErrorCodeType.TOKEN_REVOKED,
                 "The refresh token has already been used. All sessions in this chain have been revoked for security.");
         }
 
         if (storedToken.ExpiresAt <= DateTime.UtcNow)
-            throw new DomainException(errorSource, expiredMessage);
+            throw new DomainException(errorSource, ErrorCodeType.TOKEN_EXPIRED, expiredMessage);
 
         return storedToken;
     }
 
-    public async Task<TokenResponse> RotateAsync(RefreshToken refreshToken, AuthorizationClient client, int refreshTokenLifetimeSeconds, string? ipAddress, string? userAgent)
+    public async Task<TokenResponse> RotateAsync(RefreshToken refreshToken, AuthorizationClient client, int refreshTokenLifetimeSeconds, string? ipAddress, string? userAgent, string[]? requestedScopes = null)
     {
         if (refreshToken.ClientId != client.Id)
             throw new DomainException("refresh_token", "Client mismatch.");
@@ -63,11 +64,12 @@ public sealed class RefreshTokenProcessor : IRefreshTokenProcessor
             if (refreshToken.FamilyId != Guid.Empty)
                 await _tokenService.RevokeTokenFamilyAsync(refreshToken.FamilyId, "refresh_token_reuse_detected");
 
-            throw new DomainException("refresh_token",
+            throw new DomainException("refresh_token", ErrorCodeType.TOKEN_REVOKED,
                 "The refresh token has already been used. All sessions in this chain have been revoked for security.");
         }
 
-        var scopes = refreshToken.Scopes;
+        // Use narrowed scope if the client requested it (RFC 6749 §6); fall back to original grant scopes.
+        var scopes = requestedScopes ?? refreshToken.Scopes;
         var userId = refreshToken.UserId == Guid.Empty ? (Guid?)null : refreshToken.UserId;
 
         var newAccessToken = await _tokenService.GenerateAccessTokenAsync(
