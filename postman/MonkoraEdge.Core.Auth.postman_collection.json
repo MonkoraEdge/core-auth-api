@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "f8f0bc6e-7bb5-4978-ae29-e3f7a2751f12",
     "name": "MonkoraEdge Core Auth API",
-    "description": "Postman collection for MonkoraEdge Core Auth API (updated 2026-03-27). Includes Auth, OAuth2/OIDC, and IAM management flows with PKCE helpers and token auto-save scripts.",
+    "description": "Postman collection for MonkoraEdge Core Auth API (updated 2026-04-02). Includes Auth, OAuth2/OIDC, and IAM management flows with PKCE helpers and token auto-save scripts. Note: client_credentials grant rejects OIDC scopes (openid, profile, email, phone, offline_access) — use resource-level scopes only.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -24,7 +24,7 @@
       "key": "oauthScopeWithOfflineAccess",
       "value": "openid profile email offline_access"
     },
-    { "key": "clientCredentialsScope", "value": "openid profile email" },
+    { "key": "clientCredentialsScope", "value": "api.access" },
     { "key": "tenantId", "value": "00000000-0000-0000-0000-000000000001" },
     { "key": "userId", "value": "00000000-0000-0000-0000-000000000002" },
     { "key": "roleId", "value": "00000000-0000-0000-0000-000000000003" },
@@ -32,6 +32,7 @@
     { "key": "scopeId", "value": "00000000-0000-0000-0000-000000000005" },
     { "key": "clientGuid", "value": "00000000-0000-0000-0000-000000000006" },
     { "key": "apiKeyId", "value": "00000000-0000-0000-0000-000000000007" },
+    { "key": "twoFactorToken", "value": "" },
     {
       "key": "consoleTenantId",
       "value": "00000000-0000-0000-0000-000000000008"
@@ -110,9 +111,27 @@
       "item": [
         {
           "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const data = pm.response.json();",
+                  "  if (data.access_token) pm.collectionVariables.set('bearerToken', data.access_token);",
+                  "  if (data.refresh_token) pm.collectionVariables.set('refreshToken', data.refresh_token);",
+                  "  if (data.id_token) pm.collectionVariables.set('idToken', data.id_token);",
+                  "  if (data.two_factor_token) pm.collectionVariables.set('twoFactorToken', data.two_factor_token);",
+                  "}"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "description": "Authenticate with username/password. If 2FA is enrolled, response contains requires_two_factor=true and two_factor_token. The test script auto-saves tokens. Pass two_factor_token to POST /auth/2fa/verify.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"username\": \"user@example.com\",\n  \"password\": \"P@ssw0rd!\",\n  \"clientId\": \"{{clientId}}\",\n  \"twoFactorCode\": null,\n  \"twoFactorRecoveryCode\": null,\n  \"deviceFingerprint\": \"browser-fingerprint\",\n  \"deviceName\": \"Chrome on Windows\"\n}"
@@ -319,9 +338,10 @@
           "request": {
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "description": "Complete 2FA login using the twoFactorToken from the Login response (auto-saved to {{twoFactorToken}} by the Login test script). The server resolves user identity from this opaque token — do not supply userId.",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"userId\": \"{{userId}}\",\n  \"code\": \"123456\",\n  \"deviceType\": \"TOTP\"\n}"
+              "raw": "{\n  \"twoFactorToken\": \"{{twoFactorToken}}\",\n  \"code\": \"123456\",\n  \"deviceType\": \"TOTP\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/auth/2fa/verify",
@@ -585,7 +605,7 @@
           ],
           "request": {
             "method": "POST",
-            "description": "Client credentials grant. API requires explicit scope (no implicit default scope).",
+            "description": "Client credentials grant. API requires explicit non-OIDC scope (openid, profile, email, phone, offline_access are all rejected). Use resource-level scopes registered for the client (e.g. api.access, orders.read).",
             "header": [
               {
                 "key": "Content-Type",
