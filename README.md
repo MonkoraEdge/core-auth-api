@@ -429,23 +429,23 @@ Reference SQL scripts are under `src/API/script_sql/` and are numbered in depend
 
 ### Collection Variables
 
-| Variable | Description | Auto-saved by |
-|----------|-------------|---------------|
-| `baseUrl` | API base URL | — |
-| `bearerToken` | Current access token | Login, Token requests |
-| `refreshToken` | Current refresh token | Login, Token requests |
-| `idToken` | OIDC ID token | Token - Authorization Code |
-| `twoFactorToken` | 2FA challenge token from Login | Login (when 2FA required) |
-| `basicAuth` | Base64 `clientId:clientSecret` | Revoke, Introspect (pre-request) |
-| `codeVerifier` | PKCE code verifier | Authorize GET/POST (pre-request) |
-| `codeChallenge` | PKCE S256 challenge | Authorize GET/POST (pre-request) |
-| `clientId` | OAuth client_id string | — |
-| `clientSecret` | OAuth client secret | — |
-| `authorizationCode` | Authorization code to exchange | — |
-| `redirectUri` | Client callback URL | — |
-| `oauthScopeWithOfflineAccess` | Scope for code flow | — |
-| `clientCredentialsScope` | Scope for client_credentials | — |
-| `tenantId`, `userId`, `roleId`, etc. | ID placeholders for management APIs | — |
+| Variable                             | Description                         | Auto-saved by                    |
+| ------------------------------------ | ----------------------------------- | -------------------------------- |
+| `baseUrl`                            | API base URL                        | —                                |
+| `bearerToken`                        | Current access token                | Login, Token requests            |
+| `refreshToken`                       | Current refresh token               | Login, Token requests            |
+| `idToken`                            | OIDC ID token                       | Token - Authorization Code       |
+| `twoFactorToken`                     | 2FA challenge token from Login      | Login (when 2FA required)        |
+| `basicAuth`                          | Base64 `clientId:clientSecret`      | Revoke, Introspect (pre-request) |
+| `codeVerifier`                       | PKCE code verifier                  | Authorize GET/POST (pre-request) |
+| `codeChallenge`                      | PKCE S256 challenge                 | Authorize GET/POST (pre-request) |
+| `clientId`                           | OAuth client_id string              | —                                |
+| `clientSecret`                       | OAuth client secret                 | —                                |
+| `authorizationCode`                  | Authorization code to exchange      | —                                |
+| `redirectUri`                        | Client callback URL                 | —                                |
+| `oauthScopeWithOfflineAccess`        | Scope for code flow                 | —                                |
+| `clientCredentialsScope`             | Scope for client_credentials        | —                                |
+| `tenantId`, `userId`, `roleId`, etc. | ID placeholders for management APIs | —                                |
 
 ### Key Notes
 
