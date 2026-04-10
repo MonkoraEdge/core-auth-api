@@ -55,7 +55,7 @@ public sealed class ClientAuthenticator : IClientAuthenticator
         if (client == null || !client.IsActive)
             throw new DomainException("token", ErrorCodeType.INVALID_CLIENT, "Client authentication failed.");
 
-        if (client.ClientType == "PUBLIC")
+        if (client.IsPublic)
         {
             // RFC 6749 §2.1 / OAuth 2.1 §2.1: public clients MUST NOT be issued client credentials.
             // Reject any request that presents a secret for a public client — it is either a
@@ -74,7 +74,7 @@ public sealed class ClientAuthenticator : IClientAuthenticator
         if (!_passwordService.VerifyPassword(clientSecret, client.ClientSecretHash))
             throw new DomainException("token", ErrorCodeType.INVALID_CLIENT, "Client authentication failed.");
 
-        if (client.ClientSecretExpiresAt.HasValue && client.ClientSecretExpiresAt < DateTime.UtcNow)
+        if (client.IsSecretExpired())
             throw new DomainException("token", ErrorCodeType.INVALID_CLIENT, "Client authentication failed.");
 
         return client;

@@ -124,7 +124,7 @@ public class OAuth2Service : IOAuth2Service
         if (string.IsNullOrEmpty(request.RedirectUri))
             return AuthorizeValidationResult.Fail("invalid_request", "redirect_uri is required.");
 
-        if (!client.RedirectUris.Any(r => string.Equals(r, request.RedirectUri, StringComparison.Ordinal)))
+        if (!client.IsRedirectUriRegistered(request.RedirectUri))
             return AuthorizeValidationResult.Fail("invalid_request", "redirect_uri does not exactly match a registered URI.");
 
         if (string.IsNullOrEmpty(request.CodeChallenge))
@@ -141,8 +141,7 @@ public class OAuth2Service : IOAuth2Service
         if (invalidScopes.Any())
             return AuthorizeValidationResult.FailSafeRedirect("invalid_scope", $"Scope(s) not allowed: {string.Join(", ", invalidScopes)}");
 
-        var allowedGrants = client.AllowedGrantTypes ?? Array.Empty<string>();
-        if (!allowedGrants.Contains("AUTHORIZATION_CODE", StringComparer.OrdinalIgnoreCase))
+        if (!client.IsGrantTypeAllowed("AUTHORIZATION_CODE"))
             return AuthorizeValidationResult.FailSafeRedirect("unauthorized_client", "Client is not authorized for authorization_code grant.");
 
         bool requiresConsent = client.RequireConsent;
@@ -330,7 +329,7 @@ public class OAuth2Service : IOAuth2Service
         var codeHash = _tokenService.HashToken(request.Code);
         var authCode = await _authCodeRepo.GetByCodeHashAsync(codeHash);
 
-        if (authCode == null || authCode.ConsumedAt.HasValue || authCode.ExpiresAt <= DateTime.UtcNow)
+        if (authCode == null || !authCode.IsValid)
             throw new DomainException("token", ErrorCodeType.INVALID_GRANT, "Authorization code is invalid, expired, or already used.");
 
         if (authCode.ClientId != client.Id)

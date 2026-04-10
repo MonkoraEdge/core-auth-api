@@ -20,4 +20,15 @@ public class RefreshToken : BaseEntity
     public DateTime IssuedAt { get; set; } = DateTime.UtcNow;
     public DateTime ExpiresAt { get; set; }
     public DateTime? RevokedAt { get; set; }
+
+    // ─── Behavior ──────────────────────────────────────────────────────
+
+    /// <summary>True when the token has been explicitly revoked (theft detection, logout, rotation).</summary>
+    public bool IsRevoked => RevokedAt.HasValue;
+
+    /// <summary>True when the token's absolute lifetime has elapsed.</summary>
+    public bool IsExpired => ExpiresAt <= DateTime.UtcNow;
+
+    /// <summary>Whether this token can still be used to obtain a new access token.</summary>
+    public bool IsActive  => !IsRevoked && !IsExpired;
 }

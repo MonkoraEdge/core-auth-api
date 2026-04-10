@@ -5,7 +5,6 @@ using MonkoraEdge.Core.Auth.Domain.AggregatesModel.RoleAggregate.Interfaces;
 using MonkoraEdge.Core.Auth.Domain.Exceptions;
 using MonkoraEdge.Core.Auth.Domain.Services.Interface;
 using MonkoraEdge.Core.DotNet.AggregatesModel.CommonAggregate;
-using Microsoft.EntityFrameworkCore;
 
 namespace MonkoraEdge.Core.Auth.Domain.Services;
 
@@ -144,8 +143,7 @@ public class UserService : IUserService
     {
         var user = await _userRepo.GetByIdAsync(id);
         if (user == null) throw new DomainException("user", "User not found.");
-        user.IsActive = true;
-        user.Status = "ACTIVE";
+        user.Activate();
         _userRepo.Update(user);
         await _unitOfWork.SaveChangesAsync();
         return new UpdateResponse { Id = user.Id, IsSuccess = true, Message = "User activated." };
@@ -155,8 +153,7 @@ public class UserService : IUserService
     {
         var user = await _userRepo.GetByIdAsync(id);
         if (user == null) throw new DomainException("user", "User not found.");
-        user.IsActive = false;
-        user.Status = "SUSPENDED";
+        user.Deactivate();
         _userRepo.Update(user);
         await _unitOfWork.SaveChangesAsync();
         return new UpdateResponse { Id = user.Id, IsSuccess = true, Message = "User deactivated." };

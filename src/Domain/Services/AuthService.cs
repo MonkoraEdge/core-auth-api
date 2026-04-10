@@ -108,7 +108,7 @@ public class AuthService : IAuthService
             throw new DomainException("login", "Invalid username or password.");
         }
 
-        if (identity.LockedUntil.HasValue && identity.LockedUntil > DateTime.UtcNow)
+        if (identity.IsLocked)
         {
             await RecordLoginAttemptAsync(user.Id, request.Username, null, ipAddress, userAgent, false, "ACCOUNT_LOCKED", request.ClientId);
             await _unitOfWork.SaveChangesAsync();
@@ -124,9 +124,7 @@ public class AuthService : IAuthService
 
         if (!_passwordService.VerifyPassword(request.Password, identity.PasswordHash))
         {
-            identity.FailedAttempts++;
-            if (identity.FailedAttempts >= 5)
-                identity.LockedUntil = DateTime.UtcNow.AddMinutes(_signinFailedMinutes);
+            identity.RecordFailedAttempt(5, _signinFailedMinutes);
             _identityRepo.Update(identity);
 
             await RecordLoginAttemptAsync(user.Id, request.Username, null, ipAddress, userAgent, false, "INVALID_PASSWORD", request.ClientId);
@@ -134,8 +132,7 @@ public class AuthService : IAuthService
             throw new DomainException("login", "Invalid username or password.");
         }
 
-        identity.FailedAttempts = 0;
-        identity.LockedUntil = null;
+        identity.ClearLock();
         _identityRepo.Update(identity);
 
         // Check 2FA requirement
@@ -311,11 +308,8 @@ public class AuthService : IAuthService
             throw new DomainException("reset_password", "Reset token is invalid or has expired.");
 
         var oldHash = identity.PasswordHash ?? string.Empty;
-        identity.PasswordHash = _passwordService.HashPassword(request.NewPassword);
-        identity.PasswordAlgo = "BCRYPT";
-        identity.PasswordUpdatedAt = DateTime.UtcNow;
-        identity.FailedAttempts = 0;
-        identity.LockedUntil = null;
+        identity.SetPassword(_passwordService.HashPassword(request.NewPassword));
+        identity.ClearLock();
         _identityRepo.Update(identity);
 
         _passwordHistoryRepo.Insert(new PasswordHistory { UserId = user.Id, PasswordHash = oldHash });
@@ -346,9 +340,7 @@ public class AuthService : IAuthService
             throw new DomainException("change_password", "Cannot reuse a recent password.");
 
         var oldHash = identity.PasswordHash;
-        identity.PasswordHash = _passwordService.HashPassword(request.NewPassword);
-        identity.PasswordAlgo = "BCRYPT";
-        identity.PasswordUpdatedAt = DateTime.UtcNow;
+        identity.SetPassword(_passwordService.HashPassword(request.NewPassword));
         _identityRepo.Update(identity);
 
         _passwordHistoryRepo.Insert(new PasswordHistory { UserId = userId, PasswordHash = oldHash });
@@ -398,8 +390,7 @@ public class AuthService : IAuthService
         var user = await _userRepo.GetByIdAsync(verif.UserId);
         if (user != null)
         {
-            user.EmailVerified = true;
-            if (user.Status == "INACTIVE") user.Status = "ACTIVE";
+            user.MarkEmailVerified();
             _userRepo.Update(user);
         }
 
@@ -552,8 +543,7 @@ public class AuthService : IAuthService
             resolvedClientId, user.Id, null, scopes, refreshLifetime,
             ipAddress: ipAddress, userAgent: userAgent);
 
-        user.LastLoginAt = DateTime.UtcNow;
-        user.LastActivityAt = DateTime.UtcNow;
+        user.RecordSuccessfulLogin();
         _userRepo.Update(user);
 
         await RecordLoginAttemptAsync(user.Id, user.Email,

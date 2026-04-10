@@ -16,14 +16,6 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-		<PackageReference Include="Azure.Identity" Version="1.19.0" />
-		<PackageReference Include="Azure.Security.KeyVault.Keys" Version="4.9.0" />
-		<PackageReference Include="Duende.IdentityModel" Version="8.0.1" />
-		<PackageReference Include="Isopoh.Cryptography.Argon2" Version="2.0.0" />
-		<PackageReference Include="RabbitMQ.Client" Version="7.2.1" />
-	</ItemGroup>
-
-	<ItemGroup>
 	  <ProjectReference Include="..\DotNet\DotNet.csproj" />
 	</ItemGroup>
 
@@ -41,17 +33,6 @@
 			<LastGenOutput>Resources.Designer.cs</LastGenOutput>
 		</EmbeddedResource>
 	</ItemGroup>
-
-
-
-
-
-
-
-
-
-
-
 
 </Project>
 

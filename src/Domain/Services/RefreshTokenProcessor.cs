@@ -38,7 +38,7 @@ public sealed class RefreshTokenProcessor : IRefreshTokenProcessor
         if (storedToken == null)
             throw new DomainException(errorSource, ErrorCodeType.INVALID_GRANT, invalidMessage);
 
-        if (storedToken.RevokedAt.HasValue)
+        if (storedToken.IsRevoked)
         {
             if (storedToken.FamilyId != Guid.Empty)
                 await _tokenService.RevokeTokenFamilyAsync(storedToken.FamilyId, "refresh_token_reuse_detected");
@@ -47,7 +47,7 @@ public sealed class RefreshTokenProcessor : IRefreshTokenProcessor
                 "The refresh token has already been used. All sessions in this chain have been revoked for security.");
         }
 
-        if (storedToken.ExpiresAt <= DateTime.UtcNow)
+        if (storedToken.IsExpired)
             throw new DomainException(errorSource, ErrorCodeType.TOKEN_EXPIRED, expiredMessage);
 
         return storedToken;
