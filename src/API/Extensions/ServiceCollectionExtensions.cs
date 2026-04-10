@@ -104,7 +104,10 @@ public static class ServiceCollectionExtensions
 
         // Stateless utility services
         services.AddSingleton<IPasswordService, PasswordService>();
-        services.AddSingleton<ITwoFactorChallengeStore, MemoryTwoFactorChallengeStore>();
+        // Redis-backed challenge store — survives node restarts and is visible across all
+        // instances. Requires IDistributedCache (Redis) to be registered, which is done via
+        // AddStackExchangeRedisCache in Program.cs.
+        services.AddSingleton<ITwoFactorChallengeStore, RedisTwoFactorChallengeStore>();
 
         services.AddScoped<IRefreshTokenProcessor>(m => new RefreshTokenProcessor(
             m.GetRequiredService<DomainIUnitOfWork>(),

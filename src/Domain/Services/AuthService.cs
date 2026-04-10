@@ -150,7 +150,7 @@ public class AuthService : IAuthService
                 // Store the challenge token so VerifyTwoFactorLoginAsync can resolve the userId
                 // without trusting a client-supplied identifier.
                 var challengeToken = _passwordService.GenerateSecureToken(32);
-                _twoFactorChallengeStore.Store(challengeToken, user.Id, TwoFactorChallengeExpiry);
+                await _twoFactorChallengeStore.StoreAsync(challengeToken, user.Id, TwoFactorChallengeExpiry);
 
                 return new LoginResponse
                 {
@@ -493,7 +493,7 @@ public class AuthService : IAuthService
     {
         // Validate the opaque token issued during the password-correct + 2FA-required step.
         // Consuming removes it — tokens are single-use with a 5-minute TTL.
-        var userId = _twoFactorChallengeStore.Consume(twoFactorToken)
+        var userId = await _twoFactorChallengeStore.ConsumeAsync(twoFactorToken)
             ?? throw new DomainException("2fa_verify", "2FA session has expired or is invalid. Please sign in again.");
 
         var settings = await _twoFactorRepo.GetByUserIdAsync(userId);

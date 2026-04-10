@@ -167,6 +167,27 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(setup =>
 {
     setup.SwaggerDoc("v1", new OpenApiInfo { Title = "Authentication API", Version = "v1" });
+
+    // Allow testing [Authorize] endpoints in Swagger UI using JWT Bearer tokens.
+    setup.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        Description = "JWT access token (at+JWT). Enter: Bearer {token}",
+        Name = "Authorization",
+        In = ParameterLocation.Header,
+        Type = SecuritySchemeType.Http,
+        Scheme = "bearer",
+        BearerFormat = "JWT"
+    });
+    setup.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
+        {
+            new OpenApiSecurityScheme
+            {
+                Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "Bearer" }
+            },
+            Array.Empty<string>()
+        }
+    });
 });
 
 var app = builder.Build();
@@ -189,12 +210,13 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+// Assign / propagate X-Correlation-Id on every request.
+// MUST run before error-handling middleware so that correlationId is available
+// in all error log entries (including DomainException + unhandled exceptions).
+app.UseMiddleware<CorrelationIdMiddleware>();
+
 app.UseErrorHandling(new ErrorHandlingOptions("authentication"));
 app.UseMiddleware<DomainExceptionHandlingMiddleware>();
-
-// Assign / propagate X-Correlation-Id on every request.
-// Must run early so all subsequent log entries include the CorrelationId enricher.
-app.UseMiddleware<CorrelationIdMiddleware>();
 
 // Security headers — prevent clickjacking, MIME sniffing, and information leakage
 app.Use(async (ctx, next) =>

@@ -335,13 +335,11 @@ public class TokenService : ITokenService
 
         var user = await _userRepo.GetByIdAsync(userId);
 
+        // iss, aud, iat, nbf, exp are handled by JwtPayload constructor — no duplicate claims.
+        // This mirrors the access token pattern: dedicated constructor params own the registered fields.
         var claims = new List<Claim>
         {
             new Claim(JwtRegisteredClaimNames.Sub, userId.ToString()),
-            new Claim(JwtRegisteredClaimNames.Iss, _issuer),
-            // OIDC Core §2: aud MUST be the client_id string, not an internal identifier.
-            new Claim(JwtRegisteredClaimNames.Aud, clientId),
-            new Claim(JwtRegisteredClaimNames.Iat, new DateTimeOffset(now).ToUnixTimeSeconds().ToString(), ClaimValueTypes.Integer64),
             new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString("N")),
             new Claim("auth_time", new DateTimeOffset(authTime).ToUnixTimeSeconds().ToString(), ClaimValueTypes.Integer64),
         };
@@ -383,8 +381,19 @@ public class TokenService : ITokenService
         }
 
         var credentials = new SigningCredentials(_signingKey, SecurityAlgorithms.RsaSha256);
-        var token = new JwtSecurityToken(claims: claims, notBefore: now, expires: expiry, signingCredentials: credentials);
-        return new JwtSecurityTokenHandler().WriteToken(token);
+        var header = new JwtHeader(credentials);
+
+        // OIDC Core §2: aud MUST be the client_id string, not an internal Guid.
+        // JwtPayload constructor registers iss/aud/iat/nbf/exp in the standard payload fields.
+        var payload = new JwtPayload(
+            issuer: _issuer,
+            audience: clientId,
+            claims: claims,
+            notBefore: now,
+            expires: expiry,
+            issuedAt: now);
+
+        return new JwtSecurityTokenHandler().WriteToken(new JwtSecurityToken(header, payload));
     }
 
     public async Task RevokeTokenFamilyAsync(Guid familyId, string reason = "refresh_token_reuse")
