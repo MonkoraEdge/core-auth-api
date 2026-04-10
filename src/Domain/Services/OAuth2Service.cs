@@ -518,12 +518,11 @@ public class OAuth2Service : IOAuth2Service
 
     public async Task RevokeAsync(RevocationRequest request, string clientId, string? clientSecret)
     {
-        await _clientAuth.AuthenticateAsync(clientId, clientSecret);
+        var client = await _clientAuth.AuthenticateAsync(clientId, clientSecret);
 
         if (string.IsNullOrEmpty(request.Token))
             return; // RFC 7009: servers should not return an error for missing token
 
-        var client = await _clientAuth.LoadAsync(clientId);
         await _tokenService.RevokeTokenAsync(request.Token, request.TokenTypeHint, client.Id, "revoked_by_client");
 
         _auditLogRepo.Insert(new AuditLog

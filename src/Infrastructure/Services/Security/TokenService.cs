@@ -209,7 +209,7 @@ public class TokenService : ITokenService
             return new IntrospectResponse
             {
                 Active = true,
-                Sub = refreshToken.UserId.ToString(),
+                Sub = refreshToken.UserId != Guid.Empty ? refreshToken.UserId.ToString() : null,
                 Issuer = _issuer,          // RFC 7662 §2.2: iss SHOULD be present when known
                 ClientId = refreshToken.ClientId.ToString(),
                 Scope = string.Join(" ", refreshToken.Scopes),
