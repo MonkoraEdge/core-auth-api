@@ -2,9 +2,13 @@ using MonkoraEdge.Core.Auth.Domain.AggregatesModel.EntityAggregate;
 using MonkoraEdge.Core.Auth.Domain.AggregatesModel.ScopeAggregate;
 using MonkoraEdge.Core.Auth.Domain.AggregatesModel.RoleAggregate;
 using MonkoraEdge.Core.Auth.Domain.AggregatesModel.ApiKeyAggregate;
+using MonkoraEdge.Core.Auth.Domain.AggregatesModel.ProviderAggregate;
+using MonkoraEdge.Core.Auth.Domain.AggregatesModel.AgreementAggregate;
 using MonkoraEdge.Core.Auth.Domain.AggregatesModel.AuthorizationAggregate.Interfaces;
 using MonkoraEdge.Core.Auth.Domain.AggregatesModel.RoleAggregate.Interfaces;
 using MonkoraEdge.Core.Auth.Domain.AggregatesModel.ApiKeyAggregate.Interfaces;
+using MonkoraEdge.Core.Auth.Domain.AggregatesModel.ProviderAggregate.Interfaces;
+using MonkoraEdge.Core.Auth.Domain.AggregatesModel.AgreementAggregate.Interfaces;
 using MonkoraEdge.Core.Auth.Domain.Exceptions;
 using MonkoraEdge.Core.Auth.Domain.Services.Interface;
 using MonkoraEdge.Core.DotNet.AggregatesModel.CommonAggregate;
@@ -437,4 +441,226 @@ public class ApiKeyService : IApiKeyService
     private static string GenerateApiKey() =>
         "dk_" + Convert.ToBase64String(RandomNumberGenerator.GetBytes(32))
             .TrimEnd('=').Replace('+', '-').Replace('/', '_');
+}
+
+// ─── ProviderService ──────────────────────────────────────────────────────────
+
+public class ProviderService : IProviderService
+{
+    private readonly IUnitOfWork _unitOfWork;
+    private readonly IProviderRepository _providerRepo;
+
+    public ProviderService(IUnitOfWork unitOfWork, IProviderRepository providerRepo)
+    {
+        _unitOfWork = unitOfWork;
+        _providerRepo = providerRepo;
+    }
+
+    public async Task<List<ProviderResponse>> GetAllAsync(bool? activeOnly = true)
+    {
+        var providers = activeOnly == true
+            ? await _providerRepo.GetAllActiveAsync()
+            : await _providerRepo.ListAsync();
+        return providers.Select(MapToResponse).ToList();
+    }
+
+    public async Task<ProviderResponse> GetByIdAsync(Guid id)
+    {
+        var provider = await _providerRepo.GetByIdAsync(id);
+        if (provider == null) throw new DomainException("provider", "Provider not found.");
+        return MapToResponse(provider);
+    }
+
+    public async Task<CreateResponse> CreateAsync(ProviderCreateRequest request, string? createdBy)
+    {
+        var existing = await _providerRepo.GetByProviderCodeAsync(request.ProviderCode);
+        if (existing != null)
+            throw new DomainException("provider", $"Provider code '{request.ProviderCode}' already exists.");
+
+        var provider = new Provider
+        {
+            ProviderCode = request.ProviderCode.ToUpperInvariant().Trim(),
+            ProviderName = request.ProviderName,
+            Protocol = request.Protocol,
+            ClientId = request.ClientId,
+            Scopes = request.Scopes,
+            Issuer = request.Issuer,
+            AuthorizationUrl = request.AuthorizationUrl,
+            TokenUrl = request.TokenUrl,
+            UserinfoUrl = request.UserinfoUrl,
+            JwksUri = request.JwksUri,
+            DiscoveryUrl = request.DiscoveryUrl,
+            EndSessionEndpoint = request.EndSessionEndpoint,
+            CallbackUrl = request.CallbackUrl,
+            PkceSupported = request.PkceSupported,
+            IsActive = request.IsActive
+        };
+        _providerRepo.Insert(provider);
+        await _unitOfWork.SaveChangesAsync();
+        return new CreateResponse { Id = provider.Id, IsSuccess = true, Message = "Provider created." };
+    }
+
+    public async Task<UpdateResponse> UpdateAsync(Guid id, ProviderUpdateRequest request, string? updatedBy)
+    {
+        var provider = await _providerRepo.GetByIdAsync(id);
+        if (provider == null) throw new DomainException("provider", "Provider not found.");
+
+        if (request.ProviderName != null) provider.ProviderName = request.ProviderName;
+        if (request.ClientId != null) provider.ClientId = request.ClientId;
+        if (request.Scopes != null) provider.Scopes = request.Scopes;
+        if (request.AuthorizationUrl != null) provider.AuthorizationUrl = request.AuthorizationUrl;
+        if (request.TokenUrl != null) provider.TokenUrl = request.TokenUrl;
+        if (request.UserinfoUrl != null) provider.UserinfoUrl = request.UserinfoUrl;
+        if (request.JwksUri != null) provider.JwksUri = request.JwksUri;
+        if (request.DiscoveryUrl != null) provider.DiscoveryUrl = request.DiscoveryUrl;
+        if (request.EndSessionEndpoint != null) provider.EndSessionEndpoint = request.EndSessionEndpoint;
+        if (request.CallbackUrl != null) provider.CallbackUrl = request.CallbackUrl;
+        if (request.PkceSupported.HasValue) provider.PkceSupported = request.PkceSupported.Value;
+        if (request.IsActive.HasValue) provider.IsActive = request.IsActive.Value;
+
+        _providerRepo.Update(provider);
+        await _unitOfWork.SaveChangesAsync();
+        return new UpdateResponse { Id = provider.Id, IsSuccess = true, Message = "Provider updated." };
+    }
+
+    public async Task<DeleteResponse> DeleteAsync(Guid id, string? deletedBy)
+    {
+        var provider = await _providerRepo.GetByIdAsync(id);
+        if (provider == null) throw new DomainException("provider", "Provider not found.");
+        provider.DeletedAt = DateTime.UtcNow;
+        provider.DeletedBy = deletedBy;
+        provider.IsActive = false;
+        _providerRepo.Update(provider);
+        await _unitOfWork.SaveChangesAsync();
+        return new DeleteResponse { Id = provider.Id, IsSuccess = true, Message = "Provider deleted." };
+    }
+
+    private static ProviderResponse MapToResponse(Provider p) => new()
+    {
+        Id = p.Id.ToString(),
+        ProviderCode = p.ProviderCode,
+        ProviderName = p.ProviderName,
+        Protocol = p.Protocol,
+        ClientId = p.ClientId,
+        Scopes = p.Scopes,
+        Issuer = p.Issuer,
+        AuthorizationUrl = p.AuthorizationUrl,
+        TokenUrl = p.TokenUrl,
+        UserinfoUrl = p.UserinfoUrl,
+        JwksUri = p.JwksUri,
+        DiscoveryUrl = p.DiscoveryUrl,
+        EndSessionEndpoint = p.EndSessionEndpoint,
+        CallbackUrl = p.CallbackUrl,
+        PkceSupported = p.PkceSupported,
+        IsActive = p.IsActive,
+        CreatedAt = p.CreatedAt
+    };
+}
+
+// ─── AgreementService ─────────────────────────────────────────────────────────
+
+public class AgreementService : IAgreementService
+{
+    private readonly IUnitOfWork _unitOfWork;
+    private readonly IAgreementRepository _agreementRepo;
+
+    public AgreementService(IUnitOfWork unitOfWork, IAgreementRepository agreementRepo)
+    {
+        _unitOfWork = unitOfWork;
+        _agreementRepo = agreementRepo;
+    }
+
+    public async Task<List<AgreementResponse>> GetListAsync(Guid? tenantId, bool? activeOnly = true)
+    {
+        var agreements = tenantId.HasValue
+            ? await _agreementRepo.GetActiveByTenantAsync(tenantId.Value)
+            : await _agreementRepo.GetActiveByTenantAsync(null);
+
+        var list = agreements.AsEnumerable();
+        if (activeOnly == true) list = list.Where(a => a.IsActive);
+        return list.Select(MapToResponse).ToList();
+    }
+
+    public async Task<AgreementResponse> GetByIdAsync(Guid id)
+    {
+        var agreement = await _agreementRepo.GetByIdAsync(id);
+        if (agreement == null) throw new DomainException("agreement", "Agreement not found.");
+        return MapToResponse(agreement);
+    }
+
+    public async Task<CreateResponse> CreateAsync(AgreementCreateRequest request, string? createdBy)
+    {
+        var existing = await _agreementRepo.GetByAgreementCodeAsync(request.AgreementCode);
+        if (existing != null)
+            throw new DomainException("agreement", $"Agreement code '{request.AgreementCode}' already exists.");
+
+        var agreement = new Agreement
+        {
+            TenantId = request.TenantId,
+            AgreementCode = request.AgreementCode.ToUpperInvariant().Trim(),
+            AgreementType = request.AgreementType.ToUpperInvariant(),
+            Title = request.Title,
+            Content = request.Content,
+            Summary = request.Summary,
+            Version = request.Version,
+            EffectiveAt = request.EffectiveAt,
+            ExpiresAt = request.ExpiresAt,
+            IsRequired = request.IsRequired,
+            RequiresExplicitAction = request.RequiresExplicitAction,
+            IsActive = request.IsActive
+        };
+        _agreementRepo.Insert(agreement);
+        await _unitOfWork.SaveChangesAsync();
+        return new CreateResponse { Id = agreement.Id, IsSuccess = true, Message = "Agreement created." };
+    }
+
+    public async Task<UpdateResponse> UpdateAsync(Guid id, AgreementUpdateRequest request, string? updatedBy)
+    {
+        var agreement = await _agreementRepo.GetByIdAsync(id);
+        if (agreement == null) throw new DomainException("agreement", "Agreement not found.");
+
+        if (request.Title != null) agreement.Title = request.Title;
+        if (request.Content != null) agreement.Content = request.Content;
+        if (request.Summary != null) agreement.Summary = request.Summary;
+        if (request.Version != null) agreement.Version = request.Version;
+        if (request.EffectiveAt.HasValue) agreement.EffectiveAt = request.EffectiveAt.Value;
+        if (request.ExpiresAt.HasValue) agreement.ExpiresAt = request.ExpiresAt;
+        if (request.IsRequired.HasValue) agreement.IsRequired = request.IsRequired.Value;
+        if (request.RequiresExplicitAction.HasValue) agreement.RequiresExplicitAction = request.RequiresExplicitAction.Value;
+        if (request.IsActive.HasValue) agreement.IsActive = request.IsActive.Value;
+
+        _agreementRepo.Update(agreement);
+        await _unitOfWork.SaveChangesAsync();
+        return new UpdateResponse { Id = agreement.Id, IsSuccess = true, Message = "Agreement updated." };
+    }
+
+    public async Task<DeleteResponse> DeleteAsync(Guid id, string? deletedBy)
+    {
+        var agreement = await _agreementRepo.GetByIdAsync(id);
+        if (agreement == null) throw new DomainException("agreement", "Agreement not found.");
+        agreement.DeletedAt = DateTime.UtcNow;
+        agreement.DeletedBy = deletedBy;
+        agreement.IsActive = false;
+        _agreementRepo.Update(agreement);
+        await _unitOfWork.SaveChangesAsync();
+        return new DeleteResponse { Id = agreement.Id, IsSuccess = true, Message = "Agreement deleted." };
+    }
+
+    private static AgreementResponse MapToResponse(Agreement a) => new()
+    {
+        Id = a.Id.ToString(),
+        TenantId = a.TenantId?.ToString(),
+        AgreementCode = a.AgreementCode,
+        AgreementType = a.AgreementType,
+        Title = a.Title,
+        Content = a.Content,
+        Summary = a.Summary,
+        Version = a.Version,
+        EffectiveAt = a.EffectiveAt,
+        ExpiresAt = a.ExpiresAt,
+        IsRequired = a.IsRequired,
+        RequiresExplicitAction = a.RequiresExplicitAction,
+        IsActive = a.IsActive,
+        CreatedAt = a.CreatedAt
+    };
 }

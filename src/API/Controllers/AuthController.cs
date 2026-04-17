@@ -21,11 +21,13 @@ public class AuthController : MonkoraControllerBase
 {
     private readonly IAuthService _authService;
     private readonly IOAuth2Service _oauth2Service;
+    private readonly ISocialLoginService _socialLoginService;
 
-    public AuthController(IAuthService authService, IOAuth2Service oauth2Service)
+    public AuthController(IAuthService authService, IOAuth2Service oauth2Service, ISocialLoginService socialLoginService)
     {
         _authService = authService;
         _oauth2Service = oauth2Service;
+        _socialLoginService = socialLoginService;
     }
 
     // ─── Login / Register / Token ─────────────────────────────────────────────
@@ -204,6 +206,33 @@ public class AuthController : MonkoraControllerBase
     {
         var result = await _authService.VerifyTwoFactorLoginAsync(
             request.TwoFactorToken, request.Code, request.DeviceType, GetIpAddress(), GetUserAgent());
+        return Ok(result);
+    }
+
+    // ─── Social Login ─────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Initiate a social login flow by redirecting the user to the external provider.
+    /// Returns the authorization URL (with PKCE challenge) that the client should redirect to.
+    /// </summary>
+    [HttpGet("social/{providerCode}")]
+    [EnableRateLimiting("default")]
+    public async Task<IActionResult> SocialInitiate(string providerCode, [FromQuery] string? redirectUri, [FromQuery] string? state)
+    {
+        var result = await _socialLoginService.InitiateAsync(providerCode, redirectUri, state, GetIpAddress());
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Handle the authorization-code callback from the external identity provider.
+    /// Exchanges the code for provider tokens, upserts the local user account,
+    /// and returns local access + refresh tokens.
+    /// </summary>
+    [HttpGet("social/{providerCode}/callback")]
+    [EnableRateLimiting("default")]
+    public async Task<IActionResult> SocialCallback(string providerCode, [FromQuery] string code, [FromQuery] string? state)
+    {
+        var result = await _socialLoginService.HandleCallbackAsync(providerCode, code, state, GetIpAddress(), GetUserAgent());
         return Ok(result);
     }
 

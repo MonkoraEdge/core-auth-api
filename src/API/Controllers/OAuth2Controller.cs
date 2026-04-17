@@ -430,4 +430,58 @@ public class OAuth2Controller : MonkoraControllerBase
             error_description = description
         });
     }
+
+    // ─── RFC 8628 — Device Authorization Grant ────────────────────────────────
+
+    /// <summary>
+    /// RFC 8628 §3.1 — Device Authorization Endpoint.
+    /// Issues device_code + user_code for input-constrained devices (CLIs, smart-TVs, etc.).
+    /// </summary>
+    [HttpPost("device_authorization")]
+    [HttpPost("/device_authorization")]
+    [Consumes("application/x-www-form-urlencoded")]
+    [EnableRateLimiting("default")]
+    public async Task<IActionResult> DeviceAuthorization([FromForm] DeviceAuthorizationFormRequest form)
+    {
+        try
+        {
+            ExtractClientCredentials(out var clientId, out var clientSecret, null);
+            clientId ??= form.ClientId;
+            clientSecret ??= form.ClientSecret;
+
+            var request = new DeviceAuthorizationRequest
+            {
+                ClientId     = clientId,
+                ClientSecret = clientSecret,
+                Scope        = form.Scope,
+            };
+
+            ApplyNoStoreHeaders();
+            var result = await _oauth2Service.DeviceAuthorizationAsync(request, clientId, clientSecret);
+            return Ok(result);
+        }
+        catch (DomainException ex)
+        {
+            return OAuthError("invalid_request", ex.ErrorMessage, StatusCodes.Status400BadRequest);
+        }
+    }
+
+    /// <summary>
+    /// Device verification endpoint — authenticated user approves or denies a user_code.
+    /// </summary>
+    [HttpPost("device_approval")]
+    [Authorize]
+    [EnableRateLimiting("default")]
+    public async Task<IActionResult> DeviceApproval([FromBody] DeviceApprovalRequest request)
+    {
+        try
+        {
+            await _oauth2Service.ApproveDeviceCodeAsync(request.UserCode, GetUserId(), request.Approved);
+            return Ok(new { message = request.Approved ? "Device approved." : "Device denied." });
+        }
+        catch (DomainException ex)
+        {
+            return OAuthError("invalid_request", ex.ErrorMessage, StatusCodes.Status400BadRequest);
+        }
+    }
 }

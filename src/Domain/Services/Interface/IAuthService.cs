@@ -41,3 +41,22 @@ public interface IAuthService
     /// <summary>Verify 2FA code during login using the opaque challenge token issued in the login response</summary>
     Task<LoginResponse> VerifyTwoFactorLoginAsync(string twoFactorToken, string code, string deviceType, string? ipAddress, string? userAgent);
 }
+
+/// <summary>
+/// Social / external-identity-provider login flow.
+/// Handles the OAuth2/OIDC authorization-code callback and local account linking.
+/// </summary>
+public interface ISocialLoginService
+{
+    /// <summary>
+    /// Build the redirect URL that sends the user-agent to the external provider for authentication.
+    /// </summary>
+    Task<SocialLoginInitiateResponse> InitiateAsync(string providerCode, string? redirectUri, string? state, string? ipAddress);
+
+    /// <summary>
+    /// Handle the authorization-code callback from the external provider.
+    /// Exchanges the code for tokens, upserts the local user, creates/links the external login record,
+    /// and returns a local access + refresh token pair.
+    /// </summary>
+    Task<LoginResponse> HandleCallbackAsync(string providerCode, string code, string? state, string? ipAddress, string? userAgent);
+}

@@ -1,6 +1,8 @@
 using MonkoraEdge.Core.Auth.Domain.AggregatesModel.ScopeAggregate;
 using MonkoraEdge.Core.Auth.Domain.AggregatesModel.RoleAggregate;
 using MonkoraEdge.Core.Auth.Domain.AggregatesModel.ApiKeyAggregate;
+using MonkoraEdge.Core.Auth.Domain.AggregatesModel.ProviderAggregate;
+using MonkoraEdge.Core.Auth.Domain.AggregatesModel.AgreementAggregate;
 using MonkoraEdge.Core.DotNet.AggregatesModel.CommonAggregate;
 
 namespace MonkoraEdge.Core.Auth.Domain.Services.Interface;
@@ -44,4 +46,22 @@ public interface IApiKeyService
     Task<UpdateResponse> UpdateLastUsedAsync(Guid id);
     /// <summary>Validate API key and return response if valid</summary>
     Task<ApiKeyResponse?> ValidateAsync(string rawKey);
+}
+
+public interface IProviderService
+{
+    Task<List<ProviderResponse>> GetAllAsync(bool? activeOnly = true);
+    Task<ProviderResponse> GetByIdAsync(Guid id);
+    Task<CreateResponse> CreateAsync(ProviderCreateRequest request, string? createdBy);
+    Task<UpdateResponse> UpdateAsync(Guid id, ProviderUpdateRequest request, string? updatedBy);
+    Task<DeleteResponse> DeleteAsync(Guid id, string? deletedBy);
+}
+
+public interface IAgreementService
+{
+    Task<List<AgreementResponse>> GetListAsync(Guid? tenantId, bool? activeOnly = true);
+    Task<AgreementResponse> GetByIdAsync(Guid id);
+    Task<CreateResponse> CreateAsync(AgreementCreateRequest request, string? createdBy);
+    Task<UpdateResponse> UpdateAsync(Guid id, AgreementUpdateRequest request, string? updatedBy);
+    Task<DeleteResponse> DeleteAsync(Guid id, string? deletedBy);
 }

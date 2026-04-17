@@ -16,6 +16,8 @@ public class UserService : IUserService
     private readonly IUserRoleRepository _userRoleRepo;
     private readonly IRoleRepository _roleRepo;
     private readonly IPasswordService _passwordService;
+    private readonly IUserSessionRepository _sessionRepo;
+    private readonly IUserSessionDeviceRepository _deviceRepo;
 
     public UserService(
         IUnitOfWork unitOfWork,
@@ -23,7 +25,9 @@ public class UserService : IUserService
         IUserIdentityRepository identityRepo,
         IUserRoleRepository userRoleRepo,
         IRoleRepository roleRepo,
-        IPasswordService passwordService)
+        IPasswordService passwordService,
+        IUserSessionRepository sessionRepo,
+        IUserSessionDeviceRepository deviceRepo)
     {
         _unitOfWork = unitOfWork;
         _userRepo = userRepo;
@@ -31,6 +35,8 @@ public class UserService : IUserService
         _userRoleRepo = userRoleRepo;
         _roleRepo = roleRepo;
         _passwordService = passwordService;
+        _sessionRepo = sessionRepo;
+        _deviceRepo = deviceRepo;
     }
 
     public async Task<UserResponse> GetByIdAsync(Guid id)
@@ -231,5 +237,116 @@ public class UserService : IUserService
             UpdatedAt = user.UpdatedAt,
             Roles = roleNames
         };
+    }
+
+    // ── Session management ─────────────────────────────────────────────────────
+
+    public async Task<List<UserSessionResponse>> GetSessionsAsync(Guid userId)
+    {
+        var sessions = await _sessionRepo.GetActiveByUserIdAsync(userId);
+        return sessions.Select(s => new UserSessionResponse
+        {
+            Id = s.Id.ToString(),
+            ClientId = s.ClientId.ToString(),
+            DeviceId = s.DeviceId?.ToString(),
+            IpAddress = s.IpAddress,
+            UserAgent = s.UserAgent,
+            ExpiresAt = s.ExpiresAt,
+            LastActivityAt = s.LastActivityAt,
+            IsActive = s.IsActive,
+            CreatedAt = s.CreatedAt
+        }).ToList();
+    }
+
+    public async Task<DeleteResponse> RevokeSessionAsync(Guid userId, Guid sessionId)
+    {
+        var session = await _sessionRepo.GetByIdAsync(sessionId);
+        if (session == null || session.UserId != userId)
+            throw new DomainException("session", "Session not found.");
+
+        session.RevokedAt = DateTime.UtcNow;
+        session.IsActive = false;
+        _sessionRepo.Update(session);
+        await _unitOfWork.SaveChangesAsync();
+        return new DeleteResponse { Id = sessionId, IsSuccess = true, Message = "Session revoked." };
+    }
+
+    public async Task<DeleteResponse> RevokeAllSessionsAsync(Guid userId)
+    {
+        var sessions = await _sessionRepo.GetActiveByUserIdAsync(userId);
+        var now = DateTime.UtcNow;
+        foreach (var s in sessions)
+        {
+            s.RevokedAt = now;
+            s.IsActive = false;
+            _sessionRepo.Update(s);
+        }
+        await _unitOfWork.SaveChangesAsync();
+        return new DeleteResponse { Id = userId, IsSuccess = true, Message = "All sessions revoked." };
+    }
+
+    // ── Device management ──────────────────────────────────────────────────────
+
+    public async Task<List<UserDeviceResponse>> GetDevicesAsync(Guid userId)
+    {
+        var devices = await _deviceRepo.GetByUserIdAsync(userId);
+        return devices.Select(d => new UserDeviceResponse
+        {
+            Id = d.Id.ToString(),
+            DeviceName = d.DeviceName,
+            DeviceType = d.DeviceType,
+            OsName = d.OsName,
+            OsVersion = d.OsVersion,
+            BrowserName = d.BrowserName,
+            BrowserVersion = d.BrowserVersion,
+            IpAddress = d.IpAddress,
+            LoginMethod = d.LoginMethod,
+            City = d.City,
+            Country = d.Country,
+            LastSeenAt = d.LastSeenAt,
+            LastLoginAt = d.LastLoginAt,
+            IsBlocked = d.IsBlocked,
+            IsTrusted = d.IsTrusted,
+            IsActive = d.IsActive
+        }).ToList();
+    }
+
+    public async Task<UpdateResponse> TrustDeviceAsync(Guid userId, Guid deviceId)
+    {
+        var device = await _deviceRepo.GetByIdAsync(deviceId);
+        if (device == null || device.UserId != userId)
+            throw new DomainException("device", "Device not found.");
+
+        device.IsTrusted = true;
+        device.IsBlocked = false;
+        _deviceRepo.Update(device);
+        await _unitOfWork.SaveChangesAsync();
+        return new UpdateResponse { Id = deviceId, IsSuccess = true, Message = "Device trusted." };
+    }
+
+    public async Task<UpdateResponse> BlockDeviceAsync(Guid userId, Guid deviceId)
+    {
+        var device = await _deviceRepo.GetByIdAsync(deviceId);
+        if (device == null || device.UserId != userId)
+            throw new DomainException("device", "Device not found.");
+
+        device.IsBlocked = true;
+        device.IsTrusted = false;
+        _deviceRepo.Update(device);
+        await _unitOfWork.SaveChangesAsync();
+        return new UpdateResponse { Id = deviceId, IsSuccess = true, Message = "Device blocked." };
+    }
+
+    public async Task<DeleteResponse> RevokeDeviceAsync(Guid userId, Guid deviceId)
+    {
+        var device = await _deviceRepo.GetByIdAsync(deviceId);
+        if (device == null || device.UserId != userId)
+            throw new DomainException("device", "Device not found.");
+
+        device.RevokedAt = DateTime.UtcNow;
+        device.IsActive = false;
+        _deviceRepo.Update(device);
+        await _unitOfWork.SaveChangesAsync();
+        return new DeleteResponse { Id = deviceId, IsSuccess = true, Message = "Device revoked." };
     }
 }

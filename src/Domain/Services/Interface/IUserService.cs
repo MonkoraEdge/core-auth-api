@@ -15,4 +15,15 @@ public interface IUserService
     Task<UpdateResponse> AssignRolesAsync(Guid userId, AssignRoleRequest request, string? updatedBy);
     Task<UpdateResponse> RemoveRolesAsync(Guid userId, List<Guid> roleIds, string? updatedBy);
     Task<List<UserResponse>> GetByTenantIdAsync(Guid tenantId);
+
+    // Session management
+    Task<List<UserSessionResponse>> GetSessionsAsync(Guid userId);
+    Task<DeleteResponse> RevokeSessionAsync(Guid userId, Guid sessionId);
+    Task<DeleteResponse> RevokeAllSessionsAsync(Guid userId);
+
+    // Device management
+    Task<List<UserDeviceResponse>> GetDevicesAsync(Guid userId);
+    Task<UpdateResponse> TrustDeviceAsync(Guid userId, Guid deviceId);
+    Task<UpdateResponse> BlockDeviceAsync(Guid userId, Guid deviceId);
+    Task<DeleteResponse> RevokeDeviceAsync(Guid userId, Guid deviceId);
 }

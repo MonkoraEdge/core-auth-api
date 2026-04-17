@@ -70,3 +70,55 @@ public sealed class AuthorizationServerMetadataResponse
     [JsonPropertyName("code_challenge_methods_supported")]
     public string[] CodeChallengeMethodsSupported { get; set; } = Array.Empty<string>();
 }
+
+// ─── RFC 8628 — Device Authorization Grant ───────────────────────────────────
+
+/// <summary>RFC 8628 §3.1 device authorization request from a constrained client.</summary>
+public sealed class DeviceAuthorizationRequest
+{
+    public string? Scope { get; set; }
+    public string? ClientId { get; set; }
+    public string? ClientSecret { get; set; }
+}
+
+/// <summary>RFC 8628 §3.2 device authorization response.</summary>
+public sealed class DeviceAuthorizationResponse
+{
+    [JsonPropertyName("device_code")]
+    public string DeviceCode { get; set; } = string.Empty;
+
+    [JsonPropertyName("user_code")]
+    public string UserCode { get; set; } = string.Empty;
+
+    [JsonPropertyName("verification_uri")]
+    public string VerificationUri { get; set; } = string.Empty;
+
+    [JsonPropertyName("verification_uri_complete")]
+    public string? VerificationUriComplete { get; set; }
+
+    [JsonPropertyName("expires_in")]
+    public int ExpiresIn { get; set; } = 1800;
+
+    [JsonPropertyName("interval")]
+    public int Interval { get; set; } = 5;
+}
+
+/// <summary>Internal approval request from the verification UI.</summary>
+public sealed class DeviceApprovalRequest
+{
+    public string UserCode { get; set; } = string.Empty;
+    public bool Approved { get; set; }
+}
+
+/// <summary>Form-encoded device authorization request (RFC 8628 §3.1).</summary>
+public sealed class DeviceAuthorizationFormRequest
+{
+    [Microsoft.AspNetCore.Mvc.FromForm(Name = "client_id")]
+    public string? ClientId { get; set; }
+
+    [Microsoft.AspNetCore.Mvc.FromForm(Name = "client_secret")]
+    public string? ClientSecret { get; set; }
+
+    [Microsoft.AspNetCore.Mvc.FromForm(Name = "scope")]
+    public string? Scope { get; set; }
+}

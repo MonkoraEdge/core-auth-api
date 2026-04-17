@@ -21,6 +21,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Distributed;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using System.Diagnostics.CodeAnalysis;
@@ -46,7 +47,7 @@ public static class ServiceCollectionExtensions
 
         #region Repositories
         
-        services.AddScoped<ITenanttRepository, TenanttRepository>();
+        services.AddScoped<ITenantRepository, TenantRepository>();
 
         // User aggregate
         services.AddScoped<IUserRepository, UserRepository>();
@@ -99,8 +100,8 @@ public static class ServiceCollectionExtensions
         #region Services     
 
         services.AddTransient<ITenantService>(m => new TenantService(
-            m.GetService<DomainIUnitOfWork>(),
-            m.GetService<ITenanttRepository>()));
+            m.GetRequiredService<DomainIUnitOfWork>(),
+            m.GetRequiredService<ITenantRepository>()));
 
         // Stateless utility services
         services.AddSingleton<IPasswordService, PasswordService>();
@@ -275,17 +276,39 @@ public static class ServiceCollectionExtensions
             m.GetRequiredService<IPasswordService>()));
 
         // OAuth2 service
-        services.AddScoped<IOAuth2Service>(m => new OAuth2Service(
-            m.GetRequiredService<DomainIUnitOfWork>(),
-            m.GetRequiredService<IAuthorizationCodeRepository>(),
-            m.GetRequiredService<IAuthorizationConsentRepository>(),
-            m.GetRequiredService<IRefreshTokenRepository>(),
-            m.GetRequiredService<IUserRepository>(),
-            m.GetRequiredService<ITokenService>(),
-            m.GetRequiredService<IClientAuthenticator>(),
-            m.GetRequiredService<IPasswordService>(),
-            m.GetRequiredService<IRefreshTokenProcessor>(),
-            m.GetRequiredService<IAuditLogRepository>()));
+        services.AddScoped<IOAuth2Service>(m =>
+        {
+            var opts = m.GetRequiredService<EnvironmentOptions>();
+            return new OAuth2Service(
+                m.GetRequiredService<DomainIUnitOfWork>(),
+                m.GetRequiredService<IAuthorizationCodeRepository>(),
+                m.GetRequiredService<IAuthorizationConsentRepository>(),
+                m.GetRequiredService<IRefreshTokenRepository>(),
+                m.GetRequiredService<IUserRepository>(),
+                m.GetRequiredService<ITokenService>(),
+                m.GetRequiredService<IClientAuthenticator>(),
+                m.GetRequiredService<IPasswordService>(),
+                m.GetRequiredService<IRefreshTokenProcessor>(),
+                m.GetRequiredService<IAuditLogRepository>(),
+                m.GetRequiredService<IDistributedCache>(),
+                opts.AUTH_ISSUER);
+        });
+
+        // Social login service (OAuth2/OIDC external provider flow)
+        services.AddScoped<ISocialLoginService>(m =>
+        {
+            var opts = m.GetRequiredService<EnvironmentOptions>();
+            return new SocialLoginService(
+                m.GetRequiredService<DomainIUnitOfWork>(),
+                m.GetRequiredService<IProviderRepository>(),
+                m.GetRequiredService<IUserRepository>(),
+                m.GetRequiredService<IUserExternalLoginRepository>(),
+                m.GetRequiredService<ITokenService>(),
+                m.GetRequiredService<IDistributedCache>(),
+                m.GetRequiredService<IHttpClientFactory>(),
+                opts.HASH_SECRET_KEY,
+                m.GetRequiredService<ILogger<SocialLoginService>>());
+        });
 
         // User service
         services.AddScoped<IUserService>(m => new UserService(
@@ -294,7 +317,9 @@ public static class ServiceCollectionExtensions
             m.GetRequiredService<IUserIdentityRepository>(),
             m.GetRequiredService<IUserRoleRepository>(),
             m.GetRequiredService<IRoleRepository>(),
-            m.GetRequiredService<IPasswordService>()));
+            m.GetRequiredService<IPasswordService>(),
+            m.GetRequiredService<IUserSessionRepository>(),
+            m.GetRequiredService<IUserSessionDeviceRepository>()));
 
         // Client service
         services.AddScoped<IClientService>(m => new ClientService(
@@ -323,6 +348,14 @@ public static class ServiceCollectionExtensions
             m.GetRequiredService<DomainIUnitOfWork>(),
             m.GetRequiredService<IApiKeyRepository>(),
             m.GetRequiredService<IPasswordService>()));
+
+        services.AddScoped<IProviderService>(m => new ProviderService(
+            m.GetRequiredService<DomainIUnitOfWork>(),
+            m.GetRequiredService<IProviderRepository>()));
+
+        services.AddScoped<IAgreementService>(m => new AgreementService(
+            m.GetRequiredService<DomainIUnitOfWork>(),
+            m.GetRequiredService<IAgreementRepository>()));
 
         // Background service: periodically purges expired tokens to keep tables lean
         services.AddHostedService<TokenCleanupService>();

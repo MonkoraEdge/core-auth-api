@@ -172,3 +172,13 @@ public class TwoFactorLoginRequest
     [RegularExpression("^(TOTP|SMS|EMAIL)$", ErrorMessage = "DeviceType must be TOTP, SMS, or EMAIL.")]
     public string DeviceType { get; set; } = "TOTP";
 }
+
+/// <summary>Response returned to the client when initiating a social login flow.</summary>
+public class SocialLoginInitiateResponse
+{
+    /// <summary>The full redirect URL pointing to the external identity provider's authorization endpoint.</summary>
+    public string AuthorizationUrl { get; set; } = string.Empty;
+
+    /// <summary>PKCE code_verifier stored server-side (in Redis) under the returned State key.</summary>
+    public string State { get; set; } = string.Empty;
+}

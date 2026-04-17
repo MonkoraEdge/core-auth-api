@@ -3,8 +3,9 @@
 
 namespace MonkoraEdge.Core.Auth.Domain.AggregatesModel.TenantAggregate.Interfaces
 {
-    public interface ITenanttRepository : IRepository<Tenant>
+    public interface ITenantRepository : IRepository<Tenant>
     {
-        Task<Tenant> GetTenantByIdAsync(Guid id);
+        Task<Tenant?> GetTenantByIdAsync(Guid id);
+        Task<List<Tenant>> GetListAsync(string? keyword, bool? isActive);
     }
 }

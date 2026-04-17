@@ -6,6 +6,7 @@ using MonkoraEdge.Core.Auth.Domain.AggregatesModel.UserAggregate.Interfaces;
 using MonkoraEdge.Core.Auth.Domain.Exceptions;
 using MonkoraEdge.Core.Auth.Domain.Services.Interface;
 using MonkoraEdge.Core.DotNet.AggregatesModel.ConstantAggregate;
+using Microsoft.Extensions.Caching.Distributed;
 
 namespace MonkoraEdge.Core.Auth.Domain.Services;
 
@@ -21,6 +22,11 @@ public class OAuth2Service : IOAuth2Service
     private readonly IPasswordService _passwordService;
     private readonly IRefreshTokenProcessor _refreshTokenProcessor;
     private readonly IAuditLogRepository _auditLogRepo;
+    private readonly IDistributedCache _cache;
+    private readonly string _authIssuer;
+
+    private const int DeviceCodeExpirySeconds = 1800; // 30 min
+    private const int DeviceCodePollingInterval = 5;
 
     public OAuth2Service(
         IUnitOfWork unitOfWork,
@@ -32,7 +38,9 @@ public class OAuth2Service : IOAuth2Service
         IClientAuthenticator clientAuth,
         IPasswordService passwordService,
         IRefreshTokenProcessor refreshTokenProcessor,
-        IAuditLogRepository auditLogRepo)
+        IAuditLogRepository auditLogRepo,
+        IDistributedCache? cache = null,
+        string authIssuer = "")
     {
         _unitOfWork = unitOfWork;
         _authCodeRepo = authCodeRepo;
@@ -44,6 +52,8 @@ public class OAuth2Service : IOAuth2Service
         _passwordService = passwordService;
         _refreshTokenProcessor = refreshTokenProcessor;
         _auditLogRepo = auditLogRepo;
+        _cache = cache!;
+        _authIssuer = authIssuer;
     }
 
     public async Task<AuthorizeEndpointResponse> ProcessAuthorizeRequestAsync(AuthorizeRequest request, Guid? authenticatedUserId)
@@ -306,11 +316,10 @@ public class OAuth2Service : IOAuth2Service
             "AUTHORIZATION_CODE" => await ExchangeAuthorizationCodeAsync(request, clientId, clientSecret, ipAddress, userAgent),
             "CLIENT_CREDENTIALS" => await ClientCredentialsGrantAsync(request, clientId!, clientSecret, ipAddress, userAgent),
             "REFRESH_TOKEN"      => await RefreshTokenGrantAsync(request, clientId, clientSecret, ipAddress, userAgent),
+            "URN:IETF:PARAMS:OAUTH:GRANT-TYPE:DEVICE_CODE" => await DeviceCodeGrantAsync(request, clientId, clientSecret, ipAddress, userAgent),
             // OAuth 2.1 explicitly removes password and implicit grants.
             "PASSWORD" => throw new DomainException("token", ErrorCodeType.UNSUPPORTED_GRANT_TYPE,
                 "The 'password' grant has been removed in OAuth 2.1. Use 'authorization_code' with PKCE."),
-            "URN:IETF:PARAMS:OAUTH:GRANT-TYPE:DEVICE_CODE" => throw new DomainException("token", ErrorCodeType.UNSUPPORTED_GRANT_TYPE,
-                "Device code grant is not supported by this server."),
             _ => throw new DomainException("token", ErrorCodeType.UNSUPPORTED_GRANT_TYPE)
         };
     }
@@ -702,5 +711,167 @@ public class OAuth2Service : IOAuth2Service
         if (!string.IsNullOrEmpty(state))
             url += $"&state={Uri.EscapeDataString(state)}";
         return url;
+    }
+
+    // ─── RFC 8628 — Device Authorization Grant ────────────────────────────────
+
+    private async Task<TokenResponse> DeviceCodeGrantAsync(
+        TokenRequest request, string? clientId, string? clientSecret, string? ipAddress, string? userAgent)
+    {
+        if (_cache == null)
+            throw new DomainException("token", "Device code grant requires a distributed cache.");
+
+        var deviceCode = request.Code
+            ?? throw new DomainException("token", ErrorCodeType.INVALID_REQUEST, "device_code is required.");
+
+        var entryJson = await _cache.GetStringAsync(DeviceCodeKey(deviceCode));
+
+        if (string.IsNullOrEmpty(entryJson))
+            throw new DomainException("token", ErrorCodeType.INVALID_GRANT, "expired_token");
+
+        var entry = System.Text.Json.JsonSerializer.Deserialize<DeviceCodeEntry>(entryJson)
+            ?? throw new DomainException("token", ErrorCodeType.INVALID_GRANT, "expired_token");
+
+        if (entry.Status == "pending")
+            throw new DomainException("token", ErrorCodeType.INVALID_GRANT, "authorization_pending");
+
+        if (entry.Status == "denied")
+        {
+            await _cache.RemoveAsync(DeviceCodeKey(deviceCode));
+            throw new DomainException("token", ErrorCodeType.INVALID_GRANT, "access_denied");
+        }
+
+        if (entry.Status != "approved" || !entry.UserId.HasValue)
+            throw new DomainException("token", ErrorCodeType.INVALID_GRANT, "authorization_pending");
+
+        // Code is approved — exchange for tokens and remove from cache.
+        await _cache.RemoveAsync(DeviceCodeKey(deviceCode));
+        await _cache.RemoveAsync(UserCodeKey(entry.UserCode));
+
+        var client = await _clientAuth.AuthenticateAsync(clientId ?? entry.ClientId, clientSecret);
+        var scopes = entry.Scopes;
+
+        var atLifetime  = _tokenService.GetAccessTokenLifetimeSeconds();
+        var accessToken = await _tokenService.GenerateAccessTokenAsync(
+            client.Id, entry.UserId, scopes, "urn:ietf:params:oauth:grant-type:device_code", ipAddress, userAgent, atLifetime);
+        (string refreshRaw, Guid _rtId) = await _tokenService.GenerateRefreshTokenAsync(
+            client.Id, entry.UserId, null, scopes,
+            lifetimeSeconds: 30 * 24 * 3600, ipAddress: ipAddress, userAgent: userAgent);
+
+        return new TokenResponse
+        {
+            AccessToken  = accessToken,
+            TokenType    = "Bearer",
+            ExpiresIn    = atLifetime,
+            RefreshToken = refreshRaw,
+            Scope        = string.Join(" ", scopes),
+        };
+    }
+
+    public async Task<DeviceAuthorizationResponse> DeviceAuthorizationAsync(
+        DeviceAuthorizationRequest request, string? clientId, string? clientSecret)
+    {
+        if (_cache == null)
+            throw new DomainException("device", "Device authorization requires a distributed cache.");
+
+        var resolvedClientId = clientId ?? request.ClientId
+            ?? throw new DomainException("device", "client_id is required.");
+
+        // Validate client credentials (confidential clients must supply secret).
+        var client = await _clientAuth.LoadAsync(resolvedClientId);
+        if (client == null)
+            throw new DomainException("device", ErrorCodeType.INVALID_CLIENT);
+
+        // Generate cryptographically random codes.
+        var deviceCode = GenerateDeviceCode();
+        var userCode   = GenerateUserCode();
+
+        var entry = System.Text.Json.JsonSerializer.Serialize(new DeviceCodeEntry
+        {
+            ClientId  = resolvedClientId,
+            UserCode  = userCode,
+            Scopes    = request.Scope?.Split(' ') ?? Array.Empty<string>(),
+            Status    = "pending",
+            UserId    = null,
+        });
+
+        var opts = new DistributedCacheEntryOptions
+        {
+            AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(DeviceCodeExpirySeconds)
+        };
+
+        // Store under both device_code key and user_code key so that both lookup directions work.
+        await _cache.SetStringAsync(DeviceCodeKey(deviceCode), entry, opts);
+        await _cache.SetStringAsync(UserCodeKey(userCode), deviceCode, opts);
+
+        var verificationUri = $"{_authIssuer.TrimEnd('/')}/device";
+
+        return new DeviceAuthorizationResponse
+        {
+            DeviceCode            = deviceCode,
+            UserCode              = userCode,
+            VerificationUri       = verificationUri,
+            VerificationUriComplete = $"{verificationUri}?user_code={Uri.EscapeDataString(userCode)}",
+            ExpiresIn             = DeviceCodeExpirySeconds,
+            Interval              = DeviceCodePollingInterval,
+        };
+    }
+
+    public async Task ApproveDeviceCodeAsync(string userCode, Guid userId, bool approved)
+    {
+        if (_cache == null)
+            throw new DomainException("device", "Device authorization requires a distributed cache.");
+
+        var deviceCode = await _cache.GetStringAsync(UserCodeKey(userCode))
+            ?? throw new DomainException("device", "Invalid or expired user_code.");
+
+        var entryJson = await _cache.GetStringAsync(DeviceCodeKey(deviceCode))
+            ?? throw new DomainException("device", "Device code not found.");
+
+        var entry = System.Text.Json.JsonSerializer.Deserialize<DeviceCodeEntry>(entryJson)
+            ?? throw new DomainException("device", "Corrupt device code entry.");
+
+        entry.Status = approved ? "approved" : "denied";
+        entry.UserId = approved ? userId : null;
+
+        // Keep same TTL semantics — refresh with a fixed 5-minute window for the device to pick up.
+        var opts = new DistributedCacheEntryOptions
+        {
+            AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(5)
+        };
+        await _cache.SetStringAsync(DeviceCodeKey(deviceCode),
+            System.Text.Json.JsonSerializer.Serialize(entry), opts);
+    }
+
+    private static string GenerateDeviceCode()
+    {
+        var bytes = System.Security.Cryptography.RandomNumberGenerator.GetBytes(32);
+        return Convert.ToBase64String(bytes)
+            .TrimEnd('=').Replace('+', '-').Replace('/', '_');
+    }
+
+    private static string GenerateUserCode()
+    {
+        // RFC 8628 §6.1: user codes should be short and easy to type.
+        // Format: XXXX-XXXX (uppercase alphanum, excluding confusable chars 0/O/I/1)
+        const string charset = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+        var bytes = System.Security.Cryptography.RandomNumberGenerator.GetBytes(8);
+        var chars = new char[9]; // 4 + dash + 4
+        for (int i = 0; i < 4; i++) chars[i]   = charset[bytes[i]   % charset.Length];
+        chars[4] = '-';
+        for (int i = 0; i < 4; i++) chars[5+i] = charset[bytes[4+i] % charset.Length];
+        return new string(chars);
+    }
+
+    private static string DeviceCodeKey(string deviceCode) => $"oauth2:device:{deviceCode}";
+    private static string UserCodeKey(string userCode)     => $"oauth2:usercode:{userCode.Replace("-", "").ToUpperInvariant()}";
+
+    private sealed class DeviceCodeEntry
+    {
+        public string ClientId { get; set; } = string.Empty;
+        public string UserCode { get; set; } = string.Empty;
+        public string[] Scopes { get; set; } = Array.Empty<string>();
+        public string Status { get; set; } = "pending"; // pending | approved | denied
+        public Guid? UserId { get; set; }
     }
 }

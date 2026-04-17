@@ -123,6 +123,77 @@ public class UserController : MonkoraControllerBase
         return Ok(result);
     }
 
-    // ─── Helpers ──────────────────────────────────────────────────────────────
+    // ─── Session management ───────────────────────────────────────────────────
 
+    /// <summary>
+    /// List all active sessions for a user.
+    /// </summary>
+    [HttpGet("{id:guid}/sessions")]
+    public async Task<IActionResult> GetSessions(Guid id)
+    {
+        var result = await _userService.GetSessionsAsync(id);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Revoke a specific session by session identifier.
+    /// </summary>
+    [HttpDelete("{id:guid}/sessions/{sessionId:guid}")]
+    public async Task<IActionResult> RevokeSession(Guid id, Guid sessionId)
+    {
+        var result = await _userService.RevokeSessionAsync(id, sessionId);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Revoke all active sessions for a user (force logout everywhere).
+    /// </summary>
+    [HttpDelete("{id:guid}/sessions")]
+    public async Task<IActionResult> RevokeAllSessions(Guid id)
+    {
+        var result = await _userService.RevokeAllSessionsAsync(id);
+        return Ok(result);
+    }
+
+    // ─── Device management ────────────────────────────────────────────────────
+
+    /// <summary>
+    /// List all registered devices for a user.
+    /// </summary>
+    [HttpGet("{id:guid}/devices")]
+    public async Task<IActionResult> GetDevices(Guid id)
+    {
+        var result = await _userService.GetDevicesAsync(id);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Mark a device as trusted (bypasses step-up auth challenges).
+    /// </summary>
+    [HttpPost("{id:guid}/devices/{deviceId:guid}/trust")]
+    public async Task<IActionResult> TrustDevice(Guid id, Guid deviceId)
+    {
+        var result = await _userService.TrustDeviceAsync(id, deviceId);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Block a device from authenticating.
+    /// </summary>
+    [HttpPost("{id:guid}/devices/{deviceId:guid}/block")]
+    public async Task<IActionResult> BlockDevice(Guid id, Guid deviceId)
+    {
+        var result = await _userService.BlockDeviceAsync(id, deviceId);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Revoke a device registration.
+    /// </summary>
+    [HttpDelete("{id:guid}/devices/{deviceId:guid}")]
+    public async Task<IActionResult> RevokeDevice(Guid id, Guid deviceId)
+    {
+        var result = await _userService.RevokeDeviceAsync(id, deviceId);
+        return Ok(result);
+    }
 }

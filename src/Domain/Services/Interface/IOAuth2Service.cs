@@ -49,4 +49,15 @@ public interface IOAuth2Service
     /// Returns <c>null</c> when no safe redirect target can be confirmed.
     /// </summary>
     Task<string?> EndSessionAsync(Guid? userId, string? idTokenHint, string? postLogoutRedirectUri, string? clientId = null);
+
+    /// <summary>
+    /// RFC 8628 §3.1 — Device Authorization Request.
+    /// Issues a device_code and user_code pair and returns polling parameters.
+    /// </summary>
+    Task<DeviceAuthorizationResponse> DeviceAuthorizationAsync(DeviceAuthorizationRequest request, string? clientId, string? clientSecret);
+
+    /// <summary>
+    /// RFC 8628 §3.4 — Approve or deny a pending device authorization (called from the user-agent verification flow).
+    /// </summary>
+    Task ApproveDeviceCodeAsync(string userCode, Guid userId, bool approved);
 }
