@@ -484,4 +484,78 @@ public class OAuth2Controller : MonkoraControllerBase
             return OAuthError("invalid_request", ex.ErrorMessage, StatusCodes.Status400BadRequest);
         }
     }
+
+    /// <summary>
+    /// RFC 8628 — Device User Code Verification Page.
+    /// Users navigate to this URL on a secondary device, enter their user_code, and approve or deny.
+    /// GET: returns a simple HTML form. POST (with user_code): redirects to the approval API.
+    /// For SPA/mobile deployments, replace this with a proper frontend page and use POST /oauth2/device_approval.
+    /// </summary>
+    [HttpGet("/device")]
+    [EnableRateLimiting("default")]
+    public IActionResult DeviceVerificationPage([FromQuery(Name = "user_code")] string? userCode)
+    {
+        var prefilledCode = userCode != null
+            ? $" value=\"{System.Net.WebUtility.HtmlEncode(userCode)}\""
+            : string.Empty;
+
+        var html = $"""
+            <!DOCTYPE html>
+            <html lang="en">
+            <head>
+                <meta charset="utf-8"/>
+                <meta name="viewport" content="width=device-width, initial-scale=1"/>
+                <title>Activate Device</title>
+            </head>
+            <body>
+                <h2>Activate Your Device</h2>
+                <p>Enter the code shown on your device to sign in.</p>
+                <form method="post" action="/device">
+                    <label for="user_code">Device Code</label><br/>
+                    <input id="user_code" name="user_code" type="text" maxlength="9" autocomplete="off"
+                           placeholder="XXXX-XXXX"{prefilledCode} required/><br/><br/>
+                    <button type="submit">Continue</button>
+                </form>
+            </body>
+            </html>
+            """;
+
+        return Content(html, "text/html");
+    }
+
+    /// <summary>
+    /// Handles the user_code form post from the device verification page.
+    /// Requires the user to be authenticated. Redirects unauthenticated users to login.
+    /// After login, the user is redirected back here with the user_code to approve or deny.
+    /// </summary>
+    [HttpPost("/device")]
+    [Authorize]
+    [EnableRateLimiting("auth")]
+    public async Task<IActionResult> DeviceVerificationSubmit([FromForm(Name = "user_code")] string userCode)
+    {
+        if (string.IsNullOrWhiteSpace(userCode))
+            return BadRequest("user_code is required.");
+
+        try
+        {
+            // Auto-approve when user has authenticated via this flow.
+            await _oauth2Service.ApproveDeviceCodeAsync(userCode.Trim().ToUpperInvariant(), GetUserId(), approved: true);
+            return Content("""
+                <!DOCTYPE html><html><body>
+                <h2>Device Activated</h2>
+                <p>Your device has been successfully activated. You may close this window.</p>
+                </body></html>
+                """, "text/html");
+        }
+        catch (DomainException ex)
+        {
+            return Content($"""
+                <!DOCTYPE html><html><body>
+                <h2>Activation Failed</h2>
+                <p>{System.Net.WebUtility.HtmlEncode(ex.ErrorMessage)}</p>
+                <a href="/device">Try again</a>
+                </body></html>
+                """, "text/html");
+        }
+    }
 }

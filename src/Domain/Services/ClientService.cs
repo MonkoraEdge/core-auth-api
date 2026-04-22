@@ -330,9 +330,11 @@ public class ClientService : IClientService
 
     private static void ValidateLifetimes(int accessTokenLifetime, int refreshTokenLifetime)
     {
-        if (accessTokenLifetime <= 0 || accessTokenLifetime > 86400)
+        // Maximum is capped at 900s (15 min) by TokenService.GetAccessTokenLifetimeSeconds.
+        // Reject values above the cap here so registered values match actual token lifetimes.
+        if (accessTokenLifetime <= 0 || accessTokenLifetime > 900)
             throw new DomainException("client",
-                "access_token_lifetime must be between 1 and 86400 seconds (24 h).");
+                "access_token_lifetime must be between 1 and 900 seconds (15 min). Longer lifetimes increase exposure; use refresh tokens for long-lived access.");
         if (refreshTokenLifetime <= 0)
             throw new DomainException("client",
                 "refresh_token_lifetime must be greater than 0 seconds.");

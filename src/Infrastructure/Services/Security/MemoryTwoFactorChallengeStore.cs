@@ -14,21 +14,21 @@ public sealed class MemoryTwoFactorChallengeStore : ITwoFactorChallengeStore
 
     public MemoryTwoFactorChallengeStore(IMemoryCache cache) => _cache = cache;
 
-    public Task StoreAsync(string token, Guid userId, TimeSpan expiry)
+    public Task StoreAsync(string token, Guid userId, string? clientId, TimeSpan expiry)
     {
-        _cache.Set(CacheKey(token), userId, expiry);
+        _cache.Set(CacheKey(token), new TwoFactorChallengeData(userId, clientId), expiry);
         return Task.CompletedTask;
     }
 
-    public Task<Guid?> ConsumeAsync(string token)
+    public Task<TwoFactorChallengeData?> ConsumeAsync(string token)
     {
         var key = CacheKey(token);
-        if (_cache.TryGetValue<Guid>(key, out var userId))
+        if (_cache.TryGetValue<TwoFactorChallengeData>(key, out var data))
         {
             _cache.Remove(key); // single-use: remove immediately on consume
-            return Task.FromResult<Guid?>(userId);
+            return Task.FromResult<TwoFactorChallengeData?>(data);
         }
-        return Task.FromResult<Guid?>(null);
+        return Task.FromResult<TwoFactorChallengeData?>(null);
     }
 
     private static string CacheKey(string token) => $"2fa_challenge:{token}";

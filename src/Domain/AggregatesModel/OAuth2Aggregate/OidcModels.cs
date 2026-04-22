@@ -66,6 +66,9 @@ public class OpenIdConfigurationResponse
 
     [JsonPropertyName("require_pkce")]
     public bool RequirePkce { get; set; }
+
+    [JsonPropertyName("device_authorization_endpoint")]
+    public string? DeviceAuthorizationEndpoint { get; set; }
 }
 
 public class JwksResponse

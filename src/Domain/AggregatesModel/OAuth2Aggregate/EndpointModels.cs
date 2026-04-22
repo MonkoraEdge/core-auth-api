@@ -69,6 +69,9 @@ public sealed class AuthorizationServerMetadataResponse
 
     [JsonPropertyName("code_challenge_methods_supported")]
     public string[] CodeChallengeMethodsSupported { get; set; } = Array.Empty<string>();
+
+    [JsonPropertyName("device_authorization_endpoint")]
+    public string? DeviceAuthorizationEndpoint { get; set; }
 }
 
 // ─── RFC 8628 — Device Authorization Grant ───────────────────────────────────

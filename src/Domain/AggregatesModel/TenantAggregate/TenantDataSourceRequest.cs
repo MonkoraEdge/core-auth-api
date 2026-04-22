@@ -6,7 +6,7 @@ namespace MonkoraEdge.Core.Auth.Domain.AggregatesModel.TenantAggregate
     {
         public string? Keyword { get; set; }
         public bool? IsActive { get; set; }
-        public int Page { get; set; } = 1;
+        public new int Page { get; set; } = 1;
         public int PageSize { get; set; } = 20;
     }
 }

@@ -47,7 +47,9 @@
         "AMQP_PASSWORD": "guest",
         "AMQP_SYNC_DELETE_ACCOUNT_EXCHANGE_KEY": "sync.delete.account",
         "HASH_SECRET_KEY": "",
-        "HASH_SECRET_IV": ""
+        "HASH_SECRET_IV": "",
+        "AES_ENCRYPTION_KEY": "dev-aes-key-change-in-production-32ch",
+        "OAUTH2_AUDIENCE": "https://api.example.com"
       }
     }
   }

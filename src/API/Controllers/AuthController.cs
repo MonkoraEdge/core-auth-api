@@ -201,7 +201,7 @@ public class AuthController : MonkoraControllerBase
     /// Finalize login when account is protected by 2FA challenge.
     /// </summary>
     [HttpPost("2fa/verify")]
-    [EnableRateLimiting("default")]
+    [EnableRateLimiting("auth")]
     public async Task<IActionResult> TwoFactorVerify([FromBody] TwoFactorLoginRequest request)
     {
         var result = await _authService.VerifyTwoFactorLoginAsync(

@@ -29,6 +29,7 @@ public class AuthService : IAuthService
     private readonly IPasswordService _passwordService;
     private readonly IAuthorizationClientRepository _clientRepo;
     private readonly ITwoFactorChallengeStore _twoFactorChallengeStore;
+    private readonly INotificationApi _notificationApi;
     private readonly int _signinFailedMinutes;
 
     // How long a 2FA challenge token is valid after the password step.
@@ -51,6 +52,7 @@ public class AuthService : IAuthService
         IPasswordService passwordService,
         IAuthorizationClientRepository clientRepo,
         ITwoFactorChallengeStore twoFactorChallengeStore,
+        INotificationApi notificationApi,
         int signinFailedMinutes = 15)
     {
         _unitOfWork = unitOfWork;
@@ -69,6 +71,7 @@ public class AuthService : IAuthService
         _passwordService = passwordService;
         _clientRepo = clientRepo;
         _twoFactorChallengeStore = twoFactorChallengeStore;
+        _notificationApi = notificationApi;
         _signinFailedMinutes = signinFailedMinutes;
     }
 
@@ -150,7 +153,7 @@ public class AuthService : IAuthService
                 // Store the challenge token so VerifyTwoFactorLoginAsync can resolve the userId
                 // without trusting a client-supplied identifier.
                 var challengeToken = _passwordService.GenerateSecureToken(32);
-                await _twoFactorChallengeStore.StoreAsync(challengeToken, user.Id, TwoFactorChallengeExpiry);
+                await _twoFactorChallengeStore.StoreAsync(challengeToken, user.Id, request.ClientId, TwoFactorChallengeExpiry);
 
                 return new LoginResponse
                 {
@@ -276,7 +279,7 @@ public class AuthService : IAuthService
             ExpiresAt = DateTime.UtcNow.AddHours(1)
         });
         await _unitOfWork.SaveChangesAsync();
-        // TODO: dispatch email notification with rawToken
+        await _notificationApi.SendPasswordResetAsync(user.Email, rawToken, user.DisplayName);
     }
 
     public async Task<UpdateResponse> ResetPasswordAsync(ResetPasswordRequest request)
@@ -368,7 +371,7 @@ public class AuthService : IAuthService
             ExpiresAt = DateTime.UtcNow.AddHours(24)
         });
         await _unitOfWork.SaveChangesAsync();
-        // TODO: dispatch email notification with rawToken
+        await _notificationApi.SendEmailVerificationAsync(email, rawToken);
     }
 
     public async Task<UpdateResponse> VerifyEmailAsync(VerifyEmailRequest request)
@@ -403,6 +406,9 @@ public class AuthService : IAuthService
         var user = await _userRepo.GetByIdAsync(userId);
         if (user == null) throw new DomainException("2fa_setup", "User not found.");
 
+        if (request.DeviceType == "SMS" || request.DeviceType == "EMAIL")
+            throw new DomainException("2fa_setup", $"2FA via {request.DeviceType} is not supported in this deployment. Please use TOTP.");
+
         var response = new TwoFactorSetupResponse { DeviceType = request.DeviceType };
 
         if (request.DeviceType == "TOTP")
@@ -429,11 +435,10 @@ public class AuthService : IAuthService
             await _unitOfWork.SaveChangesAsync();
         }
 
-        response.RecoveryCodes = _passwordService.GenerateRecoveryCodes(10);
         return response;
     }
 
-    public async Task<UpdateResponse> EnableTwoFactorAsync(Guid userId, TwoFactorVerifyRequest request)
+    public async Task<TwoFactorEnableResponse> EnableTwoFactorAsync(Guid userId, TwoFactorVerifyRequest request)
     {
         var settings = await _twoFactorRepo.GetByUserIdAsync(userId);
         var pending = settings.FirstOrDefault(s => s.DeviceType == request.DeviceType && !s.IsActive);
@@ -468,7 +473,7 @@ public class AuthService : IAuthService
         }
 
         await _unitOfWork.SaveChangesAsync();
-        return new UpdateResponse { Id = userId, IsSuccess = true, Message = "Two-factor authentication enabled." };
+        return new TwoFactorEnableResponse { IsSuccess = true, RecoveryCodes = codes };
     }
 
     public async Task<UpdateResponse> DisableTwoFactorAsync(Guid userId, TwoFactorDisableRequest request)
@@ -484,6 +489,14 @@ public class AuthService : IAuthService
             _twoFactorRepo.Update(s);
         }
 
+        // Invalidate all active recovery codes so they cannot be replayed if 2FA is re-enabled later.
+        var activeCodes = await _recoveryCodeRepo.GetActiveByUserIdAsync(userId);
+        foreach (var rc in activeCodes)
+        {
+            rc.IsActive = false;
+            _recoveryCodeRepo.Update(rc);
+        }
+
         await _unitOfWork.SaveChangesAsync();
         return new UpdateResponse { Id = userId, IsSuccess = true, Message = "Two-factor authentication disabled." };
     }
@@ -493,10 +506,10 @@ public class AuthService : IAuthService
     {
         // Validate the opaque token issued during the password-correct + 2FA-required step.
         // Consuming removes it — tokens are single-use with a 5-minute TTL.
-        var userId = await _twoFactorChallengeStore.ConsumeAsync(twoFactorToken)
+        var challenge = await _twoFactorChallengeStore.ConsumeAsync(twoFactorToken)
             ?? throw new DomainException("2fa_verify", "2FA session has expired or is invalid. Please sign in again.");
 
-        var settings = await _twoFactorRepo.GetByUserIdAsync(userId);
+        var settings = await _twoFactorRepo.GetByUserIdAsync(challenge.UserId);
         var setting = settings.FirstOrDefault(s => s.DeviceType == deviceType && s.IsActive);
         if (setting == null)
             throw new DomainException("2fa_verify", "2FA is not configured for this device type.");
@@ -507,10 +520,10 @@ public class AuthService : IAuthService
         if (!valid)
             throw new DomainException("2fa_verify", "Invalid 2FA code.");
 
-        var user = await _userRepo.GetByIdAsync(userId);
+        var user = await _userRepo.GetByIdAsync(challenge.UserId);
         if (user == null) throw new DomainException("2fa_verify", "User not found.");
 
-        return await IssueTokensAndFinalizeLoginAsync(user, null, ipAddress, userAgent);
+        return await IssueTokensAndFinalizeLoginAsync(user, challenge.ClientId, ipAddress, userAgent);
     }
 
     // ─── Private helpers ────────────────────────────────────────────────────────

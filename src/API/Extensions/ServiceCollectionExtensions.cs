@@ -140,12 +140,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ITokenService>(m =>
         {
             var opts = m.GetRequiredService<EnvironmentOptions>();
-            // OAUTH2_AUDIENCE separates the AS issuer from the resource server audience.
-            // Falls back to AUTH_ISSUER for backward compatibility with deployments that
-            // have not yet set this variable.
-            var audience = !string.IsNullOrWhiteSpace(opts.OAUTH2_AUDIENCE)
-                ? opts.OAUTH2_AUDIENCE
-                : opts.AUTH_ISSUER;
+            // OAUTH2_AUDIENCE must differ from AUTH_ISSUER to prevent audience confusion attacks (RFC 8707).
+            var audience = opts.OAUTH2_AUDIENCE;
 
             return new TokenService(
                 m.GetRequiredService<DomainIUnitOfWork>(),
@@ -170,9 +166,7 @@ public static class ServiceCollectionExtensions
         services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)
             .Configure<RsaSecurityKey>((jwtOptions, rsaKey) =>
             {
-                var audience = !string.IsNullOrWhiteSpace(options.OAUTH2_AUDIENCE)
-                    ? options.OAUTH2_AUDIENCE
-                    : options.AUTH_ISSUER;
+                var audience = options.OAUTH2_AUDIENCE;
 
                 jwtOptions.MapInboundClaims = false; // keep claims as-is; do not remap to WS-Security URIs
 
@@ -265,6 +259,7 @@ public static class ServiceCollectionExtensions
                 m.GetRequiredService<IPasswordService>(),
                 m.GetRequiredService<IAuthorizationClientRepository>(),
                 m.GetRequiredService<ITwoFactorChallengeStore>(),
+                m.GetRequiredService<INotificationApi>(),
                 opts.SIGNIN_FAILED_IN_MINUTES);
         });
 
@@ -300,13 +295,14 @@ public static class ServiceCollectionExtensions
             var opts = m.GetRequiredService<EnvironmentOptions>();
             return new SocialLoginService(
                 m.GetRequiredService<DomainIUnitOfWork>(),
+                m.GetRequiredService<IAuthorizationClientRepository>(),
                 m.GetRequiredService<IProviderRepository>(),
                 m.GetRequiredService<IUserRepository>(),
                 m.GetRequiredService<IUserExternalLoginRepository>(),
                 m.GetRequiredService<ITokenService>(),
                 m.GetRequiredService<IDistributedCache>(),
                 m.GetRequiredService<IHttpClientFactory>(),
-                opts.HASH_SECRET_KEY,
+                opts.AES_ENCRYPTION_KEY,
                 m.GetRequiredService<ILogger<SocialLoginService>>());
         });
 
@@ -351,7 +347,8 @@ public static class ServiceCollectionExtensions
 
         services.AddScoped<IProviderService>(m => new ProviderService(
             m.GetRequiredService<DomainIUnitOfWork>(),
-            m.GetRequiredService<IProviderRepository>()));
+            m.GetRequiredService<IProviderRepository>(),
+            m.GetRequiredService<EnvironmentOptions>().AES_ENCRYPTION_KEY));
 
         services.AddScoped<IAgreementService>(m => new AgreementService(
             m.GetRequiredService<DomainIUnitOfWork>(),

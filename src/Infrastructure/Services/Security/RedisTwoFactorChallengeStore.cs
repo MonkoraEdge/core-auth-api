@@ -17,14 +17,15 @@ public sealed class RedisTwoFactorChallengeStore : ITwoFactorChallengeStore
 
     public RedisTwoFactorChallengeStore(IDistributedCache cache) => _cache = cache;
 
-    public async Task StoreAsync(string token, Guid userId, TimeSpan expiry)
+    public async Task StoreAsync(string token, Guid userId, string? clientId, TimeSpan expiry)
     {
         var options = new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = expiry };
-        var value = Encoding.UTF8.GetBytes(userId.ToString());
+        // Format: "userId|clientId" — clientId may be an empty string for direct logins.
+        var value = Encoding.UTF8.GetBytes($"{userId}|{clientId ?? string.Empty}");
         await _cache.SetAsync(CacheKey(token), value, options);
     }
 
-    public async Task<Guid?> ConsumeAsync(string token)
+    public async Task<TwoFactorChallengeData?> ConsumeAsync(string token)
     {
         var key = CacheKey(token);
         var value = await _cache.GetAsync(key);
@@ -36,7 +37,11 @@ public sealed class RedisTwoFactorChallengeStore : ITwoFactorChallengeStore
         await _cache.RemoveAsync(key);
 
         var raw = Encoding.UTF8.GetString(value);
-        return Guid.TryParse(raw, out var userId) ? userId : null;
+        var parts = raw.Split('|', 2);
+        if (!Guid.TryParse(parts[0], out var userId))
+            return null;
+        var clientId = parts.Length > 1 && !string.IsNullOrEmpty(parts[1]) ? parts[1] : null;
+        return new TwoFactorChallengeData(userId, clientId);
     }
 
     private static string CacheKey(string token) => $"2fa_challenge:{token}";

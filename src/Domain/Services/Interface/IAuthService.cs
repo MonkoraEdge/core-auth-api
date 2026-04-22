@@ -33,7 +33,7 @@ public interface IAuthService
     Task<TwoFactorSetupResponse> SetupTwoFactorAsync(Guid userId, TwoFactorSetupRequest request);
 
     /// <summary>Enable 2FA after verifying the code</summary>
-    Task<UpdateResponse> EnableTwoFactorAsync(Guid userId, TwoFactorVerifyRequest request);
+    Task<TwoFactorEnableResponse> EnableTwoFactorAsync(Guid userId, TwoFactorVerifyRequest request);
 
     /// <summary>Disable 2FA</summary>
     Task<UpdateResponse> DisableTwoFactorAsync(Guid userId, TwoFactorDisableRequest request);

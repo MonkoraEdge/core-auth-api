@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Text;
 using MonkoraEdge.Core.Auth.Domain.AggregatesModel.AuthAggregate;
 using MonkoraEdge.Core.Auth.Domain.AggregatesModel.EntityAggregate;
+using MonkoraEdge.Core.Auth.Domain.AggregatesModel.AuthorizationAggregate.Interfaces;
 using MonkoraEdge.Core.Auth.Domain.AggregatesModel.ProviderAggregate.Interfaces;
 using MonkoraEdge.Core.Auth.Domain.AggregatesModel.UserAggregate.Interfaces;
 using MonkoraEdge.Core.Auth.Domain.Exceptions;
@@ -24,6 +25,7 @@ namespace MonkoraEdge.Core.Auth.Domain.Services;
 public class SocialLoginService : ISocialLoginService
 {
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IAuthorizationClientRepository _clientRepo;
     private readonly IProviderRepository _providerRepo;
     private readonly IUserRepository _userRepo;
     private readonly IUserExternalLoginRepository _externalLoginRepo;
@@ -37,6 +39,7 @@ public class SocialLoginService : ISocialLoginService
 
     public SocialLoginService(
         IUnitOfWork unitOfWork,
+        IAuthorizationClientRepository clientRepo,
         IProviderRepository providerRepo,
         IUserRepository userRepo,
         IUserExternalLoginRepository externalLoginRepo,
@@ -47,6 +50,7 @@ public class SocialLoginService : ISocialLoginService
         ILogger<SocialLoginService> logger)
     {
         _unitOfWork = unitOfWork;
+        _clientRepo = clientRepo;
         _providerRepo = providerRepo;
         _userRepo = userRepo;
         _externalLoginRepo = externalLoginRepo;
@@ -151,15 +155,18 @@ public class SocialLoginService : ISocialLoginService
         // Upsert external login record and resolve/create local user.
         (User localUser, UserExternalLogin externalLogin) = await UpsertExternalLoginAsync(provider, providerUser, providerToken);
 
-        // Issue local tokens (client_id = provider.Id, scopes = ["openid","profile","email"]).
+        // Issue local tokens. Resolve the dedicated "social_login" AuthorizationClient so
+        // tokens are linked to a real client UUID (required for revocation and auditing).
+        var socialClient = await _clientRepo.GetByClientIdAsync("social_login");
+        var socialClientId = socialClient?.Id ?? Guid.Empty;
         var scopes = new[] { "openid", "profile", "email" };
         var accessToken = await _tokenService.GenerateAccessTokenAsync(
-            provider.Id, localUser.Id, scopes, "social", ipAddress, userAgent);
+            socialClientId, localUser.Id, scopes, "social", ipAddress, userAgent);
         (string refreshRaw, Guid _rtId) = await _tokenService.GenerateRefreshTokenAsync(
-            provider.Id, localUser.Id, null, scopes, lifetimeSeconds: 30 * 24 * 3600,
+            socialClientId, localUser.Id, null, scopes, lifetimeSeconds: 30 * 24 * 3600,
             ipAddress: ipAddress, userAgent: userAgent);
         var idToken = await _tokenService.GenerateIdTokenAsync(
-            provider.ClientId ?? provider.Id.ToString(), localUser.Id, scopes, null, DateTime.UtcNow, accessToken);
+            socialClient?.ClientId ?? "social_login", localUser.Id, scopes, null, DateTime.UtcNow, accessToken);
 
         return new LoginResponse
         {

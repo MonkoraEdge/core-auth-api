@@ -82,11 +82,29 @@ public sealed class TokenCleanupService : BackgroundService
             .Where(t => !t.ExpiresAt.HasValue && t.RevokedAt < cutoff)
             .ExecuteDeleteAsync(ct);
 
-        if (accessDeleted + refreshDeleted + codeDeleted + revokedDeleted + revokedNullExpiryDeleted > 0)
+        // Login attempts older than retention window
+        var loginAttemptsDeleted = await db.LoginAttempts
+            .Where(a => a.CreatedAt < cutoff)
+            .ExecuteDeleteAsync(ct);
+
+        // Expired/used email verification tokens older than retention window
+        var emailVerifDeleted = await db.EmailVerifications
+            .Where(v => v.ExpiresAt < cutoff)
+            .ExecuteDeleteAsync(ct);
+
+        // Expired/used password reset tokens older than retention window
+        var passwordResetDeleted = await db.PasswordResets
+            .Where(r => r.ExpiresAt < cutoff)
+            .ExecuteDeleteAsync(ct);
+
+        if (accessDeleted + refreshDeleted + codeDeleted + revokedDeleted + revokedNullExpiryDeleted
+            + loginAttemptsDeleted + emailVerifDeleted + passwordResetDeleted > 0)
         {
             _logger.LogInformation(
-                "Token cleanup: removed {Access} access tokens, {Refresh} refresh tokens, {Codes} auth codes, {Revoked} revoked tokens ({RevokedNullExpiry} with no expiry).",
-                accessDeleted, refreshDeleted, codeDeleted, revokedDeleted, revokedNullExpiryDeleted);
+                "Token cleanup: removed {Access} access tokens, {Refresh} refresh tokens, {Codes} auth codes, " +
+                "{Revoked} revoked tokens, {LoginAttempts} login attempts, {EmailVerif} email verifications, {PasswordResets} password resets.",
+                accessDeleted, refreshDeleted, codeDeleted, revokedDeleted + revokedNullExpiryDeleted,
+                loginAttemptsDeleted, emailVerifDeleted, passwordResetDeleted);
         }
     }
 }

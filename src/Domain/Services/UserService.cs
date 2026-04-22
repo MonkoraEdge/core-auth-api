@@ -5,6 +5,7 @@ using MonkoraEdge.Core.Auth.Domain.AggregatesModel.RoleAggregate.Interfaces;
 using MonkoraEdge.Core.Auth.Domain.Exceptions;
 using MonkoraEdge.Core.Auth.Domain.Services.Interface;
 using MonkoraEdge.Core.DotNet.AggregatesModel.CommonAggregate;
+using System.Linq.Expressions;
 
 namespace MonkoraEdge.Core.Auth.Domain.Services;
 
@@ -48,23 +49,17 @@ public class UserService : IUserService
 
     public async Task<(List<UserResponse> Items, int Total)> GetListAsync(UserDataSourceRequest request)
     {
-        var query = _userRepo.ListAsync(u =>
+        Expression<Func<User, bool>> predicate = u =>
             (request.TenantId == null || u.TenantId == request.TenantId) &&
             (request.IsActive == null || u.IsActive == request.IsActive.Value) &&
             (request.Status == null || u.Status == request.Status) &&
             (string.IsNullOrEmpty(request.Search) ||
                 u.Email.Contains(request.Search) ||
                 (u.DisplayName != null && u.DisplayName.Contains(request.Search))) &&
-            u.DeletedAt == null);
+            u.DeletedAt == null;
 
-        var all = await query;
-        var sorted = request.SortDir?.ToLower() == "asc"
-            ? (IEnumerable<User>)all.OrderBy(u => u.CreatedAt)
-            : all.OrderByDescending(u => u.CreatedAt);
-
-        var total = sorted.Count();
-        var skip = (request.Page - 1) * request.PageSize;
-        var page = sorted.Skip(skip).Take(request.PageSize).ToList();
+        bool ascending = request.SortDir?.ToLower() == "asc";
+        var (page, total) = await _userRepo.GetPagedAsync(predicate, request.Page, request.PageSize, ascending);
 
         var responses = new List<UserResponse>();
         foreach (var u in page)

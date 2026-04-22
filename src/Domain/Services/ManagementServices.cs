@@ -12,6 +12,7 @@ using MonkoraEdge.Core.Auth.Domain.AggregatesModel.AgreementAggregate.Interfaces
 using MonkoraEdge.Core.Auth.Domain.Exceptions;
 using MonkoraEdge.Core.Auth.Domain.Services.Interface;
 using MonkoraEdge.Core.DotNet.AggregatesModel.CommonAggregate;
+using MonkoraEdge.Core.DotNet.Security.Encryption;
 using System.Security.Cryptography;
 
 namespace MonkoraEdge.Core.Auth.Domain.Services;
@@ -124,10 +125,21 @@ public class RoleService : IRoleService
     {
         var roles = await _roleRepo.GetByTenantIdAsync(tenantId);
         if (activeOnly == true) roles = roles.Where(r => r.IsActive).ToList();
-        var result = new List<RoleResponse>();
-        foreach (var r in roles)
-            result.Add(await MapToResponseAsync(r));
-        return result;
+
+        if (!roles.Any())
+            return new List<RoleResponse>();
+
+        // Batch-load all role-permissions and permissions in 2 queries to avoid N+1.
+        var roleIds = roles.Select(r => r.Id).ToList();
+        var allRolePerms = await _rolePermissionRepo.ListAsync(rp => roleIds.Contains(rp.RoleId));
+        var permIds = allRolePerms.Select(rp => rp.PermissionId).Distinct().ToList();
+        var allPerms = permIds.Any()
+            ? await _permissionRepo.ListAsync(p => permIds.Contains(p.Id))
+            : new List<Permission>();
+        var permById = allPerms.ToDictionary(p => p.Id);
+        var rpsByRole = allRolePerms.GroupBy(rp => rp.RoleId).ToDictionary(g => g.Key, g => g.ToList());
+
+        return roles.Select(r => MapToResponse(r, rpsByRole, permById)).ToList();
     }
 
     public async Task<RoleResponse> GetByIdAsync(Guid id)
@@ -221,6 +233,41 @@ public class RoleService : IRoleService
                     IsActive = perm.IsActive
                 });
         }
+
+        return new RoleResponse
+        {
+            Id = role.Id.ToString(),
+            TenantId = role.TenantId?.ToString(),
+            RoleCode = role.RoleCode,
+            RoleName = role.RoleCode,
+            IsActive = role.IsActive,
+            Permissions = permissions,
+            CreatedAt = role.CreatedAt
+        };
+    }
+
+    // Sync mapping used by GetListAsync with pre-loaded batch data to avoid N+1 queries.
+    private static RoleResponse MapToResponse(
+        Role role,
+        Dictionary<Guid, List<RolePermission>> rpsByRole,
+        Dictionary<Guid, Permission> permById)
+    {
+        var rolePerms = rpsByRole.TryGetValue(role.Id, out var rps) ? rps : new();
+        var permissions = rolePerms
+            .Where(rp => permById.ContainsKey(rp.PermissionId))
+            .Select(rp =>
+            {
+                var perm = permById[rp.PermissionId];
+                return new PermissionResponse
+                {
+                    Id = perm.Id.ToString(),
+                    PermissionCode = perm.PermissionCode,
+                    PermissionName = perm.PermissionCode,
+                    Resource = perm.Resource ?? string.Empty,
+                    Action = perm.Action ?? string.Empty,
+                    IsActive = perm.IsActive
+                };
+            }).ToList();
 
         return new RoleResponse
         {
@@ -449,11 +496,13 @@ public class ProviderService : IProviderService
 {
     private readonly IUnitOfWork _unitOfWork;
     private readonly IProviderRepository _providerRepo;
+    private readonly string _encryptionKey;
 
-    public ProviderService(IUnitOfWork unitOfWork, IProviderRepository providerRepo)
+    public ProviderService(IUnitOfWork unitOfWork, IProviderRepository providerRepo, string encryptionKey)
     {
         _unitOfWork = unitOfWork;
         _providerRepo = providerRepo;
+        _encryptionKey = encryptionKey;
     }
 
     public async Task<List<ProviderResponse>> GetAllAsync(bool? activeOnly = true)
@@ -483,6 +532,9 @@ public class ProviderService : IProviderService
             ProviderName = request.ProviderName,
             Protocol = request.Protocol,
             ClientId = request.ClientId,
+            ClientSecretEncrypt = !string.IsNullOrEmpty(request.ClientSecret)
+                ? AesHelper.Encrypt(request.ClientSecret, _encryptionKey)
+                : null,
             Scopes = request.Scopes,
             Issuer = request.Issuer,
             AuthorizationUrl = request.AuthorizationUrl,
@@ -507,6 +559,8 @@ public class ProviderService : IProviderService
 
         if (request.ProviderName != null) provider.ProviderName = request.ProviderName;
         if (request.ClientId != null) provider.ClientId = request.ClientId;
+        if (request.ClientSecret != null)
+            provider.ClientSecretEncrypt = AesHelper.Encrypt(request.ClientSecret, _encryptionKey);
         if (request.Scopes != null) provider.Scopes = request.Scopes;
         if (request.AuthorizationUrl != null) provider.AuthorizationUrl = request.AuthorizationUrl;
         if (request.TokenUrl != null) provider.TokenUrl = request.TokenUrl;
@@ -572,13 +626,21 @@ public class AgreementService : IAgreementService
 
     public async Task<List<AgreementResponse>> GetListAsync(Guid? tenantId, bool? activeOnly = true)
     {
-        var agreements = tenantId.HasValue
-            ? await _agreementRepo.GetActiveByTenantAsync(tenantId.Value)
-            : await _agreementRepo.GetActiveByTenantAsync(null);
-
-        var list = agreements.AsEnumerable();
-        if (activeOnly == true) list = list.Where(a => a.IsActive);
-        return list.Select(MapToResponse).ToList();
+        IEnumerable<Agreement> agreements;
+        if (activeOnly == true)
+        {
+            // Fetch only active records — repository method handles the active filter.
+            agreements = await _agreementRepo.GetActiveByTenantAsync(tenantId);
+        }
+        else
+        {
+            // Fetch all records, then optionally filter by tenantId in memory (small dataset expected).
+            var all = await _agreementRepo.ListAsync();
+            agreements = tenantId.HasValue
+                ? all.Where(a => a.TenantId == tenantId.Value)
+                : all;
+        }
+        return agreements.Select(MapToResponse).ToList();
     }
 
     public async Task<AgreementResponse> GetByIdAsync(Guid id)

@@ -29,6 +29,7 @@ public class WellKnownController : ControllerBase
     public IActionResult GetOpenIdConfiguration()
     {
         var baseUrl = $"{Request.Scheme}://{Request.Host}";
+        Response.Headers[Microsoft.Net.Http.Headers.HeaderNames.CacheControl] = "public, max-age=3600";
         return Ok(_oauth2Service.GetOpenIdConfiguration(baseUrl));
     }
 
@@ -40,6 +41,7 @@ public class WellKnownController : ControllerBase
     public IActionResult GetAuthorizationServerMetadata()
     {
         var baseUrl = $"{Request.Scheme}://{Request.Host}";
+        Response.Headers[Microsoft.Net.Http.Headers.HeaderNames.CacheControl] = "public, max-age=3600";
         return Ok(_oauth2Service.GetAuthorizationServerMetadata(baseUrl));
     }
 

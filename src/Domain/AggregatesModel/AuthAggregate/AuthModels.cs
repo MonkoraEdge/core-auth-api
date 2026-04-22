@@ -129,7 +129,15 @@ public class TwoFactorSetupResponse
     public string? TotpUri { get; set; }
     public string? QrCodeBase64 { get; set; }
     public string? PhoneNumber { get; set; }
-    public string[]? RecoveryCodes { get; set; }
+}
+
+public class TwoFactorEnableResponse
+{
+    public bool IsSuccess { get; set; }
+    /// <summary>
+    /// One-time recovery codes. Show these to the user exactly once — they are not stored in plain text.
+    /// </summary>
+    public string[] RecoveryCodes { get; set; } = Array.Empty<string>();
 }
 
 public class TwoFactorVerifyRequest

@@ -604,7 +604,7 @@ public class OAuth2Service : IOAuth2Service
             ResponseTypesSupported = new[] { "code" },
             // OIDC Core §3.1.2.1: only 'query' is supported for code flow
             ResponseModesSupported = new[] { "query" },
-            GrantTypesSupported = new[] { "authorization_code", "client_credentials", "refresh_token" },
+            GrantTypesSupported = new[] { "authorization_code", "client_credentials", "refresh_token", "urn:ietf:params:oauth:grant-type:device_code" },
             SubjectTypesSupported = new[] { "public" },
             IdTokenSigningAlgValuesSupported = new[] { "RS256" },
             // 'none' is required for PUBLIC clients (OAuth2.1 §2.1)
@@ -626,7 +626,8 @@ public class OAuth2Service : IOAuth2Service
             CodeChallengeMethodsSupported = new[] { "S256" },
             // PKCE is mandatory on this server for all public clients
             RequirePkce = true,
-            RequestParameterSupported = false
+            RequestParameterSupported = false,
+            DeviceAuthorizationEndpoint = $"{baseUrl}/oauth2/device_authorization"
         };
     }
 
@@ -641,10 +642,11 @@ public class OAuth2Service : IOAuth2Service
             RevocationEndpoint = $"{baseUrl}/revoke",
             IntrospectionEndpoint = $"{baseUrl}/introspect",
             ResponseTypesSupported = new[] { "code" },
-            GrantTypesSupported = new[] { "authorization_code", "client_credentials", "refresh_token" },
+            GrantTypesSupported = new[] { "authorization_code", "client_credentials", "refresh_token", "urn:ietf:params:oauth:grant-type:device_code" },
             // 'none' is required for PUBLIC clients (OAuth2.1 §2.1)
             TokenEndpointAuthMethodsSupported = new[] { "none", "client_secret_basic", "client_secret_post" },
-            CodeChallengeMethodsSupported = new[] { "S256" }
+            CodeChallengeMethodsSupported = new[] { "S256" },
+            DeviceAuthorizationEndpoint = $"{baseUrl}/oauth2/device_authorization"
         };
     }
 
@@ -749,6 +751,11 @@ public class OAuth2Service : IOAuth2Service
         await _cache.RemoveAsync(UserCodeKey(entry.UserCode));
 
         var client = await _clientAuth.AuthenticateAsync(clientId ?? entry.ClientId, clientSecret);
+
+        // C-4: Enforce AllowedGrantTypes for device code grant.
+        if (!client.IsGrantTypeAllowed("DEVICE_CODE"))
+            throw new DomainException("token", ErrorCodeType.UNAUTHORIZED_CLIENT, "Client is not authorized to use the device code grant.");
+
         var scopes = entry.Scopes;
 
         var atLifetime  = _tokenService.GetAccessTokenLifetimeSeconds();
@@ -757,6 +764,21 @@ public class OAuth2Service : IOAuth2Service
         (string refreshRaw, Guid _rtId) = await _tokenService.GenerateRefreshTokenAsync(
             client.Id, entry.UserId, null, scopes,
             lifetimeSeconds: 30 * 24 * 3600, ipAddress: ipAddress, userAgent: userAgent);
+
+        // M-10: Audit log for device code token issuance.
+        _auditLogRepo.Insert(new AuditLog
+        {
+            ClientId = client.Id,
+            UserId = entry.UserId,
+            ActorType = "device",
+            Action = "token_issued",
+            EntityName = "AccessToken",
+            IpAddress = ipAddress,
+            UserAgent = userAgent,
+            Result = "success",
+            Metadata = $"{{\"grant\":\"urn:ietf:params:oauth:grant-type:device_code\",\"scopes\":\"{string.Join(" ", scopes)}\"}}"
+        });
+        await _unitOfWork.SaveChangesAsync();
 
         return new TokenResponse
         {
@@ -777,10 +799,20 @@ public class OAuth2Service : IOAuth2Service
         var resolvedClientId = clientId ?? request.ClientId
             ?? throw new DomainException("device", "client_id is required.");
 
-        // Validate client credentials (confidential clients must supply secret).
-        var client = await _clientAuth.LoadAsync(resolvedClientId);
-        if (client == null)
-            throw new DomainException("device", ErrorCodeType.INVALID_CLIENT);
+        // C-5: Authenticate client (confidential clients must supply their secret per RFC 8628 §3.1).
+        var client = await _clientAuth.AuthenticateAsync(resolvedClientId, clientSecret);
+
+        // C-6: Validate requested scopes against client's registered scopes.
+        var allowedScopes = await _clientAuth.GetAllowedScopeNamesAsync(client.Id);
+        var requestedScopes = request.Scope?.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            ?? Array.Empty<string>();
+        var invalidScopes = requestedScopes.Where(s => !allowedScopes.Contains(s)).ToArray();
+        if (invalidScopes.Length > 0)
+            throw new DomainException("device", ErrorCodeType.INVALID_SCOPE,
+                $"Requested scopes not allowed for this client: {string.Join(" ", invalidScopes)}");
+        var grantedScopes = requestedScopes.Length > 0
+            ? requestedScopes
+            : allowedScopes.Where(s => s != "offline_access").ToArray();
 
         // Generate cryptographically random codes.
         var deviceCode = GenerateDeviceCode();
@@ -790,7 +822,7 @@ public class OAuth2Service : IOAuth2Service
         {
             ClientId  = resolvedClientId,
             UserCode  = userCode,
-            Scopes    = request.Scope?.Split(' ') ?? Array.Empty<string>(),
+            Scopes    = grantedScopes,
             Status    = "pending",
             UserId    = null,
         });

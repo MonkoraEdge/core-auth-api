@@ -293,8 +293,22 @@ public class TokenService : ITokenService
         var activeRefreshTokens = await _refreshTokenRepo.GetActiveByUserIdAsync(userId);
         foreach (var token in activeRefreshTokens)
         {
+            if (sessionId.HasValue && token.SessionId != sessionId)
+                continue;
+
             token.RevokedAt = DateTime.UtcNow;
             _refreshTokenRepo.Update(token);
+
+            _revokedTokenRepo.Insert(new RevokedToken
+            {
+                TokenHash = token.RefreshTokenHash,
+                TokenType = "refresh_token",
+                ClientId = token.ClientId,
+                UserId = userId,
+                Reason = reason,
+                RevokedAt = DateTime.UtcNow,
+                ExpiresAt = token.ExpiresAt
+            });
         }
 
         await _unitOfWork.SaveChangesAsync();

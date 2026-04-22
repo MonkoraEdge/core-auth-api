@@ -47,12 +47,14 @@ public abstract class MonkoraControllerBase : ControllerBase
     // ─── Request-context helpers ───────────────────────────────────────────────
 
     /// <summary>
-    /// Resolve the caller IP address, respecting the <c>X-Forwarded-For</c> reverse-proxy header.
+    /// Resolve the caller IP address from the TCP connection's remote endpoint.
+    /// NOTE: Deploy behind a reverse proxy that sets RemoteIpAddress correctly
+    /// (e.g., Nginx with proxy_protocol, or Kestrel with UseForwardedHeaders).
+    /// X-Forwarded-For is intentionally NOT used here — it is untrusted user input
+    /// and must never be used for security decisions (rate limiting, audit logs).
     /// </summary>
     protected string GetIpAddress() =>
-        HttpContext.Connection.RemoteIpAddress?.ToString()
-        ?? Request.Headers["X-Forwarded-For"].FirstOrDefault()
-        ?? "unknown";
+        HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
 
     /// <summary>
     /// Resolve the caller User-Agent string for security telemetry.
