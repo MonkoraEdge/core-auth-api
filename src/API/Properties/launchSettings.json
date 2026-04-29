@@ -14,7 +14,7 @@
         "BP_API_BASIC_AUTHENTICATION_PASSWORD": "",
         "BP_API_BASIC_AUTHENTICATION_USERNAME": "",
         "BP_API_ENDPOINT": "http://localhost:5002/",
-        "POSTGRES_CONNECTIONSTRING": "",
+        "POSTGRES_CONNECTIONSTRING": "Host=localhost; Port=5432; User ID=postgres; Password=<dev-password>; Database=auth-dev; Pooling=true; Connection Idle Lifetime=10; Minimum Pool Size=2; Maximum Pool Size=50;",
         "REDIS_CONNECTIONSTRING": "",
         "GOOGLE_APPLICATION_CREDENTIALS_AUTH": "",
         "AUTH_ISSUER": "http://localhost:5003",
