@@ -21,10 +21,12 @@ namespace MonkoraEdge.Core.Auth.API.Controllers;
 public class OAuth2Controller : MonkoraControllerBase
 {
     private readonly IOAuth2Service _oauth2Service;
+    private readonly IDPoPService _dpopService;
 
-    public OAuth2Controller(IOAuth2Service oauth2Service)
+    public OAuth2Controller(IOAuth2Service oauth2Service, IDPoPService dpopService)
     {
         _oauth2Service = oauth2Service;
+        _dpopService = dpopService;
     }
 
     /// <summary>
@@ -97,10 +99,26 @@ public class OAuth2Controller : MonkoraControllerBase
         var request = MapFormToTokenRequest(formRequest);
         ExtractClientCredentials(out var clientId, out var clientSecret, request);
 
+        // RFC 9449: if the client attaches a DPoP proof, validate it and bind the issued token.
+        string? dpopJkt = null;
+        var dpopHeader = Request.Headers["DPoP"].FirstOrDefault();
+        if (!string.IsNullOrEmpty(dpopHeader))
+        {
+            try
+            {
+                var tokenUrl = $"{Request.Scheme}://{Request.Host}{Request.Path}";
+                dpopJkt = await _dpopService.ValidateProofAsync(dpopHeader, "POST", tokenUrl);
+            }
+            catch (DomainException ex)
+            {
+                return OAuthError("invalid_dpop_proof", ex.ErrorMessage, StatusCodes.Status400BadRequest);
+            }
+        }
+
         try
         {
             var response = await _oauth2Service.ProcessTokenRequestAsync(
-                request, clientId, clientSecret, GetIpAddress(), GetUserAgent());
+                request, clientId, clientSecret, GetIpAddress(), GetUserAgent(), dpopJkt);
 
             ApplyNoStoreHeaders();
             return Ok(response);
@@ -258,6 +276,53 @@ public class OAuth2Controller : MonkoraControllerBase
         return Ok(new { message = "Session ended." });
     }
 
+    /// <summary>
+    /// RFC 9126 Pushed Authorization Request endpoint.
+    /// Clients POST authorize parameters here and receive a short-lived request_uri to pass to /authorize.
+    /// </summary>
+    [HttpPost("par")]
+    [Consumes("application/x-www-form-urlencoded")]
+    [Produces("application/json")]
+    [EnableRateLimiting("auth")]
+    public async Task<IActionResult> PushedAuthorizationRequest([FromForm] PushedAuthorizationFormRequest form)
+    {
+        ExtractClientCredentials(out var clientId, out var clientSecret, null);
+        // RFC 9126 §2.1: client_id from body is preferred; header takes precedence if both present.
+        if (string.IsNullOrEmpty(clientId)) clientId = form.ClientId;
+
+        try
+        {
+            var response = await _oauth2Service.PushAuthorizationRequestAsync(form, clientId, clientSecret);
+            ApplyNoStoreHeaders();
+            return StatusCode(StatusCodes.Status201Created, response);
+        }
+        catch (DomainException ex)
+        {
+            return OAuthError("invalid_request", ex.ErrorMessage, StatusCodes.Status400BadRequest);
+        }
+    }
+
+    /// <summary>
+    /// RFC 7591 Dynamic Client Registration endpoint.
+    /// Registers a new OAuth client and returns credentials. No authentication required.
+    /// </summary>
+    [HttpPost("register")]
+    [Produces("application/json")]
+    [EnableRateLimiting("default")]
+    [AllowAnonymous]
+    public async Task<IActionResult> RegisterClient([FromBody] DynamicClientRegistrationRequest request)
+    {
+        try
+        {
+            var response = await _oauth2Service.RegisterClientDynamicallyAsync(request);
+            return StatusCode(StatusCodes.Status201Created, response);
+        }
+        catch (DomainException ex)
+        {
+            return BadRequest(new { error = "invalid_client_metadata", error_description = ex.ErrorMessage });
+        }
+    }
+
     // ─── Helpers ────────────────────────────────────────────────────────────────
 
 
@@ -348,7 +413,14 @@ public class OAuth2Controller : MonkoraControllerBase
         RefreshToken = f.RefreshToken,
         Scope = f.Scope,
         ClientId = f.ClientId,
-        ClientSecret = f.ClientSecret
+        ClientSecret = f.ClientSecret,
+        SubjectToken = f.SubjectToken,
+        SubjectTokenType = f.SubjectTokenType,
+        ActorToken = f.ActorToken,
+        ActorTokenType = f.ActorTokenType,
+        RequestedTokenType = f.RequestedTokenType,
+        Audience = f.Audience,
+        Resource = f.Resource
     };
 
     private IActionResult MapTokenDomainException(DomainException ex)

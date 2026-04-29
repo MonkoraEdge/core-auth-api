@@ -39,7 +39,8 @@ public interface IPermissionService
 public interface IApiKeyService
 {
     Task<List<ApiKeyResponse>> GetByUserIdAsync(Guid userId);
-    Task<List<ApiKeyResponse>> GetByClientIdAsync(Guid clientId);
+    /// <summary>List API keys for a client, scoped to the requesting user to prevent cross-user data exposure.</summary>
+    Task<List<ApiKeyResponse>> GetByClientIdAsync(Guid clientId, Guid requestingUserId);
     Task<ApiKeyResponse> GetByIdAsync(Guid id);
     Task<ApiKeyCreatedResponse> CreateAsync(ApiKeyCreateRequest request, string? createdBy);
     Task<DeleteResponse> RevokeAsync(Guid id, string? revokedBy);
@@ -64,4 +65,6 @@ public interface IAgreementService
     Task<CreateResponse> CreateAsync(AgreementCreateRequest request, string? createdBy);
     Task<UpdateResponse> UpdateAsync(Guid id, AgreementUpdateRequest request, string? updatedBy);
     Task<DeleteResponse> DeleteAsync(Guid id, string? deletedBy);
+    /// <summary>Record a user's acceptance of a legal agreement. Idempotent — safe to call multiple times.</summary>
+    Task<CreateResponse> AcceptAsync(Guid agreementId, Guid userId, AgreementAcceptRequest request, string? ipAddress, string? userAgent);
 }

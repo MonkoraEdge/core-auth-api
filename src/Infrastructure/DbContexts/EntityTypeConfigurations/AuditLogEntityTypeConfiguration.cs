@@ -13,5 +13,10 @@ public class AuditLogEntityTypeConfiguration : IEntityTypeConfiguration<AuditLog
 
         builder.Property(m => m.Metadata).HasColumnType("jsonb");
         builder.Property(m => m.IpAddress).HasColumnName("ip_address");
+
+        // Composite index for GetByUserIdAsync with descending CreatedAt (audit history queries).
+        builder.HasIndex(m => new { m.UserId, m.CreatedAt });
+        // Composite index for GetByEntityAsync (entity-scoped audit trail).
+        builder.HasIndex(m => new { m.EntityName, m.EntityId, m.CreatedAt });
     }
 }

@@ -27,9 +27,6 @@ public class EnvironmentOptions
     public string? GOOGLE_OAUTH2_API_AUTH_ENDPOINT { get; init; }
     public string? GOOGLE_APPLICATION_CREDENTIALS_AUTH { get; init; }
 
-    // Argon2 — currently unused (BCrypt is in use). Remove when confirmed obsolete.
-    public string? ARGON2_SECRET { get; init; }
-
     [Required] public string NOTIFICATION_ENDPOINT { get; init; }
     [Required] public string BP_API_ENDPOINT { get; init; }
     [Required] public int SIGNIN_FAILED_IN_MINUTES { get; init; }

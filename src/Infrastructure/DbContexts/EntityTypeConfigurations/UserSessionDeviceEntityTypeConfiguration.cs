@@ -13,5 +13,8 @@ public class UserSessionDeviceEntityTypeConfiguration : IEntityTypeConfiguration
 
         builder.Property(m => m.DeviceType).HasDefaultValue("UNKNOWN");
         builder.Property(m => m.IpAddress).HasColumnName("ip_address");
+
+        // Index for GetByUserIdAsync (device management endpoints).
+        builder.HasIndex(m => m.UserId);
     }
 }

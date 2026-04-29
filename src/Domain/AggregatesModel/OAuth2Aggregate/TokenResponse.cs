@@ -21,4 +21,9 @@ public class TokenResponse
 
     [JsonPropertyName("scope")]
     public string? Scope { get; set; }
+
+    /// <summary>RFC 8693 §2.2.1 — present only for token exchange responses.</summary>
+    [JsonPropertyName("issued_token_type")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? IssuedTokenType { get; set; }
 }

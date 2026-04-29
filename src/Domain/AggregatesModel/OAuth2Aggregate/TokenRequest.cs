@@ -10,4 +10,12 @@ public class TokenRequest
     public string? Scope { get; set; }
     public string? ClientId { get; set; }          // public clients
     public string? ClientSecret { get; set; }      // confidential clients (form post)
+    // RFC 8693 — Token Exchange
+    public string? SubjectToken { get; set; }
+    public string? SubjectTokenType { get; set; }   // urn:ietf:params:oauth:token-type:access_token etc.
+    public string? ActorToken { get; set; }
+    public string? ActorTokenType { get; set; }
+    public string? RequestedTokenType { get; set; } // desired output token type
+    public string? Audience { get; set; }
+    public string? Resource { get; set; }
 }

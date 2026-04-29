@@ -17,16 +17,16 @@ public interface IOAuth2Service
     Task<string> IssueAuthorizationCodeAsync(AuthorizeRequest request, Guid userId, bool rememberConsent);
 
     /// <summary>Dispatch token endpoint grant processing with OAuth-compliant validation.</summary>
-    Task<TokenResponse> ProcessTokenRequestAsync(TokenRequest request, string? clientId, string? clientSecret, string? ipAddress, string? userAgent);
+    Task<TokenResponse> ProcessTokenRequestAsync(TokenRequest request, string? clientId, string? clientSecret, string? ipAddress, string? userAgent, string? dpopJkt = null);
 
     /// <summary>Exchange authorization code for tokens</summary>
-    Task<TokenResponse> ExchangeAuthorizationCodeAsync(TokenRequest request, string? clientId, string? clientSecret, string? ipAddress, string? userAgent);
+    Task<TokenResponse> ExchangeAuthorizationCodeAsync(TokenRequest request, string? clientId, string? clientSecret, string? ipAddress, string? userAgent, string? dpopJkt = null);
 
     /// <summary>Issue tokens for client_credentials grant</summary>
-    Task<TokenResponse> ClientCredentialsGrantAsync(TokenRequest request, string clientId, string? clientSecret, string? ipAddress, string? userAgent);
+    Task<TokenResponse> ClientCredentialsGrantAsync(TokenRequest request, string clientId, string? clientSecret, string? ipAddress, string? userAgent, string? dpopJkt = null);
 
     /// <summary>Refresh access token</summary>
-    Task<TokenResponse> RefreshTokenGrantAsync(TokenRequest request, string? clientId, string? clientSecret, string? ipAddress, string? userAgent);
+    Task<TokenResponse> RefreshTokenGrantAsync(TokenRequest request, string? clientId, string? clientSecret, string? ipAddress, string? userAgent, string? dpopJkt = null);
 
     /// <summary>Revoke a token (RFC 7009)</summary>
     Task RevokeAsync(RevocationRequest request, string clientId, string? clientSecret);
@@ -60,4 +60,23 @@ public interface IOAuth2Service
     /// RFC 8628 §3.4 — Approve or deny a pending device authorization (called from the user-agent verification flow).
     /// </summary>
     Task ApproveDeviceCodeAsync(string userCode, Guid userId, bool approved);
+
+    /// <summary>
+    /// RFC 9126 — Push authorization request parameters, store them in cache, and return a request_uri.
+    /// The request_uri can then be passed to the authorize endpoint instead of inline parameters.
+    /// </summary>
+    Task<PushedAuthorizationResponse> PushAuthorizationRequestAsync(
+        PushedAuthorizationFormRequest form, string? clientId, string? clientSecret);
+
+    /// <summary>
+    /// RFC 7591 — Dynamic client registration. Creates a new OAuth client from the supplied metadata
+    /// and returns the assigned credentials.
+    /// </summary>
+    Task<DynamicClientRegistrationResponse> RegisterClientDynamicallyAsync(DynamicClientRegistrationRequest request);
+
+    /// <summary>
+    /// RFC 8693 — Token Exchange grant. Validates the subject_token and issues a new access token
+    /// (optionally scoped to a specific audience) with an embedded act claim.
+    /// </summary>
+    Task<TokenResponse> TokenExchangeGrantAsync(TokenRequest request, string? clientId, string? clientSecret, string? ipAddress, string? userAgent, string? dpopJkt = null);
 }

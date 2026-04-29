@@ -12,5 +12,10 @@ public class UserSessionEntityTypeConfiguration : IEntityTypeConfiguration<UserS
         builder.HasKey(m => m.Id);
 
         builder.Property(m => m.IpAddress).HasColumnName("ip_address");
+
+        // Composite index for GetActiveByUserId + expiry filtering (called on every login and logout).
+        builder.HasIndex(m => new { m.UserId, m.IsActive, m.ExpiresAt });
+        // Separate index for ClientId queries (revoke-all-for-client).
+        builder.HasIndex(m => m.ClientId);
     }
 }

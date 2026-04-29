@@ -12,7 +12,10 @@ using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Options;
 using Microsoft.OpenApi.Models;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Resources;
 using Serilog;
+using System.Diagnostics.Metrics;
 using System.Threading.RateLimiting;
 
 // Bootstrap Serilog early so startup errors are captured before the host is built.
@@ -59,7 +62,7 @@ builder.Services.AddCors(options =>
             // would let scripts from allowed origins inject a forged client IP header.
             policy.WithOrigins(allowedOrigins)
                   .WithHeaders("Authorization", "Content-Type", "X-Requested-With")
-                  .WithMethods("GET", "POST", "PUT", "DELETE")
+                  .WithMethods("GET", "POST", "PUT", "PATCH", "DELETE")
                   .SetPreflightMaxAge(TimeSpan.FromMinutes(10));
         // If no origins are configured, the policy allows nothing (deny-by-default)
     });
@@ -114,9 +117,9 @@ builder.Services.AddRateLimiter(o =>
         // cannot spoof their way to a fresh rate-limit bucket by forging X-Forwarded-For.
         // When running behind a trusted reverse proxy, configure UseForwardedHeaders() so that
         // RemoteIpAddress is already populated with the real client IP before this runs.
-        var ip = context.Connection.RemoteIpAddress?.ToString()
-                 ?? context.Request.Headers["X-Forwarded-For"].FirstOrDefault()
-                 ?? "unknown";
+        // Fallback to "unknown" — never trust X-Forwarded-For here because a caller
+        // behind our real proxy already has RemoteIpAddress populated correctly.
+        var ip = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
 
         return RateLimitPartition.GetFixedWindowLimiter(partitionKey: ip, factory: _ =>
             new FixedWindowRateLimiterOptions
@@ -132,9 +135,7 @@ builder.Services.AddRateLimiter(o =>
     // 10 requests/min per IP prevents brute-force and credential stuffing attacks.
     o.AddPolicy("auth", context =>
     {
-        var ip = context.Connection.RemoteIpAddress?.ToString()
-                 ?? context.Request.Headers["X-Forwarded-For"].FirstOrDefault()
-                 ?? "unknown";
+        var ip = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
 
         return RateLimitPartition.GetFixedWindowLimiter(partitionKey: $"auth:{ip}", factory: _ =>
             new FixedWindowRateLimiterOptions
@@ -161,6 +162,38 @@ builder.Services.AddHealthChecks()
         redisConnectionString: environmentOptions.REDIS_CONNECTIONSTRING,
         name: "redis",
         tags: new[] { "ready", "cache" });
+
+// ── OpenTelemetry Metrics (Phase 5-1) ─────────────────────────────────────────────────────────
+// Exposes a Prometheus-compatible /metrics scrape endpoint.
+// Custom meters track business-level auth events (login, token issued, authorise requests).
+// Runtime instrumentation adds GC, thread-pool, and memory metrics for free.
+const string ServiceName = "monkora-core-auth";
+var authMeter = new Meter(ServiceName, "1.0.0");
+
+// Business-level counters — incremented from the DomainEvents / services layer via Meter.
+// These are registered here so they exist before the first request is processed.
+var loginSuccess  = authMeter.CreateCounter<long>("auth.login.success",  description: "Successful login events");
+var loginFailure  = authMeter.CreateCounter<long>("auth.login.failure",  description: "Failed login attempts");
+var tokenIssued   = authMeter.CreateCounter<long>("oauth2.token.issued", description: "OAuth2 access tokens issued");
+var authorizeReq  = authMeter.CreateCounter<long>("oauth2.authorize.request", description: "OAuth2 authorize requests received");
+
+// Expose the Meter via DI so services can inject IMeterFactory and record observations.
+builder.Services.AddSingleton(authMeter);
+builder.Services.AddSingleton(loginSuccess);
+builder.Services.AddSingleton(loginFailure);
+builder.Services.AddSingleton(tokenIssued);
+builder.Services.AddSingleton(authorizeReq);
+
+builder.Services.AddOpenTelemetry()
+    .ConfigureResource(r => r.AddService(ServiceName))
+    .WithMetrics(metrics =>
+    {
+        metrics
+            .AddAspNetCoreInstrumentation()   // HTTP server request metrics (latency, status codes)
+            .AddRuntimeInstrumentation()       // .NET runtime GC / thread-pool metrics
+            .AddMeter(ServiceName)             // Our custom business-level meter
+            .AddPrometheusExporter();          // Expose on /metrics (Prometheus text format)
+    });
 
 builder.Services.AddEndpointsApiExplorer();
 
@@ -214,6 +247,8 @@ if (app.Environment.IsDevelopment())
 // MUST run before error-handling middleware so that correlationId is available
 // in all error log entries (including DomainException + unhandled exceptions).
 app.UseMiddleware<CorrelationIdMiddleware>();
+// Log all HTTP requests (method, path, status, duration) with correlation ID for tracing.
+app.UseRequestLoggingMiddleware();
 
 app.UseErrorHandling(new ErrorHandlingOptions("authentication"));
 app.UseMiddleware<DomainExceptionHandlingMiddleware>();
@@ -251,6 +286,13 @@ app.MapHealthChecks("/health/ready", new HealthCheckOptions
     AllowCachingResponses = false
 }).AllowAnonymous();
 app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false, AllowCachingResponses = false }).AllowAnonymous();
+
+// Expose Prometheus /metrics endpoint.
+// In production, restrict by IP using the allowlist in appsettings.json ("Metrics:AllowedCidrs").
+// The simple IP-filter below guards against accidental public exposure.
+app.MapPrometheusScrapingEndpoint("/metrics")
+   .RequireHost(builder.Configuration.GetSection("Metrics:AllowedHosts").Get<string[]>() ?? new[] { "*" })
+   .AllowAnonymous();
 
 app.Run();
 

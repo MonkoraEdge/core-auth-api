@@ -1,8 +1,9 @@
+using MonkoraEdge.Core.DotNet.Domain.Interfaces;
 using MonkoraEdge.Core.DotNet.Domain.SeedWork;
 
 namespace MonkoraEdge.Core.Auth.Domain.AggregatesModel.EntityAggregate;
 
-public class UserTwoFactorRecoveryCode : BaseEntity
+public class UserTwoFactorRecoveryCode : BaseEntity, ISoftDelete
 {
     public Guid UserId { get; set; }
     public Guid? TwoFactorSettingId { get; set; }
@@ -16,4 +17,8 @@ public class UserTwoFactorRecoveryCode : BaseEntity
     public DateTime? RevokedAt { get; set; }
 
     public bool IsActive { get; set; } = true;
+
+    // ISoftDelete — allows tracking of deleted recovery code batches (e.g., on 2FA disable).
+    public DateTime? DeletedAt { get; set; }
+    public string? DeletedBy { get; set; }
 }

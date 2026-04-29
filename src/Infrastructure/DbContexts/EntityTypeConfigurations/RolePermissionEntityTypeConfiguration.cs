@@ -10,5 +10,9 @@ public class RolePermissionEntityTypeConfiguration : IEntityTypeConfiguration<Ro
     {
         builder.ToTable("lnk_role_permissions");
         builder.HasKey(m => m.Id);
+
+        // Composite index for role-permission lookups and batch-loading by RoleId.
+        builder.HasIndex(m => new { m.RoleId, m.PermissionId }).IsUnique();
+        builder.HasIndex(m => m.RoleId);
     }
 }

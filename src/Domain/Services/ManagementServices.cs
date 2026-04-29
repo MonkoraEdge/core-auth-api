@@ -146,7 +146,17 @@ public class RoleService : IRoleService
     {
         var role = await _roleRepo.GetByIdAsync(id);
         if (role == null) throw new DomainException("role", "Role not found.");
-        return await MapToResponseAsync(role);
+
+        // Batch-load permissions in 2 queries (same pattern as GetListAsync) to avoid N+1.
+        var rolePerms = await _rolePermissionRepo.GetByRoleIdAsync(role.Id);
+        var permIds = rolePerms.Select(rp => rp.PermissionId).Distinct().ToList();
+        var perms = permIds.Any()
+            ? await _permissionRepo.ListAsync(p => permIds.Contains(p.Id))
+            : new List<Permission>();
+        var permById = perms.ToDictionary(p => p.Id);
+        var rpsByRole = new Dictionary<Guid, List<RolePermission>> { [role.Id] = rolePerms.ToList() };
+
+        return MapToResponse(role, rpsByRole, permById);
     }
 
     public async Task<CreateResponse> CreateAsync(RoleCreateRequest request, string? createdBy)
@@ -383,10 +393,11 @@ public class ApiKeyService : IApiKeyService
         return keys.Where(k => k.DeletedAt == null).Select(MapToResponse).ToList();
     }
 
-    public async Task<List<ApiKeyResponse>> GetByClientIdAsync(Guid clientId)
+    public async Task<List<ApiKeyResponse>> GetByClientIdAsync(Guid clientId, Guid requestingUserId)
     {
         var keys = await _apiKeyRepo.GetByClientIdAsync(clientId);
-        return keys.Where(k => k.DeletedAt == null).Select(MapToResponse).ToList();
+        // Only return keys owned by the requesting user to prevent cross-user information disclosure.
+        return keys.Where(k => k.DeletedAt == null && k.UserId == requestingUserId).Select(MapToResponse).ToList();
     }
 
     public async Task<ApiKeyResponse> GetByIdAsync(Guid id)
@@ -452,6 +463,8 @@ public class ApiKeyService : IApiKeyService
         var key = await _apiKeyRepo.GetByKeyHashAsync(keyHash);
         if (key == null || !key.IsActive || key.RevokedAt.HasValue || key.DeletedAt.HasValue) return null;
         if (key.ExpiresAt.HasValue && key.ExpiresAt < DateTime.UtcNow) return null;
+        // Update last-used timestamp for audit trail (fire-and-forget; ignore update failures).
+        await UpdateLastUsedAsync(key.Id);
         return MapToResponse(key);
     }
 
@@ -617,11 +630,16 @@ public class AgreementService : IAgreementService
 {
     private readonly IUnitOfWork _unitOfWork;
     private readonly IAgreementRepository _agreementRepo;
+    private readonly IAgreementAcceptRepository _acceptRepo;
 
-    public AgreementService(IUnitOfWork unitOfWork, IAgreementRepository agreementRepo)
+    public AgreementService(
+        IUnitOfWork unitOfWork,
+        IAgreementRepository agreementRepo,
+        IAgreementAcceptRepository acceptRepo)
     {
         _unitOfWork = unitOfWork;
         _agreementRepo = agreementRepo;
+        _acceptRepo = acceptRepo;
     }
 
     public async Task<List<AgreementResponse>> GetListAsync(Guid? tenantId, bool? activeOnly = true)
@@ -706,6 +724,33 @@ public class AgreementService : IAgreementService
         _agreementRepo.Update(agreement);
         await _unitOfWork.SaveChangesAsync();
         return new DeleteResponse { Id = agreement.Id, IsSuccess = true, Message = "Agreement deleted." };
+    }
+
+    public async Task<CreateResponse> AcceptAsync(Guid agreementId, Guid userId, AgreementAcceptRequest request, string? ipAddress, string? userAgent)
+    {
+        var agreement = await _agreementRepo.GetByIdAsync(agreementId);
+        if (agreement == null) throw new DomainException("agreement", "Agreement not found.");
+        if (!agreement.IsActive) throw new DomainException("agreement", "Agreement is no longer active.");
+
+        // Idempotent: return existing acceptance if the user already accepted this agreement.
+        var existing = await _acceptRepo.GetActiveByUserAndAgreementAsync(userId, agreementId);
+        if (existing != null)
+            return new CreateResponse { Id = existing.Id, IsSuccess = true, Message = "Agreement already accepted." };
+
+        var acceptance = new AgreementAccept
+        {
+            AgreementId = agreementId,
+            UserId = userId,
+            ClientId = request.ClientId,
+            AcceptanceMethod = request.AcceptanceMethod,
+            AcceptedAt = DateTime.UtcNow,
+            IpAddress = ipAddress,
+            UserAgent = userAgent,
+            IsActive = true
+        };
+        _acceptRepo.Insert(acceptance);
+        await _unitOfWork.SaveChangesAsync();
+        return new CreateResponse { Id = acceptance.Id, IsSuccess = true, Message = "Agreement accepted." };
     }
 
     private static AgreementResponse MapToResponse(Agreement a) => new()

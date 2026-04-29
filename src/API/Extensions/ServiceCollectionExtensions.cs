@@ -6,6 +6,9 @@ using MonkoraEdge.Core.Auth.Domain.AggregatesModel.RoleAggregate.Interfaces;
 using MonkoraEdge.Core.Auth.Domain.AggregatesModel.AuditAggregate.Interfaces;
 using MonkoraEdge.Core.Auth.Domain.AggregatesModel.ApiKeyAggregate.Interfaces;
 using MonkoraEdge.Core.Auth.Domain.AggregatesModel.AgreementAggregate.Interfaces;
+using MonkoraEdge.Core.Auth.Domain.AggregatesModel.PasskeyAggregate.Interfaces;
+using MonkoraEdge.Core.Auth.Domain.AggregatesModel.SamlAggregate.Interfaces;
+using MonkoraEdge.Core.Auth.Domain.AggregatesModel.WebhookAggregate.Interfaces;
 using MonkoraEdge.Core.Auth.Domain.Services;
 using MonkoraEdge.Core.Auth.Domain.Services.Interface;
 using MonkoraEdge.Core.Auth.Infrastructure.ExternalApis;
@@ -15,7 +18,9 @@ using MonkoraEdge.Core.Auth.Infrastructure.Extensions;
 using MonkoraEdge.Core.Auth.Infrastructure.Services;
 using MonkoraEdge.Core.Auth.Infrastructure.Services.Security;
 using MonkoraEdge.Core.Auth.Infrastructure.Repositories;
+using Fido2NetLib;
 using MonkoraEdge.Core.DotNet.Infrastructure;
+using Microsoft.Extensions.Configuration;
 using MonkoraEdge.Core.DotNet.Infrastructure.Interfaces;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -94,6 +99,16 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IAgreementRepository, AgreementRepository>();
         services.AddScoped<IAgreementAcceptRepository, AgreementAcceptRepository>();
 
+        // Webhook aggregate
+        services.AddScoped<IWebhookEndpointRepository, WebhookEndpointRepository>();
+        services.AddScoped<IWebhookDeliveryLogRepository, WebhookDeliveryLogRepository>();
+
+        // Passkey aggregate
+        services.AddScoped<IPasskeyCredentialRepository, PasskeyCredentialRepository>();
+
+        // SAML 2.0 aggregate
+        services.AddScoped<ISamlProviderRepository, SamlProviderRepository>();
+
         #endregion
 
 
@@ -134,6 +149,54 @@ public static class ServiceCollectionExtensions
                 .TrimEnd('=').Replace('+', '-').Replace('/', '_');
 
             return new RsaSecurityKey(rsa) { KeyId = kid };
+        });
+
+        // DPoP service (RFC 9449) — validates DPoP proof JWTs on the token endpoint
+        services.AddScoped<IDPoPService>(m =>
+            new MonkoraEdge.Core.Auth.Infrastructure.Services.Security.DPoPService(
+                m.GetRequiredService<IDistributedCache>()));
+
+        // FIDO2 / Passkey (WebAuthn Level 3)
+        // ServerDomain = RP ID (effective domain of the relying party).
+        // Origins = allowed origins — must match the browser's window.location.origin.
+        services.AddSingleton<Fido2>(m =>
+        {
+            var config = m.GetRequiredService<IConfiguration>();
+            return new Fido2(new Fido2Configuration
+            {
+                ServerDomain          = config["Fido2:ServerDomain"] ?? "localhost",
+                ServerName            = config["Fido2:ServerName"]   ?? "MonkoraEdge Auth",
+                Origins               = new HashSet<string>(config.GetSection("Fido2:Origins").Get<string[]>() ?? ["https://localhost:5001"]),
+                TimestampDriftTolerance = 300_000   // 5 minutes in milliseconds
+            });
+        });
+
+        // Passkey service (scoped — depends on scoped repositories)
+        services.AddScoped<IPasskeyService>(m => new PasskeyService(
+            m.GetRequiredService<Fido2>(),
+            m.GetRequiredService<IDistributedCache>(),
+            m.GetRequiredService<DomainIUnitOfWork>(),
+            m.GetRequiredService<IPasskeyCredentialRepository>(),
+            m.GetRequiredService<IUserRepository>(),
+            m.GetRequiredService<IUserRoleRepository>(),
+            m.GetRequiredService<IRoleRepository>(),
+            m.GetRequiredService<ILoginAttemptRepository>(),
+            m.GetRequiredService<ITokenService>()));
+
+        // SAML 2.0 service (scoped — depends on scoped repositories)
+        services.AddScoped<ISamlService>(m =>
+        {
+            var opts = m.GetRequiredService<EnvironmentOptions>();
+            return new SamlService(
+                m.GetRequiredService<IDistributedCache>(),
+                m.GetRequiredService<DomainIUnitOfWork>(),
+                m.GetRequiredService<ISamlProviderRepository>(),
+                m.GetRequiredService<IUserRepository>(),
+                m.GetRequiredService<IUserRoleRepository>(),
+                m.GetRequiredService<IRoleRepository>(),
+                m.GetRequiredService<ILoginAttemptRepository>(),
+                m.GetRequiredService<ITokenService>(),
+                opts.AES_ENCRYPTION_KEY);
         });
 
         // Token service (scoped — depends on scoped repositories)
@@ -285,6 +348,7 @@ public static class ServiceCollectionExtensions
                 m.GetRequiredService<IPasswordService>(),
                 m.GetRequiredService<IRefreshTokenProcessor>(),
                 m.GetRequiredService<IAuditLogRepository>(),
+                m.GetRequiredService<IClientService>(),
                 m.GetRequiredService<IDistributedCache>(),
                 opts.AUTH_ISSUER);
         });
@@ -352,10 +416,19 @@ public static class ServiceCollectionExtensions
 
         services.AddScoped<IAgreementService>(m => new AgreementService(
             m.GetRequiredService<DomainIUnitOfWork>(),
-            m.GetRequiredService<IAgreementRepository>()));
+            m.GetRequiredService<IAgreementRepository>(),
+            m.GetRequiredService<IAgreementAcceptRepository>()));
 
         // Background service: periodically purges expired tokens to keep tables lean
         services.AddHostedService<TokenCleanupService>();
+
+        // Webhook delivery pipeline (Phase 5-2)
+        // WebhookChannel is the in-process bounded channel shared between the enqueue side
+        // (IWebhookService) and the background delivery worker.
+        services.AddSingleton<WebhookChannel>();
+        services.AddScoped<IWebhookService>(m =>
+            new WebhookService(m.GetRequiredService<WebhookChannel>()));
+        services.AddHostedService<WebhookDeliveryBackgroundService>();
         
         #endregion
 

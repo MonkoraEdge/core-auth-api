@@ -12,5 +12,10 @@ public class UserExternalLoginEntityTypeConfiguration : IEntityTypeConfiguration
         builder.HasKey(m => m.Id);
 
         builder.Property(m => m.Scopes).HasColumnType("text[]");
+
+        // Composite index for GetByProviderUserIdAsync (called on every social/external login callback).
+        builder.HasIndex(m => new { m.ProviderId, m.ProviderUserId });
+        // Index for GetByUserIdAsync (list all external logins for a user).
+        builder.HasIndex(m => m.UserId);
     }
 }

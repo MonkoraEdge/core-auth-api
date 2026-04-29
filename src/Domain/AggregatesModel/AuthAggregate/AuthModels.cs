@@ -190,3 +190,20 @@ public class SocialLoginInitiateResponse
     /// <summary>PKCE code_verifier stored server-side (in Redis) under the returned State key.</summary>
     public string State { get; set; } = string.Empty;
 }
+
+/// <summary>Request model for the magic-link passwordless login initiation endpoint.</summary>
+public class MagicLinkRequest
+{
+    [Required]
+    [EmailAddress]
+    [MaxLength(256)]
+    public string Email { get; set; } = string.Empty;
+
+    /// <summary>Optional OAuth2 client_id to scope the issued token after verification.</summary>
+    [MaxLength(128)]
+    public string? ClientId { get; set; }
+
+    /// <summary>Optional post-verification redirect URI for SPA/mobile clients.</summary>
+    [MaxLength(2048)]
+    public string? RedirectUri { get; set; }
+}

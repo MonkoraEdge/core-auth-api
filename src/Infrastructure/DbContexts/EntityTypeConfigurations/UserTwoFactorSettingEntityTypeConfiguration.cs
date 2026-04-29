@@ -10,5 +10,8 @@ public class UserTwoFactorSettingEntityTypeConfiguration : IEntityTypeConfigurat
     {
         builder.ToTable("tx_user_two_factor_settings");
         builder.HasKey(m => m.Id);
+
+        // Index for GetByUserIdAsync (called on every authenticated login to check 2FA status).
+        builder.HasIndex(m => m.UserId);
     }
 }

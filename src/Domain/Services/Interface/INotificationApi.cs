@@ -47,4 +47,16 @@ public interface INotificationApi
         string? displayName = null,
         string? language = null,
         CancellationToken ct = default);
+
+    /// <summary>
+    /// Sends a magic-link login email. The recipient clicks the link to sign in without a password.
+    /// </summary>
+    Task SendMagicLinkAsync(
+        string toEmail,
+        string magicToken,
+        string? clientId = null,
+        string? redirectUri = null,
+        string? displayName = null,
+        string? language = null,
+        CancellationToken ct = default);
 }

@@ -10,5 +10,8 @@ public class UserTwoFactorRecoveryCodeEntityTypeConfiguration : IEntityTypeConfi
     {
         builder.ToTable("tx_user_two_factor_recovery_codes");
         builder.HasKey(m => m.Id);
+
+        // Index for GetActiveByUserIdAsync (called on every 2FA recovery code login attempt).
+        builder.HasIndex(m => m.UserId);
     }
 }

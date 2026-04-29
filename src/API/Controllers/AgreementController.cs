@@ -82,4 +82,14 @@ public class AgreementController : MonkoraControllerBase
         var result = await _agreementService.DeleteAsync(id, GetUserIdString());
         return Ok(result);
     }
+
+    /// <summary>
+    /// Record the authenticated user's acceptance of a legal agreement. Idempotent.
+    /// </summary>
+    [HttpPost("{id:guid}/accept")]
+    public async Task<IActionResult> Accept(Guid id, [FromBody] AgreementAcceptRequest request)
+    {
+        var result = await _agreementService.AcceptAsync(id, GetUserId(), request, GetIpAddress(), GetUserAgent());
+        return Ok(result);
+    }
 }

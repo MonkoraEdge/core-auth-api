@@ -203,6 +203,9 @@ public class AuthService : IAuthService
         if (existingUser != null)
             throw new DomainException("register", "Email address is already registered.");
 
+        if (!string.IsNullOrEmpty(request.PhoneNumber) && !System.Text.RegularExpressions.Regex.IsMatch(request.PhoneNumber, @"^\+[1-9]\d{1,14}$"))
+            throw new DomainException("register", "Phone number must be in E.164 format (e.g., +66812345678).");
+
         var user = new User
         {
             TenantId = request.TenantId,
@@ -357,6 +360,14 @@ public class AuthService : IAuthService
 
     public async Task SendVerificationEmailAsync(Guid userId, string email)
     {
+        // Cooldown: prevent email spam by rejecting resend requests within a 60-second window.
+        var pending = (await _emailVerifRepo.GetByUserIdAsync(userId))
+            .Where(v => v.VerifiedAt == null && v.ExpiresAt > DateTime.UtcNow)
+            .OrderByDescending(v => v.CreatedAt)
+            .FirstOrDefault();
+        if (pending != null && (DateTime.UtcNow - pending.CreatedAt).TotalSeconds < 60)
+            throw new DomainException("resend_verification", "Please wait 60 seconds before requesting another verification email.");
+
         // Invalidate any still-pending tokens so previous links cannot be reused after resend
         await _emailVerifRepo.InvalidatePendingByUserIdAsync(userId);
 
@@ -615,5 +626,115 @@ public class AuthService : IAuthService
             FailureReason = failureReason,
             LoginMethod = "LOCAL"
         });
+    }
+
+    // ─── Magic Link ────────────────────────────────────────────────────────────
+
+    public async Task SendMagicLinkAsync(string email, string? clientId, string? redirectUri, string? ipAddress)
+    {
+        // Normalise email
+        email = email.Trim().ToLowerInvariant();
+
+        // Silently succeed for unknown emails — prevents account enumeration.
+        var user = await _userRepo.GetByEmailAsync(email);
+        if (user == null || user.DeletedAt.HasValue) return;
+
+        // Cooldown: at most one magic-link per 60 seconds per user.
+        var pending = (await _emailVerifRepo.GetByUserIdAsync(user.Id))
+            .Where(v => v.VerificationType == "MAGIC_LINK" &&
+                        v.VerifiedAt == null &&
+                        v.ExpiresAt > DateTime.UtcNow)
+            .OrderByDescending(v => v.CreatedAt)
+            .FirstOrDefault();
+        if (pending != null && (DateTime.UtcNow - pending.CreatedAt).TotalSeconds < 60)
+            return; // silently swallow — no enumeration leak
+
+        // Invalidate stale magic-link tokens before issuing a fresh one.
+        await _emailVerifRepo.InvalidatePendingByUserIdAsync(user.Id);
+
+        var rawToken = _passwordService.GenerateSecureToken(48);
+        var tokenHash = _passwordService.HashSha256(rawToken);
+
+        _emailVerifRepo.Insert(new EmailVerification
+        {
+            UserId           = user.Id,
+            Email            = email,
+            VerificationType = "MAGIC_LINK",
+            TokenHash        = tokenHash,
+            // Magic links expire in 15 minutes — short enough to be secure.
+            ExpiresAt        = DateTime.UtcNow.AddMinutes(15)
+        });
+        await _unitOfWork.SaveChangesAsync();
+
+        await _notificationApi.SendMagicLinkAsync(email, rawToken, clientId, redirectUri);
+    }
+
+    public async Task<LoginResponse> VerifyMagicLinkAsync(string token, string? ipAddress, string? userAgent)
+    {
+        var tokenHash = _passwordService.HashSha256(token.Trim());
+        var verif = await _emailVerifRepo.GetByTokenHashAsync(tokenHash);
+
+        if (verif == null
+            || verif.VerificationType != "MAGIC_LINK"
+            || verif.ExpiresAt <= DateTime.UtcNow
+            || verif.VerifiedAt.HasValue)
+            throw new DomainException("magic_link", "Magic link is invalid or has expired.");
+
+        // Atomically consume the token — single-use guard
+        var consumed = await _emailVerifRepo.TryMarkVerifiedAsync(verif.Id, DateTime.UtcNow);
+        if (!consumed)
+            throw new DomainException("magic_link", "Magic link has already been used.");
+
+        var user = await _userRepo.GetByIdAsync(verif.UserId);
+        if (user == null || user.DeletedAt.HasValue)
+            throw new DomainException("magic_link", "Account not found.");
+
+        // Ensure the email is marked verified
+        if (!user.EmailVerified)
+        {
+            user.MarkEmailVerified();
+            _userRepo.Update(user);
+        }
+
+        var scopes = new[] { "openid", "profile", "email" };
+        var expiresIn = _tokenService.GetAccessTokenLifetimeSeconds(null);
+
+        var accessToken = await _tokenService.GenerateAccessTokenAsync(
+            Guid.Empty, user.Id, scopes, "magic_link", ipAddress, userAgent, expiresIn);
+        var (refreshToken, _) = await _tokenService.GenerateRefreshTokenAsync(
+            Guid.Empty, user.Id, null, scopes, 30 * 24 * 60, // 30-day refresh
+            ipAddress: ipAddress, userAgent: userAgent);
+
+        user.RecordSuccessfulLogin();
+        _userRepo.Update(user);
+
+        await RecordLoginAttemptAsync(user.Id, user.Email, null,
+            ipAddress, userAgent, true, null, null);
+        await _unitOfWork.SaveChangesAsync();
+
+        var userRoles = await _userRoleRepo.GetByUserIdAsync(user.Id);
+        var roleNames = new List<string>();
+        foreach (var ur in userRoles)
+        {
+            var role = await _roleRepo.GetByIdAsync(ur.RoleId);
+            if (role != null) roleNames.Add(role.RoleCode);
+        }
+
+        return new LoginResponse
+        {
+            RequiresTwoFactor = false,
+            AccessToken       = accessToken,
+            RefreshToken      = refreshToken,
+            ExpiresIn         = expiresIn,
+            User = new UserInfoResult
+            {
+                Id            = user.Id.ToString(),
+                Email         = user.Email,
+                DisplayName   = user.DisplayName,
+                EmailVerified = user.EmailVerified,
+                Status        = user.Status,
+                Roles         = roleNames
+            }
+        };
     }
 }

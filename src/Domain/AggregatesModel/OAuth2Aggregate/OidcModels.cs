@@ -69,6 +69,21 @@ public class OpenIdConfigurationResponse
 
     [JsonPropertyName("device_authorization_endpoint")]
     public string? DeviceAuthorizationEndpoint { get; set; }
+
+    /// <summary>RFC 9126 PAR endpoint.</summary>
+    [JsonPropertyName("pushed_authorization_request_endpoint")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? PushedAuthorizationRequestEndpoint { get; set; }
+
+    /// <summary>RFC 7591 Dynamic Client Registration endpoint.</summary>
+    [JsonPropertyName("registration_endpoint")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? RegistrationEndpoint { get; set; }
+
+    /// <summary>RFC 9449 DPoP — signing algorithms supported for DPoP proofs.</summary>
+    [JsonPropertyName("dpop_signing_alg_values_supported")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string[]? DPoPSigningAlgValuesSupported { get; set; }
 }
 
 public class JwksResponse

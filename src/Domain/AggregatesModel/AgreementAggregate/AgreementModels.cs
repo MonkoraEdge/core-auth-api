@@ -2,6 +2,14 @@ using MonkoraEdge.Core.DotNet.AggregatesModel.CommonAggregate;
 
 namespace MonkoraEdge.Core.Auth.Domain.AggregatesModel.AgreementAggregate;
 
+public class AgreementAcceptRequest
+{
+    /// <summary>Optional: OAuth2 client associated with this acceptance event.</summary>
+    public Guid? ClientId { get; set; }
+    /// <summary>CHECKBOX | SIGNATURE | CLICK_THROUGH | IMPLICIT — default CHECKBOX.</summary>
+    public string AcceptanceMethod { get; set; } = "CHECKBOX";
+}
+
 public class AgreementCreateRequest
 {
     public Guid? TenantId { get; set; }

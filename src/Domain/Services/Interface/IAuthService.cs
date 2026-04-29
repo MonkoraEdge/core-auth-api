@@ -29,6 +29,12 @@ public interface IAuthService
     /// <summary>Verify email with token</summary>
     Task<UpdateResponse> VerifyEmailAsync(VerifyEmailRequest request);
 
+    /// <summary>Send a one-time magic-link login email to the given address.</summary>
+    Task SendMagicLinkAsync(string email, string? clientId, string? redirectUri, string? ipAddress);
+
+    /// <summary>Verify the magic-link token and issue session tokens.</summary>
+    Task<LoginResponse> VerifyMagicLinkAsync(string token, string? ipAddress, string? userAgent);
+
     /// <summary>Setup 2FA for a user</summary>
     Task<TwoFactorSetupResponse> SetupTwoFactorAsync(Guid userId, TwoFactorSetupRequest request);
 

@@ -154,7 +154,7 @@ public class AuthController : MonkoraControllerBase
     /// </summary>
     [HttpPost("resend-verification")]
     [Authorize]
-    [EnableRateLimiting("default")]
+    [EnableRateLimiting("auth")]
     public async Task<IActionResult> ResendVerification([FromBody] ResendVerificationEmailRequest request)
     {
         await _authService.SendVerificationEmailAsync(GetUserId(), request.Email);
@@ -234,6 +234,44 @@ public class AuthController : MonkoraControllerBase
     {
         var result = await _socialLoginService.HandleCallbackAsync(providerCode, code, state, GetIpAddress(), GetUserAgent());
         return Ok(result);
+    }
+
+    // ─── Magic Link ───────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Request a passwordless magic-link login email.
+    /// Always returns 200 to prevent account enumeration — the link is sent if the email is known.
+    /// </summary>
+    [HttpPost("magic-link")]
+    [EnableRateLimiting("auth")]
+    public async Task<IActionResult> RequestMagicLink([FromBody] MagicLinkRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.Email))
+            return BadRequest(new { error = "email is required." });
+
+        await _authService.SendMagicLinkAsync(request.Email, request.ClientId, request.RedirectUri, GetIpAddress());
+        return Ok(new { message = "If that email is registered, a magic link has been sent." });
+    }
+
+    /// <summary>
+    /// Verify a magic-link token and issue access + refresh tokens.
+    /// </summary>
+    [HttpGet("magic-link/verify")]
+    [EnableRateLimiting("auth")]
+    public async Task<IActionResult> VerifyMagicLink([FromQuery] string token)
+    {
+        if (string.IsNullOrWhiteSpace(token))
+            return BadRequest(new { error = "token is required." });
+
+        try
+        {
+            var result = await _authService.VerifyMagicLinkAsync(token, GetIpAddress(), GetUserAgent());
+            return Ok(result);
+        }
+        catch (MonkoraEdge.Core.Auth.Domain.Exceptions.DomainException ex)
+        {
+            return BadRequest(new { error = ex.ErrorCode, message = ex.ErrorMessage });
+        }
     }
 
 }

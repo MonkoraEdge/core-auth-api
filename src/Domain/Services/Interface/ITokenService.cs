@@ -8,8 +8,10 @@ public interface ITokenService
     /// Generate a signed JWT access token.
     /// <paramref name="lifetimeSeconds"/> overrides the server default and is silently
     /// capped at the server-enforced maximum (900 s). Pass null to use the server default.
+    /// When <paramref name="dpopJkt"/> is provided (RFC 9449), the token embeds a <c>cnf.jkt</c>
+    /// claim binding it to the client's DPoP public key.
     /// </summary>
-    Task<string> GenerateAccessTokenAsync(Guid clientId, Guid? userId, string[] scopes, string? grantType, string? ipAddress, string? userAgent, int? lifetimeSeconds = null);
+    Task<string> GenerateAccessTokenAsync(Guid clientId, Guid? userId, string[] scopes, string? grantType, string? ipAddress, string? userAgent, int? lifetimeSeconds = null, string? dpopJkt = null);
 
     /// <summary>
     /// Return the effective access-token lifetime in seconds after applying the server cap.

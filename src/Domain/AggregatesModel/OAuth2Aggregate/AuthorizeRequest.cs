@@ -13,4 +13,6 @@ public class AuthorizeRequest
     public string? Prompt { get; set; }             // "none" | "login" | "consent" | "select_account"
     public string? MaxAge { get; set; }
     public string? LoginHint { get; set; }
+    /// <summary>RFC 9126: PAR request_uri returned by the /par endpoint.</summary>
+    public string? RequestUri { get; set; }
 }

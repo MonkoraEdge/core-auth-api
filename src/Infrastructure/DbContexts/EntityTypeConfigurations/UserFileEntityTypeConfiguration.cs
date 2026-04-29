@@ -13,5 +13,8 @@ public class UserFileEntityTypeConfiguration : IEntityTypeConfiguration<UserFile
 
         builder.Property(m => m.FileName).HasColumnType("jsonb");
         builder.Property(m => m.FileType).HasDefaultValue("OTHER");
+
+        // Index for GetByUserIdAsync.
+        builder.HasIndex(m => m.UserId);
     }
 }

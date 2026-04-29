@@ -49,6 +49,16 @@ public class AuthenticationDbContext : DbContext
     // Audit
     public DbSet<AuditLog> AuditLogs { get; set; }
 
+    // Passkeys
+    public DbSet<PasskeyCredential> PasskeyCredentials { get; set; }
+
+    // SAML 2.0 providers
+    public DbSet<SamlProvider> SamlProviders { get; set; }
+
+    // Webhooks
+    public DbSet<WebhookEndpoint> WebhookEndpoints { get; set; }
+    public DbSet<WebhookDeliveryLog> WebhookDeliveryLogs { get; set; }
+
     // Links
     public DbSet<AuthorizationClientScope> AuthorizationClientScopes { get; set; }
     public DbSet<AuthorizationCodeScope> AuthorizationCodeScopes { get; set; }
@@ -107,6 +117,10 @@ public class AuthenticationDbContext : DbContext
         modelBuilder.ApplyConfiguration(new ApiKeyEntityTypeConfiguration());
         modelBuilder.ApplyConfiguration(new AgreementEntityTypeConfiguration());
         modelBuilder.ApplyConfiguration(new AgreementAcceptEntityTypeConfiguration());
+        modelBuilder.ApplyConfiguration(new PasskeyCredentialEntityTypeConfiguration());
+        modelBuilder.ApplyConfiguration(new SamlProviderEntityTypeConfiguration());
+        modelBuilder.ApplyConfiguration(new WebhookEndpointEntityTypeConfiguration());
+        modelBuilder.ApplyConfiguration(new WebhookDeliveryLogEntityTypeConfiguration());
 
         modelBuilder.ApplyGlobalFiltersSoftDeleted();
         modelBuilder.UseSnakeCaseNames(DatabaseType.PostgreSql);

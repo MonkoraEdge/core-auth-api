@@ -64,7 +64,7 @@ public class TokenService : ITokenService
         return Math.Min(requestedSeconds.Value, MaxAccessTokenLifetimeSeconds);
     }
 
-    public Task<string> GenerateAccessTokenAsync(Guid clientId, Guid? userId, string[] scopes, string? grantType, string? ipAddress, string? userAgent, int? lifetimeSeconds = null)
+    public Task<string> GenerateAccessTokenAsync(Guid clientId, Guid? userId, string[] scopes, string? grantType, string? ipAddress, string? userAgent, int? lifetimeSeconds = null, string? dpopJkt = null)
     {
         var now = DateTime.UtcNow;
         var jti = Guid.NewGuid().ToString("N");
@@ -84,6 +84,10 @@ public class TokenService : ITokenService
 
         if (!string.IsNullOrEmpty(grantType))
             claims.Add(new Claim("grant_type", grantType));
+
+        // RFC 9449 §4.2: embed cnf.jkt when the token is DPoP-bound.
+        if (!string.IsNullOrEmpty(dpopJkt))
+            claims.Add(new Claim("cnf", $"{{\"jkt\":\"{dpopJkt}\"}}", "JSON"));
 
         // RFC 9068 §2.1: JOSE header typ MUST be "at+JWT" for access tokens.
         // This prevents ID tokens and other JWTs from being accepted as access tokens.

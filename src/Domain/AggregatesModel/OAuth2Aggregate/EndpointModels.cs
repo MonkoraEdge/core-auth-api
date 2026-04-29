@@ -72,6 +72,127 @@ public sealed class AuthorizationServerMetadataResponse
 
     [JsonPropertyName("device_authorization_endpoint")]
     public string? DeviceAuthorizationEndpoint { get; set; }
+
+    /// <summary>RFC 9126 PAR endpoint.</summary>
+    [JsonPropertyName("pushed_authorization_request_endpoint")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? PushedAuthorizationRequestEndpoint { get; set; }
+
+    /// <summary>RFC 7591 Dynamic Client Registration endpoint.</summary>
+    [JsonPropertyName("registration_endpoint")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? RegistrationEndpoint { get; set; }
+
+    /// <summary>RFC 9449 DPoP — signing algorithms supported for DPoP proofs.</summary>
+    [JsonPropertyName("dpop_signing_alg_values_supported")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string[]? DPoPSigningAlgValuesSupported { get; set; }
+}
+
+// ─── RFC 9126 — Pushed Authorization Requests ────────────────────────────────
+
+/// <summary>Form-encoded PAR request — same shape as AuthorizeRequest but posted by the client.</summary>
+public sealed class PushedAuthorizationFormRequest
+{
+    [Microsoft.AspNetCore.Mvc.FromForm(Name = "response_type")]        public string? ResponseType { get; set; }
+    [Microsoft.AspNetCore.Mvc.FromForm(Name = "client_id")]            public string? ClientId { get; set; }
+    [Microsoft.AspNetCore.Mvc.FromForm(Name = "client_secret")]        public string? ClientSecret { get; set; }
+    [Microsoft.AspNetCore.Mvc.FromForm(Name = "redirect_uri")]         public string? RedirectUri { get; set; }
+    [Microsoft.AspNetCore.Mvc.FromForm(Name = "scope")]                public string? Scope { get; set; }
+    [Microsoft.AspNetCore.Mvc.FromForm(Name = "state")]                public string? State { get; set; }
+    [Microsoft.AspNetCore.Mvc.FromForm(Name = "code_challenge")]       public string? CodeChallenge { get; set; }
+    [Microsoft.AspNetCore.Mvc.FromForm(Name = "code_challenge_method")] public string? CodeChallengeMethod { get; set; }
+    [Microsoft.AspNetCore.Mvc.FromForm(Name = "nonce")]                public string? Nonce { get; set; }
+    [Microsoft.AspNetCore.Mvc.FromForm(Name = "prompt")]               public string? Prompt { get; set; }
+    [Microsoft.AspNetCore.Mvc.FromForm(Name = "max_age")]              public string? MaxAge { get; set; }
+    [Microsoft.AspNetCore.Mvc.FromForm(Name = "login_hint")]           public string? LoginHint { get; set; }
+}
+
+/// <summary>RFC 9126 §2.2 PAR endpoint response.</summary>
+public sealed class PushedAuthorizationResponse
+{
+    [JsonPropertyName("request_uri")]
+    public string RequestUri { get; set; } = string.Empty;
+
+    [JsonPropertyName("expires_in")]
+    public int ExpiresIn { get; set; } = 90;
+}
+
+// ─── RFC 7591 — Dynamic Client Registration ──────────────────────────────────
+
+/// <summary>RFC 7591 §2 client metadata request.</summary>
+public sealed class DynamicClientRegistrationRequest
+{
+    [JsonPropertyName("client_name")]
+    public string? ClientName { get; set; }
+
+    [JsonPropertyName("redirect_uris")]
+    public string[]? RedirectUris { get; set; }
+
+    [JsonPropertyName("grant_types")]
+    public string[]? GrantTypes { get; set; }
+
+    [JsonPropertyName("response_types")]
+    public string[]? ResponseTypes { get; set; }
+
+    [JsonPropertyName("scope")]
+    public string? Scope { get; set; }
+
+    [JsonPropertyName("token_endpoint_auth_method")]
+    public string? TokenEndpointAuthMethod { get; set; }
+
+    [JsonPropertyName("logo_uri")]
+    public string? LogoUri { get; set; }
+
+    [JsonPropertyName("client_uri")]
+    public string? ClientUri { get; set; }
+
+    [JsonPropertyName("jwks_uri")]
+    public string? JwksUri { get; set; }
+
+    [JsonPropertyName("require_pkce")]
+    public bool? RequirePkce { get; set; }
+}
+
+/// <summary>RFC 7591 §3.2 registration response — includes assigned client_id and optional secret.</summary>
+public sealed class DynamicClientRegistrationResponse
+{
+    [JsonPropertyName("client_id")]
+    public string ClientId { get; set; } = string.Empty;
+
+    [JsonPropertyName("client_secret")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ClientSecret { get; set; }
+
+    [JsonPropertyName("client_name")]
+    public string? ClientName { get; set; }
+
+    [JsonPropertyName("redirect_uris")]
+    public string[] RedirectUris { get; set; } = Array.Empty<string>();
+
+    [JsonPropertyName("grant_types")]
+    public string[] GrantTypes { get; set; } = Array.Empty<string>();
+
+    [JsonPropertyName("response_types")]
+    public string[] ResponseTypes { get; set; } = Array.Empty<string>();
+
+    [JsonPropertyName("token_endpoint_auth_method")]
+    public string TokenEndpointAuthMethod { get; set; } = string.Empty;
+
+    [JsonPropertyName("scope")]
+    public string? Scope { get; set; }
+
+    [JsonPropertyName("logo_uri")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? LogoUri { get; set; }
+
+    [JsonPropertyName("client_uri")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ClientUri { get; set; }
+
+    [JsonPropertyName("jwks_uri")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? JwksUri { get; set; }
 }
 
 // ─── RFC 8628 — Device Authorization Grant ───────────────────────────────────

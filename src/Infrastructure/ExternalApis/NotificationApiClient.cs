@@ -78,6 +78,26 @@ public sealed class NotificationApiClient : INotificationApi
         _logger.LogInformation("Password reset email dispatched to Notification API. Email={Email}", toEmail);
     }
 
+    public async Task SendMagicLinkAsync(
+        string toEmail, string magicToken,
+        string? clientId = null, string? redirectUri = null,
+        string? displayName = null, string? language = null,
+        CancellationToken ct = default)
+    {
+        var payload = new
+        {
+            to = toEmail,
+            token = magicToken,
+            clientId,
+            redirectUri,
+            displayName,
+            language = language ?? "en"
+        };
+
+        await PostAsync("/api/notifications/email/magic-link", payload, ct);
+        _logger.LogInformation("Magic-link email dispatched to Notification API. Email={Email}", toEmail);
+    }
+
     // ── private ──────────────────────────────────────────────────────────────
 
     private async Task PostAsync<T>(string path, T payload, CancellationToken ct)

@@ -13,5 +13,8 @@ public class AuthorizationConsentEntityTypeConfiguration : IEntityTypeConfigurat
 
         builder.Property(m => m.Scopes).HasColumnType("text[]");
         builder.Property(m => m.IpAddress).HasColumnName("ip_address");
+
+        // Composite index for GetActiveByUserAndClientAsync (checked on every authorization request).
+        builder.HasIndex(m => new { m.UserId, m.ClientId });
     }
 }

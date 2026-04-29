@@ -1,4 +1,3 @@
-using System.Security.Claims;
 using MonkoraEdge.Core.Auth.Domain.AggregatesModel.ApiKeyAggregate;
 using MonkoraEdge.Core.Auth.Domain.Services.Interface;
 using Asp.Versioning;
@@ -14,7 +13,7 @@ namespace MonkoraEdge.Core.Auth.API.Controllers;
 [ApiController]
 [ApiVersion("1.0")]
 [Authorize]
-public class ApiKeyController : ControllerBase
+public class ApiKeyController : MonkoraControllerBase
 {
     private readonly IApiKeyService _apiKeyService;
 
@@ -34,12 +33,12 @@ public class ApiKeyController : ControllerBase
     }
 
     /// <summary>
-    /// List API keys associated with a specific OAuth client.
+    /// List API keys associated with a specific OAuth client (scoped to calling user).
     /// </summary>
     [HttpGet("client/{clientId:guid}")]
     public async Task<IActionResult> GetByClient(Guid clientId)
     {
-        var result = await _apiKeyService.GetByClientIdAsync(clientId);
+        var result = await _apiKeyService.GetByClientIdAsync(clientId, GetUserId());
         return Ok(result);
     }
 
@@ -59,7 +58,7 @@ public class ApiKeyController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] ApiKeyCreateRequest request)
     {
-        var result = await _apiKeyService.CreateAsync(request, GetUserId().ToString());
+        var result = await _apiKeyService.CreateAsync(request, GetUserIdString());
         return Ok(result);
     }
 
@@ -69,7 +68,7 @@ public class ApiKeyController : ControllerBase
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> Revoke(Guid id)
     {
-        var result = await _apiKeyService.RevokeAsync(id, GetUserId().ToString());
+        var result = await _apiKeyService.RevokeAsync(id, GetUserIdString());
         return Ok(result);
     }
 
@@ -84,17 +83,6 @@ public class ApiKeyController : ControllerBase
         return Ok(result);
     }
 
-    // ─── Helpers ──────────────────────────────────────────────────────────────
-
-    /// <summary>
-    /// Resolve caller user id from token claims.
-    /// </summary>
-    private Guid GetUserId()
-    {
-        var sub = User.FindFirstValue("sub") ?? User.FindFirstValue(ClaimTypes.NameIdentifier);
-        if (!Guid.TryParse(sub, out var id)) throw new UnauthorizedAccessException("Invalid user token.");
-        return id;
-    }
 }
 
 /// <summary>API key validation request</summary>

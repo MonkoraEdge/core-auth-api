@@ -1,4 +1,5 @@
 using MonkoraEdge.Core.Auth.Domain.AggregatesModel.AuditAggregate.Interfaces;
+using MonkoraEdge.Core.Auth.Domain.AggregatesModel.ClientAggregate;
 using MonkoraEdge.Core.Auth.Domain.AggregatesModel.EntityAggregate;
 using MonkoraEdge.Core.Auth.Domain.AggregatesModel.OAuth2Aggregate;
 using MonkoraEdge.Core.Auth.Domain.AggregatesModel.AuthorizationAggregate.Interfaces;
@@ -23,10 +24,12 @@ public class OAuth2Service : IOAuth2Service
     private readonly IRefreshTokenProcessor _refreshTokenProcessor;
     private readonly IAuditLogRepository _auditLogRepo;
     private readonly IDistributedCache _cache;
+    private readonly IClientService _clientService;
     private readonly string _authIssuer;
 
     private const int DeviceCodeExpirySeconds = 1800; // 30 min
     private const int DeviceCodePollingInterval = 5;
+    private const int ParExpirySeconds = 90; // RFC 9126 §2.1
 
     public OAuth2Service(
         IUnitOfWork unitOfWork,
@@ -39,6 +42,7 @@ public class OAuth2Service : IOAuth2Service
         IPasswordService passwordService,
         IRefreshTokenProcessor refreshTokenProcessor,
         IAuditLogRepository auditLogRepo,
+        IClientService clientService,
         IDistributedCache? cache = null,
         string authIssuer = "")
     {
@@ -52,12 +56,31 @@ public class OAuth2Service : IOAuth2Service
         _passwordService = passwordService;
         _refreshTokenProcessor = refreshTokenProcessor;
         _auditLogRepo = auditLogRepo;
+        _clientService = clientService;
         _cache = cache!;
         _authIssuer = authIssuer;
     }
 
     public async Task<AuthorizeEndpointResponse> ProcessAuthorizeRequestAsync(AuthorizeRequest request, Guid? authenticatedUserId)
     {
+        // RFC 9126 §4: if request_uri is present, fetch the cached PAR parameters and replace the
+        // inline request fields. The request_uri is single-use — remove it from the cache on access.
+        if (!string.IsNullOrEmpty(request.RequestUri))
+        {
+            if (_cache == null)
+                return new AuthorizeEndpointResponse { Kind = AuthorizeResponseKind.Error, Error = "server_error", ErrorDescription = "Cache not available." };
+
+            var parJson = await _cache.GetStringAsync(ParKey(request.RequestUri));
+            if (string.IsNullOrEmpty(parJson))
+                return new AuthorizeEndpointResponse { Kind = AuthorizeResponseKind.Error, Error = "invalid_request_uri", ErrorDescription = "request_uri is expired or invalid." };
+
+            await _cache.RemoveAsync(ParKey(request.RequestUri));
+            var stored = System.Text.Json.JsonSerializer.Deserialize<AuthorizeRequest>(parJson)!;
+            // Overlay only the fields from the cached object; allow the client_id from the URL
+            // to be overridden by the authenticated one stored in the PAR object.
+            request = stored;
+        }
+
         var validation = await ValidateAuthorizeRequestAsync(request, authenticatedUserId ?? Guid.Empty);
         if (!validation.IsValid)
         {
@@ -308,15 +331,16 @@ public class OAuth2Service : IOAuth2Service
     }
 
     public async Task<TokenResponse> ProcessTokenRequestAsync(
-        TokenRequest request, string? clientId, string? clientSecret, string? ipAddress, string? userAgent)
+        TokenRequest request, string? clientId, string? clientSecret, string? ipAddress, string? userAgent, string? dpopJkt = null)
     {
         var normalizedGrantType = request.GrantType?.Trim().ToUpperInvariant();
         return normalizedGrantType switch
         {
-            "AUTHORIZATION_CODE" => await ExchangeAuthorizationCodeAsync(request, clientId, clientSecret, ipAddress, userAgent),
-            "CLIENT_CREDENTIALS" => await ClientCredentialsGrantAsync(request, clientId!, clientSecret, ipAddress, userAgent),
-            "REFRESH_TOKEN"      => await RefreshTokenGrantAsync(request, clientId, clientSecret, ipAddress, userAgent),
+            "AUTHORIZATION_CODE" => await ExchangeAuthorizationCodeAsync(request, clientId, clientSecret, ipAddress, userAgent, dpopJkt),
+            "CLIENT_CREDENTIALS" => await ClientCredentialsGrantAsync(request, clientId!, clientSecret, ipAddress, userAgent, dpopJkt),
+            "REFRESH_TOKEN"      => await RefreshTokenGrantAsync(request, clientId, clientSecret, ipAddress, userAgent, dpopJkt),
             "URN:IETF:PARAMS:OAUTH:GRANT-TYPE:DEVICE_CODE" => await DeviceCodeGrantAsync(request, clientId, clientSecret, ipAddress, userAgent),
+            "URN:IETF:PARAMS:OAUTH:GRANT-TYPE:TOKEN-EXCHANGE" => await TokenExchangeGrantAsync(request, clientId, clientSecret, ipAddress, userAgent, dpopJkt),
             // OAuth 2.1 explicitly removes password and implicit grants.
             "PASSWORD" => throw new DomainException("token", ErrorCodeType.UNSUPPORTED_GRANT_TYPE,
                 "The 'password' grant has been removed in OAuth 2.1. Use 'authorization_code' with PKCE."),
@@ -325,7 +349,7 @@ public class OAuth2Service : IOAuth2Service
     }
 
     public async Task<TokenResponse> ExchangeAuthorizationCodeAsync(
-        TokenRequest request, string? clientId, string? clientSecret, string? ipAddress, string? userAgent)
+        TokenRequest request, string? clientId, string? clientSecret, string? ipAddress, string? userAgent, string? dpopJkt = null)
     {
         var client = await _clientAuth.AuthenticateAsync(clientId ?? request.ClientId, clientSecret);
 
@@ -365,7 +389,7 @@ public class OAuth2Service : IOAuth2Service
         var expiresIn = _tokenService.GetAccessTokenLifetimeSeconds(client.AccessTokenLifetime);
         var accessToken = await _tokenService.GenerateAccessTokenAsync(
             client.Id, authCode.UserId, scopes, "AUTHORIZATION_CODE", ipAddress, userAgent,
-            expiresIn);
+            expiresIn, dpopJkt);
         string? refreshToken = null;
         if (scopes.Contains("offline_access", StringComparer.Ordinal))
         {
@@ -410,7 +434,7 @@ public class OAuth2Service : IOAuth2Service
     }
 
     public async Task<TokenResponse> ClientCredentialsGrantAsync(
-        TokenRequest request, string clientId, string? clientSecret, string? ipAddress, string? userAgent)
+        TokenRequest request, string clientId, string? clientSecret, string? ipAddress, string? userAgent, string? dpopJkt = null)
     {
         var client = await _clientAuth.AuthenticateAsync(clientId, clientSecret);
 
@@ -447,7 +471,7 @@ public class OAuth2Service : IOAuth2Service
         var finalScopes = requestedScopes.Distinct(StringComparer.Ordinal).ToArray();
         var expiresIn = _tokenService.GetAccessTokenLifetimeSeconds(client.AccessTokenLifetime);
         var accessToken = await _tokenService.GenerateAccessTokenAsync(
-            client.Id, null, finalScopes, "CLIENT_CREDENTIALS", ipAddress, userAgent, expiresIn);
+            client.Id, null, finalScopes, "CLIENT_CREDENTIALS", ipAddress, userAgent, expiresIn, dpopJkt);
 
         _auditLogRepo.Insert(new AuditLog
         {
@@ -473,7 +497,7 @@ public class OAuth2Service : IOAuth2Service
     }
 
     public async Task<TokenResponse> RefreshTokenGrantAsync(
-        TokenRequest request, string? clientId, string? clientSecret, string? ipAddress, string? userAgent)
+        TokenRequest request, string? clientId, string? clientSecret, string? ipAddress, string? userAgent, string? dpopJkt = null)
     {
         if (string.IsNullOrEmpty(request.RefreshToken))
             throw new DomainException("token", ErrorCodeType.INVALID_REQUEST, "refresh_token is required.");
@@ -506,7 +530,8 @@ public class OAuth2Service : IOAuth2Service
             client.RefreshTokenLifetime,
             ipAddress,
             userAgent,
-            narrowedScopes);
+            narrowedScopes,
+            dpopJkt);
 
         _auditLogRepo.Insert(new AuditLog
         {
@@ -604,7 +629,7 @@ public class OAuth2Service : IOAuth2Service
             ResponseTypesSupported = new[] { "code" },
             // OIDC Core §3.1.2.1: only 'query' is supported for code flow
             ResponseModesSupported = new[] { "query" },
-            GrantTypesSupported = new[] { "authorization_code", "client_credentials", "refresh_token", "urn:ietf:params:oauth:grant-type:device_code" },
+            GrantTypesSupported = new[] { "authorization_code", "client_credentials", "refresh_token", "urn:ietf:params:oauth:grant-type:device_code", "urn:ietf:params:oauth:grant-type:token-exchange" },
             SubjectTypesSupported = new[] { "public" },
             IdTokenSigningAlgValuesSupported = new[] { "RS256" },
             // 'none' is required for PUBLIC clients (OAuth2.1 §2.1)
@@ -627,7 +652,11 @@ public class OAuth2Service : IOAuth2Service
             // PKCE is mandatory on this server for all public clients
             RequirePkce = true,
             RequestParameterSupported = false,
-            DeviceAuthorizationEndpoint = $"{baseUrl}/oauth2/device_authorization"
+            DeviceAuthorizationEndpoint = $"{baseUrl}/oauth2/device_authorization",
+            PushedAuthorizationRequestEndpoint = $"{baseUrl}/oauth2/par",
+            RegistrationEndpoint = $"{baseUrl}/oauth2/register",
+            // RFC 9449: advertise DPoP as optional — clients that attach DPoP proofs get bound tokens.
+            DPoPSigningAlgValuesSupported = new[] { "RS256", "RS384", "RS512", "ES256", "ES384", "ES512", "PS256", "PS384", "PS512" }
         };
     }
 
@@ -642,11 +671,14 @@ public class OAuth2Service : IOAuth2Service
             RevocationEndpoint = $"{baseUrl}/revoke",
             IntrospectionEndpoint = $"{baseUrl}/introspect",
             ResponseTypesSupported = new[] { "code" },
-            GrantTypesSupported = new[] { "authorization_code", "client_credentials", "refresh_token", "urn:ietf:params:oauth:grant-type:device_code" },
+            GrantTypesSupported = new[] { "authorization_code", "client_credentials", "refresh_token", "urn:ietf:params:oauth:grant-type:device_code", "urn:ietf:params:oauth:grant-type:token-exchange" },
             // 'none' is required for PUBLIC clients (OAuth2.1 §2.1)
             TokenEndpointAuthMethodsSupported = new[] { "none", "client_secret_basic", "client_secret_post" },
             CodeChallengeMethodsSupported = new[] { "S256" },
-            DeviceAuthorizationEndpoint = $"{baseUrl}/oauth2/device_authorization"
+            DeviceAuthorizationEndpoint = $"{baseUrl}/oauth2/device_authorization",
+            PushedAuthorizationRequestEndpoint = $"{baseUrl}/oauth2/par",
+            RegistrationEndpoint = $"{baseUrl}/oauth2/register",
+            DPoPSigningAlgValuesSupported = new[] { "RS256", "RS384", "RS512", "ES256", "ES384", "ES512", "PS256", "PS384", "PS512" }
         };
     }
 
@@ -897,6 +929,171 @@ public class OAuth2Service : IOAuth2Service
 
     private static string DeviceCodeKey(string deviceCode) => $"oauth2:device:{deviceCode}";
     private static string UserCodeKey(string userCode)     => $"oauth2:usercode:{userCode.Replace("-", "").ToUpperInvariant()}";
+    private static string ParKey(string requestUri)        => $"oauth2:par:{requestUri}";
+
+    // ─── RFC 9126 — Pushed Authorization Requests ────────────────────────────────────
+
+    public async Task<PushedAuthorizationResponse> PushAuthorizationRequestAsync(
+        PushedAuthorizationFormRequest form, string? clientId, string? clientSecret)
+    {
+        if (_cache == null)
+            throw new DomainException("par", "PAR requires a distributed cache.");
+
+        // Client MUST authenticate for PAR (RFC 9126 §2.1).
+        var resolvedClientId = clientId ?? form.ClientId
+            ?? throw new DomainException("par", "client_id is required.");
+        await _clientAuth.AuthenticateAsync(resolvedClientId, clientSecret);
+
+        // Basic validate: require response_type and redirect_uri to prevent storing garbage.
+        if (string.IsNullOrEmpty(form.ResponseType))
+            throw new DomainException("par", "response_type is required.");
+        if (string.IsNullOrEmpty(form.RedirectUri))
+            throw new DomainException("par", "redirect_uri is required.");
+
+        var authorizeRequest = new AuthorizeRequest
+        {
+            ResponseType = form.ResponseType,
+            ClientId = resolvedClientId,
+            RedirectUri = form.RedirectUri,
+            Scope = form.Scope,
+            State = form.State,
+            CodeChallenge = form.CodeChallenge,
+            CodeChallengeMethod = form.CodeChallengeMethod,
+            Nonce = form.Nonce,
+            Prompt = form.Prompt,
+            MaxAge = form.MaxAge,
+            LoginHint = form.LoginHint
+        };
+
+        var requestUriId = Guid.NewGuid().ToString("N");
+        var requestUri = $"urn:ietf:params:oauth:request_uri:{requestUriId}";
+
+        var json = System.Text.Json.JsonSerializer.Serialize(authorizeRequest);
+        await _cache.SetStringAsync(ParKey(requestUri), json, new DistributedCacheEntryOptions
+        {
+            AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(ParExpirySeconds)
+        });
+
+        return new PushedAuthorizationResponse { RequestUri = requestUri, ExpiresIn = ParExpirySeconds };
+    }
+
+    // ─── RFC 7591 — Dynamic Client Registration ─────────────────────────────────────
+
+    public async Task<DynamicClientRegistrationResponse> RegisterClientDynamicallyAsync(
+        DynamicClientRegistrationRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.ClientName))
+            throw new DomainException("registration", "client_name is required.");
+        if (request.RedirectUris == null || request.RedirectUris.Length == 0)
+            throw new DomainException("registration", "redirect_uris is required and must not be empty.");
+
+        var authMethod = request.TokenEndpointAuthMethod ?? "client_secret_basic";
+        var clientType = authMethod == "none" ? "PUBLIC" : "CONFIDENTIAL";
+        var grantTypes = request.GrantTypes ?? new[] { "authorization_code" };
+        var responseTypes = request.ResponseTypes ?? new[] { "code" };
+
+        // Derive scope ids from free-form scope string: map known names to ids via discovery.
+        // For dynamic registration we accept the scope string as-is and store it as scope names.
+        var scopeNames = request.Scope?.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+
+        var createRequest = new ClientCreateRequest
+        {
+            ClientName = request.ClientName,
+            ClientType = clientType,
+            TokenEndpointAuthMethod = authMethod.ToUpperInvariant().Replace("-", "_"),
+            RequirePkce = request.RequirePkce ?? true,
+            RequireConsent = true,
+            RedirectUris = request.RedirectUris,
+            AllowedGrantTypes = grantTypes.Select(g => g.ToUpperInvariant().Replace("-", "_")).ToArray(),
+            AllowedResponseTypes = responseTypes,
+            LogoUri = request.LogoUri,
+            ClientUri = request.ClientUri,
+            JwksUri = request.JwksUri
+        };
+
+        var (clientResult, secretResult) = await _clientService.CreateAsync(createRequest, "dynamic_registration");
+
+        return new DynamicClientRegistrationResponse
+        {
+            ClientId = clientResult.ClientId,
+            ClientSecret = secretResult.ClientSecret,
+            ClientName = clientResult.ClientName,
+            RedirectUris = clientResult.RedirectUris,
+            GrantTypes = clientResult.AllowedGrantTypes ?? Array.Empty<string>(),
+            ResponseTypes = clientResult.AllowedResponseTypes ?? Array.Empty<string>(),
+            TokenEndpointAuthMethod = clientResult.TokenEndpointAuthMethod,
+            Scope = request.Scope,
+            LogoUri = clientResult.LogoUri,
+            ClientUri = clientResult.ClientUri,
+            JwksUri = request.JwksUri
+        };
+    }
+
+    // ─── RFC 8693 — Token Exchange ─────────────────────────────────────────────────────
+
+    public async Task<TokenResponse> TokenExchangeGrantAsync(
+        TokenRequest request, string? clientId, string? clientSecret, string? ipAddress, string? userAgent, string? dpopJkt = null)
+    {
+        var client = await _clientAuth.AuthenticateAsync(clientId ?? request.ClientId, clientSecret);
+
+        if (string.IsNullOrEmpty(request.SubjectToken))
+            throw new DomainException("token", ErrorCodeType.INVALID_REQUEST, "subject_token is required.");
+
+        // Only access_token subject token type is supported in this implementation.
+        var subjectTokenType = request.SubjectTokenType
+            ?? "urn:ietf:params:oauth:token-type:access_token";
+        if (!subjectTokenType.Equals("urn:ietf:params:oauth:token-type:access_token", StringComparison.OrdinalIgnoreCase))
+            throw new DomainException("token", ErrorCodeType.INVALID_REQUEST,
+                "Only urn:ietf:params:oauth:token-type:access_token is supported as subject_token_type.");
+
+        // Validate the subject token.
+        var introspect = await _tokenService.IntrospectTokenAsync(request.SubjectToken, "access_token");
+        if (!introspect.Active)
+            throw new DomainException("token", ErrorCodeType.INVALID_GRANT, "subject_token is invalid or expired.");
+
+        // Determine the subject (may be a user or service account).
+        Guid? subjectUserId = Guid.TryParse(introspect.Sub, out var uid) ? uid : null;
+
+        // Scope: use requested or inherit from subject token.
+        var originalScopes = (introspect.Scope ?? string.Empty).Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var requestedScopes = !string.IsNullOrWhiteSpace(request.Scope)
+            ? request.Scope.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            : originalScopes;
+
+        // Requested scopes must not exceed the subject token's scopes.
+        var exceeded = requestedScopes.Except(originalScopes, StringComparer.Ordinal).ToArray();
+        if (exceeded.Any())
+            throw new DomainException("token", ErrorCodeType.INVALID_SCOPE,
+                $"Requested scope exceeds subject_token scope: {string.Join(" ", exceeded)}");
+
+        var expiresIn = _tokenService.GetAccessTokenLifetimeSeconds(client.AccessTokenLifetime);
+        var newAccessToken = await _tokenService.GenerateAccessTokenAsync(
+            client.Id, subjectUserId, requestedScopes,
+            "urn:ietf:params:oauth:grant-type:token-exchange", ipAddress, userAgent, expiresIn, dpopJkt);
+
+        _auditLogRepo.Insert(new AuditLog
+        {
+            ClientId = client.Id,
+            UserId = subjectUserId,
+            ActorType = subjectUserId.HasValue ? "user" : "client",
+            Action = "token_exchanged",
+            EntityName = "AccessToken",
+            IpAddress = ipAddress,
+            UserAgent = userAgent,
+            Result = "success",
+            Metadata = $"{{\"grant\":\"token_exchange\",\"scopes\":\"{string.Join(" ", requestedScopes)}\"}}"
+        });
+        await _unitOfWork.SaveChangesAsync();
+
+        return new TokenResponse
+        {
+            AccessToken = newAccessToken,
+            TokenType = "Bearer",
+            ExpiresIn = expiresIn,
+            Scope = string.Join(" ", requestedScopes),
+            IssuedTokenType = "urn:ietf:params:oauth:token-type:access_token"
+        };
+    }
 
     private sealed class DeviceCodeEntry
     {

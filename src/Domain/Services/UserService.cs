@@ -74,6 +74,9 @@ public class UserService : IUserService
         if (existing != null)
             throw new DomainException("user", "A user with this email already exists.");
 
+        if (!string.IsNullOrEmpty(request.PhoneNumber) && !System.Text.RegularExpressions.Regex.IsMatch(request.PhoneNumber, @"^\+[1-9]\d{1,14}$"))
+            throw new DomainException("user", "Phone number must be in E.164 format (e.g., +66812345678).");
+
         var user = new User
         {
             TenantId = request.TenantId,
@@ -114,6 +117,9 @@ public class UserService : IUserService
     {
         var user = await _userRepo.GetByIdAsync(id);
         if (user == null) throw new DomainException("user", "User not found.");
+
+        if (request.PhoneNumber != null && !System.Text.RegularExpressions.Regex.IsMatch(request.PhoneNumber, @"^\+[1-9]\d{1,14}$"))
+            throw new DomainException("user", "Phone number must be in E.164 format (e.g., +66812345678).");
 
         if (request.PhoneNumber != null) user.PhoneNumber = request.PhoneNumber;
         if (request.DisplayName != null) user.DisplayName = request.DisplayName;

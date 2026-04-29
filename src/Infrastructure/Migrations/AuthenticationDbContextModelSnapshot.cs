@@ -521,6 +521,12 @@ namespace MonkoraEdge.Core.Auth.Infrastructure.Migrations
                     b.HasKey("Id")
                         .HasName("pk_audit_logs");
 
+                    b.HasIndex("UserId", "CreatedAt")
+                        .HasDatabaseName("ix_audit_logs_user_id_created_at");
+
+                    b.HasIndex("EntityName", "EntityId", "CreatedAt")
+                        .HasDatabaseName("ix_audit_logs_entity_name_entity_id_created_at");
+
                     b.ToTable("audit_logs", (string)null);
                 });
 
@@ -674,6 +680,12 @@ namespace MonkoraEdge.Core.Auth.Infrastructure.Migrations
                         .IsUnique()
                         .HasDatabaseName("ix_mt_authorization_clients_client_id");
 
+                    b.HasIndex("IsActive")
+                        .HasDatabaseName("ix_mt_authorization_clients_is_active");
+
+                    b.HasIndex("TenantId")
+                        .HasDatabaseName("ix_mt_authorization_clients_tenant_id");
+
                     b.ToTable("mt_authorization_clients", (string)null);
                 });
 
@@ -733,6 +745,13 @@ namespace MonkoraEdge.Core.Auth.Infrastructure.Migrations
 
                     b.HasKey("Id")
                         .HasName("pk_lnk_authorization_client_scopes");
+
+                    b.HasIndex("ClientId")
+                        .HasDatabaseName("ix_lnk_authorization_client_scopes_client_id");
+
+                    b.HasIndex("ClientId", "ScopeId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_lnk_authorization_client_scopes_client_id_scope_id");
 
                     b.ToTable("lnk_authorization_client_scopes", (string)null);
                 });
@@ -969,6 +988,9 @@ namespace MonkoraEdge.Core.Auth.Infrastructure.Migrations
                     b.HasKey("Id")
                         .HasName("pk_tx_authorization_consents");
 
+                    b.HasIndex("UserId", "ClientId")
+                        .HasDatabaseName("ix_tx_authorization_consents_user_id_client_id");
+
                     b.ToTable("tx_authorization_consents", (string)null);
                 });
 
@@ -1041,6 +1063,13 @@ namespace MonkoraEdge.Core.Auth.Infrastructure.Migrations
 
                     b.HasKey("Id")
                         .HasName("pk_tx_email_verifications");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique()
+                        .HasDatabaseName("ix_tx_email_verifications_token_hash");
+
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("ix_tx_email_verifications_user_id");
 
                     b.ToTable("tx_email_verifications", (string)null);
                 });
@@ -1150,7 +1179,121 @@ namespace MonkoraEdge.Core.Auth.Infrastructure.Migrations
                     b.HasIndex("IpAddress", "Success", "CreatedAt")
                         .HasDatabaseName("ix_tx_login_attempts_ip_address_success_created_at");
 
+                    b.HasIndex("Username", "Success", "CreatedAt")
+                        .HasDatabaseName("ix_tx_login_attempts_username_success_created_at");
+
                     b.ToTable("tx_login_attempts", (string)null);
+                });
+
+            modelBuilder.Entity("MonkoraEdge.Core.Auth.Domain.AggregatesModel.EntityAggregate.PasskeyCredential", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<string>("AaGuid")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("aa_guid");
+
+                    b.Property<string>("AttestationType")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("attestation_type");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasColumnName("created_by")
+                        .HasDefaultValueSql("'SYSTEM'");
+
+                    b.Property<byte[]>("CredentialId")
+                        .IsRequired()
+                        .HasColumnType("bytea")
+                        .HasColumnName("credential_id");
+
+                    b.Property<string>("CredentialIdBase64Url")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)")
+                        .HasColumnName("credential_id_base64url");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("description");
+
+                    b.Property<string>("FriendlyName")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("friendly_name");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<bool>("IsBackedUp")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_backed_up");
+
+                    b.Property<bool>("IsBackupEligible")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_backup_eligible");
+
+                    b.Property<DateTime?>("LastUsedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_used_at");
+
+                    b.Property<byte[]>("PublicKey")
+                        .IsRequired()
+                        .HasColumnType("bytea")
+                        .HasColumnName("public_key");
+
+                    b.Property<long>("SignatureCounter")
+                        .HasColumnType("bigint")
+                        .HasColumnName("signature_counter");
+
+                    b.PrimitiveCollection<string[]>("Transports")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("transports");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<string>("UpdatedBy")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasColumnName("updated_by")
+                        .HasDefaultValueSql("'SYSTEM'");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_mt_passkey_credentials");
+
+                    b.HasIndex("CredentialIdBase64Url")
+                        .IsUnique()
+                        .HasDatabaseName("ix_mt_passkey_credentials_credential_id_base64url");
+
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("ix_mt_passkey_credentials_user_id");
+
+                    b.ToTable("mt_passkey_credentials", (string)null);
                 });
 
             modelBuilder.Entity("MonkoraEdge.Core.Auth.Domain.AggregatesModel.EntityAggregate.PasswordHistory", b =>
@@ -1214,6 +1357,9 @@ namespace MonkoraEdge.Core.Auth.Infrastructure.Migrations
 
                     b.HasKey("Id")
                         .HasName("pk_tx_password_history");
+
+                    b.HasIndex("UserId", "CreatedAt")
+                        .HasDatabaseName("ix_tx_password_history_user_id_created_at");
 
                     b.ToTable("tx_password_history", (string)null);
                 });
@@ -1283,6 +1429,13 @@ namespace MonkoraEdge.Core.Auth.Infrastructure.Migrations
 
                     b.HasKey("Id")
                         .HasName("pk_tx_password_resets");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique()
+                        .HasDatabaseName("ix_tx_password_resets_token_hash");
+
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("ix_tx_password_resets_user_id");
 
                     b.ToTable("tx_password_resets", (string)null);
                 });
@@ -1878,7 +2031,140 @@ namespace MonkoraEdge.Core.Auth.Infrastructure.Migrations
                     b.HasKey("Id")
                         .HasName("pk_lnk_role_permissions");
 
+                    b.HasIndex("RoleId")
+                        .HasDatabaseName("ix_lnk_role_permissions_role_id");
+
+                    b.HasIndex("RoleId", "PermissionId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_lnk_role_permissions_role_id_permission_id");
+
                     b.ToTable("lnk_role_permissions", (string)null);
+                });
+
+            modelBuilder.Entity("MonkoraEdge.Core.Auth.Domain.AggregatesModel.EntityAggregate.SamlProvider", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<string>("AttributeMappingJson")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("attribute_mapping_json");
+
+                    b.Property<bool>("AutoProvisionUsers")
+                        .HasColumnType("boolean")
+                        .HasColumnName("auto_provision_users");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasColumnName("created_by")
+                        .HasDefaultValueSql("'SYSTEM'");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("description");
+
+                    b.Property<string>("DisplayName")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("display_name");
+
+                    b.Property<string>("IdpCertificatePem")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("idp_certificate_pem");
+
+                    b.Property<string>("IdpEntityId")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)")
+                        .HasColumnName("idp_entity_id");
+
+                    b.Property<string>("IdpMetadataUrl")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)")
+                        .HasColumnName("idp_metadata_url");
+
+                    b.Property<string>("IdpSloUrl")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)")
+                        .HasColumnName("idp_slo_url");
+
+                    b.Property<string>("IdpSsoUrl")
+                        .IsRequired()
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)")
+                        .HasColumnName("idp_sso_url");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<string>("NameIdFormat")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("name_id_format");
+
+                    b.Property<string>("ProviderCode")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("provider_code");
+
+                    b.Property<bool>("SignAuthRequests")
+                        .HasColumnType("boolean")
+                        .HasColumnName("sign_auth_requests");
+
+                    b.Property<string>("SpCertificatePem")
+                        .HasColumnType("text")
+                        .HasColumnName("sp_certificate_pem");
+
+                    b.Property<string>("SpEntityId")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)")
+                        .HasColumnName("sp_entity_id");
+
+                    b.Property<string>("SpPrivateKeyEncrypted")
+                        .HasColumnType("text")
+                        .HasColumnName("sp_private_key_encrypted");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<string>("UpdatedBy")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasColumnName("updated_by")
+                        .HasDefaultValueSql("'SYSTEM'");
+
+                    b.Property<bool>("WantAssertionsSigned")
+                        .HasColumnType("boolean")
+                        .HasColumnName("want_assertions_signed");
+
+                    b.HasKey("Id")
+                        .HasName("pk_mt_saml_providers");
+
+                    b.HasIndex("ProviderCode")
+                        .IsUnique()
+                        .HasDatabaseName("ix_mt_saml_providers_provider_code");
+
+                    b.ToTable("mt_saml_providers", (string)null);
                 });
 
             modelBuilder.Entity("MonkoraEdge.Core.Auth.Domain.AggregatesModel.EntityAggregate.Scope", b =>
@@ -2241,6 +2527,12 @@ namespace MonkoraEdge.Core.Auth.Infrastructure.Migrations
                     b.HasKey("Id")
                         .HasName("pk_lnk_user_external_logins");
 
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("ix_lnk_user_external_logins_user_id");
+
+                    b.HasIndex("ProviderId", "ProviderUserId")
+                        .HasDatabaseName("ix_lnk_user_external_logins_provider_id_provider_user_id");
+
                     b.ToTable("lnk_user_external_logins", (string)null);
                 });
 
@@ -2325,6 +2617,9 @@ namespace MonkoraEdge.Core.Auth.Infrastructure.Migrations
 
                     b.HasKey("Id")
                         .HasName("pk_tx_user_files");
+
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("ix_tx_user_files_user_id");
 
                     b.ToTable("tx_user_files", (string)null);
                 });
@@ -2418,6 +2713,9 @@ namespace MonkoraEdge.Core.Auth.Infrastructure.Migrations
                     b.HasKey("Id")
                         .HasName("pk_mt_user_identities");
 
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("ix_mt_user_identities_user_id");
+
                     b.ToTable("mt_user_identities", (string)null);
                 });
 
@@ -2473,6 +2771,16 @@ namespace MonkoraEdge.Core.Auth.Infrastructure.Migrations
 
                     b.HasKey("Id")
                         .HasName("pk_lnk_user_roles");
+
+                    b.HasIndex("RoleId")
+                        .HasDatabaseName("ix_lnk_user_roles_role_id");
+
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("ix_lnk_user_roles_user_id");
+
+                    b.HasIndex("UserId", "RoleId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_lnk_user_roles_user_id_role_id");
 
                     b.ToTable("lnk_user_roles", (string)null);
                 });
@@ -2558,6 +2866,12 @@ namespace MonkoraEdge.Core.Auth.Infrastructure.Migrations
 
                     b.HasKey("Id")
                         .HasName("pk_tx_user_sessions");
+
+                    b.HasIndex("ClientId")
+                        .HasDatabaseName("ix_tx_user_sessions_client_id");
+
+                    b.HasIndex("UserId", "IsActive", "ExpiresAt")
+                        .HasDatabaseName("ix_tx_user_sessions_user_id_is_active_expires_at");
 
                     b.ToTable("tx_user_sessions", (string)null);
                 });
@@ -2686,6 +3000,9 @@ namespace MonkoraEdge.Core.Auth.Infrastructure.Migrations
                     b.HasKey("Id")
                         .HasName("pk_tx_user_sessions_devices");
 
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("ix_tx_user_sessions_devices_user_id");
+
                     b.ToTable("tx_user_sessions_devices", (string)null);
                 });
 
@@ -2723,6 +3040,14 @@ namespace MonkoraEdge.Core.Auth.Infrastructure.Migrations
                         .HasColumnType("text")
                         .HasColumnName("created_by")
                         .HasDefaultValueSql("'SYSTEM'");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deleted_at");
+
+                    b.Property<string>("DeletedBy")
+                        .HasColumnType("text")
+                        .HasColumnName("deleted_by");
 
                     b.Property<string>("Description")
                         .HasColumnType("jsonb")
@@ -2767,6 +3092,9 @@ namespace MonkoraEdge.Core.Auth.Infrastructure.Migrations
 
                     b.HasKey("Id")
                         .HasName("pk_tx_user_two_factor_recovery_codes");
+
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("ix_tx_user_two_factor_recovery_codes_user_id");
 
                     b.ToTable("tx_user_two_factor_recovery_codes", (string)null);
                 });
@@ -2849,7 +3177,180 @@ namespace MonkoraEdge.Core.Auth.Infrastructure.Migrations
                     b.HasKey("Id")
                         .HasName("pk_tx_user_two_factor_settings");
 
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("ix_tx_user_two_factor_settings_user_id");
+
                     b.ToTable("tx_user_two_factor_settings", (string)null);
+                });
+
+            modelBuilder.Entity("MonkoraEdge.Core.Auth.Domain.AggregatesModel.EntityAggregate.WebhookDeliveryLog", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<int>("AttemptCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("attempt_count");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasColumnName("created_by")
+                        .HasDefaultValueSql("'SYSTEM'");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("description");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)")
+                        .HasColumnName("error_message");
+
+                    b.Property<string>("EventType")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("event_type");
+
+                    b.Property<string>("Payload")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("payload");
+
+                    b.Property<int?>("ResponseStatusCode")
+                        .HasColumnType("integer")
+                        .HasColumnName("response_status_code");
+
+                    b.Property<bool>("Success")
+                        .HasColumnType("boolean")
+                        .HasColumnName("success");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<string>("UpdatedBy")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasColumnName("updated_by")
+                        .HasDefaultValueSql("'SYSTEM'");
+
+                    b.Property<Guid>("WebhookEndpointId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("webhook_endpoint_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_tx_webhook_delivery_logs");
+
+                    b.HasIndex("Success", "CreatedAt")
+                        .HasDatabaseName("ix_tx_webhook_delivery_logs_success_created_at");
+
+                    b.HasIndex("WebhookEndpointId", "CreatedAt")
+                        .HasDatabaseName("ix_tx_webhook_delivery_logs_webhook_endpoint_id_created_at");
+
+                    b.ToTable("tx_webhook_delivery_logs", (string)null);
+                });
+
+            modelBuilder.Entity("MonkoraEdge.Core.Auth.Domain.AggregatesModel.EntityAggregate.WebhookEndpoint", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<Guid>("ClientId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("client_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasColumnName("created_by")
+                        .HasDefaultValueSql("'SYSTEM'");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deleted_at");
+
+                    b.Property<string>("DeletedBy")
+                        .HasColumnType("text")
+                        .HasColumnName("deleted_by");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("description");
+
+                    b.Property<string>("Events")
+                        .IsRequired()
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)")
+                        .HasColumnName("events");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_deleted");
+
+                    b.Property<string>("Secret")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("secret");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<string>("UpdatedBy")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasColumnName("updated_by")
+                        .HasDefaultValueSql("'SYSTEM'");
+
+                    b.Property<string>("Url")
+                        .IsRequired()
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)")
+                        .HasColumnName("url");
+
+                    b.HasKey("Id")
+                        .HasName("pk_mt_webhook_endpoints");
+
+                    b.HasIndex("ClientId")
+                        .HasDatabaseName("ix_mt_webhook_endpoints_client_id");
+
+                    b.HasIndex("IsActive", "IsDeleted")
+                        .HasDatabaseName("ix_mt_webhook_endpoints_is_active_is_deleted");
+
+                    b.ToTable("mt_webhook_endpoints", (string)null);
                 });
 #pragma warning restore 612, 618
         }
