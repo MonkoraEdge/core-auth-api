@@ -15,4 +15,14 @@ public class Permission : BaseEntity, ISoftDelete
     public bool IsActive { get; set; }
     public DateTime? DeletedAt { get; set; }
     public string? DeletedBy { get; set; }
+
+    // ─── Behavior ──────────────────────────────────────────────────────
+
+    /// <summary>Soft-deletes the permission and deactivates it so it can no longer be granted.</summary>
+    public void SoftDelete(string? deletedBy)
+    {
+        DeletedAt = DateTime.UtcNow;
+        DeletedBy = deletedBy;
+        IsActive = false;
+    }
 }

@@ -16,6 +16,13 @@ public class EnvironmentOptions
     [Required] public int TOKEN_EXPIRES_IN_MINUTES { get; init; }
     [Required] public string AUTH_ISSUER { get; init; }
     [Required] public string OAUTH2_SIGNED_PRIVATE_KEY { get; init; }
+
+    /// <summary>
+    /// Previous RSA private key in PEM format. Set during key rotation so tokens signed with
+    /// the old key remain valid until their natural expiry (≤ 900 s). Clear after all old-key
+    /// tokens have expired. Optional — no effect when absent.
+    /// </summary>
+    public string? OAUTH2_PREVIOUS_PRIVATE_KEY { get; init; }
     [Required] public string REDIS_CONNECTIONSTRING { get; init; }
 
     // Static API keys list (comma-separated) — optional if API key auth is not used.

@@ -84,6 +84,10 @@ public class OpenIdConfigurationResponse
     [JsonPropertyName("dpop_signing_alg_values_supported")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string[]? DPoPSigningAlgValuesSupported { get; set; }
+
+    /// <summary>RFC 9207: server appends iss to authorization responses to prevent mix-up attacks.</summary>
+    [JsonPropertyName("authorization_response_iss_parameter_supported")]
+    public bool AuthorizationResponseIssParameterSupported { get; set; }
 }
 
 public class JwksResponse

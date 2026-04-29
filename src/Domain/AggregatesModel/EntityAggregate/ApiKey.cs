@@ -22,4 +22,18 @@ public class ApiKey : BaseEntity, ISoftDelete
     public bool IsActive { get; set; } = true;
     public DateTime? DeletedAt { get; set; }
     public string? DeletedBy { get; set; }
+
+    // ─── Behavior ──────────────────────────────────────────────────────
+
+    /// <summary>Revokes and soft-deletes the key atomically so it can never be used again.</summary>
+    public void Revoke(string? revokedBy)
+    {
+        RevokedAt = DateTime.UtcNow;
+        IsActive  = false;
+        DeletedAt = DateTime.UtcNow;
+        DeletedBy = revokedBy;
+    }
+
+    /// <summary>Stamps the current UTC time as the last-used timestamp for auditing.</summary>
+    public void RecordUsage() => LastUsedAt = DateTime.UtcNow;
 }

@@ -65,7 +65,7 @@ public sealed class RefreshTokenProcessor : IRefreshTokenProcessor
         // RFC 6749 §5.1: expires_in MUST reflect the actual JWT lifetime, not the client config value.
         var expiresIn = _tokenService.GetAccessTokenLifetimeSeconds(client.AccessTokenLifetime);
         var newAccessToken = await _tokenService.GenerateAccessTokenAsync(
-            client.Id, userId, scopes, "REFRESH_TOKEN", ipAddress, userAgent, expiresIn, dpopJkt);
+            client.Id, userId, scopes, "REFRESH_TOKEN", refreshToken.SessionId, ipAddress, userAgent, expiresIn, dpopJkt);
         // Generate the new refresh token first so we know its ID before we write anything.
         var (newRefreshToken, newRefreshTokenId) = await _tokenService.GenerateRefreshTokenAsync(
             client.Id, userId, refreshToken.SessionId, scopes,
@@ -88,12 +88,24 @@ public sealed class RefreshTokenProcessor : IRefreshTokenProcessor
 
         await _unitOfWork.SaveChangesAsync();
 
+        // OIDC Core §12: when the original grant included the openid scope, the refresh response
+        // SHOULD include an updated id_token so clients can detect claims changes.
+        // Nonce MUST NOT be re-included (it is a one-time value from the original request).
+        string? idToken = null;
+        if (userId.HasValue && scopes.Contains("openid", StringComparer.Ordinal))
+            idToken = await _tokenService.GenerateIdTokenAsync(
+                client.ClientId, userId.Value, scopes,
+                nonce: null,                 // one-time nonce not stored on refresh token
+                authTime: DateTime.UtcNow,   // original auth_time not preserved; use now
+                accessToken: newAccessToken);
+
         return new TokenResponse
         {
             AccessToken = newAccessToken,
             TokenType = "Bearer",
             ExpiresIn = expiresIn,
             RefreshToken = newRefreshToken,
+            IdToken = idToken,
             Scope = string.Join(" ", scopes)
         };
     }

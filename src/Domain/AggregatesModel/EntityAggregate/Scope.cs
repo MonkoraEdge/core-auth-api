@@ -14,4 +14,14 @@ public class Scope : BaseEntity, ISoftDelete
     public bool IsActive { get; set; } = true;
     public DateTime? DeletedAt { get; set; }
     public string? DeletedBy { get; set; }
+
+    // ─── Behavior ──────────────────────────────────────────────────────
+
+    /// <summary>Soft-deletes the scope and deactivates it so it can no longer be requested.</summary>
+    public void SoftDelete(string? deletedBy)
+    {
+        DeletedAt = DateTime.UtcNow;
+        DeletedBy = deletedBy;
+        IsActive = false;
+    }
 }

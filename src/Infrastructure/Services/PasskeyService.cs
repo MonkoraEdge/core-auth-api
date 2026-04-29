@@ -227,12 +227,12 @@ public class PasskeyService : IPasskeyService
                 OriginalOptions        = options,
                 StoredPublicKey        = storedCred.PublicKey,
                 StoredSignatureCounter = storedCred.SignatureCounter,
-                IsUserHandleOwnerOfCredentialIdCallback = async (args, ct) =>
+                IsUserHandleOwnerOfCredentialIdCallback = (args, ct) =>
                 {
                     // Verify the user handle in the assertion matches the credential owner.
-                    if (args.UserHandle == null || args.UserHandle.Length == 0) return true;
+                    if (args.UserHandle == null || args.UserHandle.Length == 0) return Task.FromResult(true);
                     var assertedUserId = new Guid(args.UserHandle);
-                    return assertedUserId == storedCred.UserId;
+                    return Task.FromResult(assertedUserId == storedCred.UserId);
                 }
             });
 
@@ -282,7 +282,7 @@ public class PasskeyService : IPasskeyService
         var expiresIn = _tokenService.GetAccessTokenLifetimeSeconds(null);
 
         var accessToken = await _tokenService.GenerateAccessTokenAsync(
-            Guid.Empty, user.Id, scopes, "passkey", ipAddress, userAgent, expiresIn);
+            Guid.Empty, user.Id, scopes, "passkey", null, ipAddress, userAgent, expiresIn);
 
         var (refreshToken, _) = await _tokenService.GenerateRefreshTokenAsync(
             Guid.Empty, user.Id, null, scopes,

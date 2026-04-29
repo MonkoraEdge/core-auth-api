@@ -32,6 +32,7 @@ using Microsoft.IdentityModel.Tokens;
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Security.Cryptography;
+using MonkoraEdge.Core.Auth.API.Middleware;
 using DomainIUnitOfWork = MonkoraEdge.Core.Auth.Domain.Services.Interface.IUnitOfWork;
 using DotNetIUnitOfWork = MonkoraEdge.Core.DotNet.Infrastructure.Interfaces.IUnitOfWork;
 
@@ -91,6 +92,9 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IAuditLogRepository, AuditLogRepository>();
         services.AddScoped<ILoginAttemptRepository, LoginAttemptRepository>();
         services.AddScoped<IRateLimitRepository, RateLimitRepository>();
+
+        // Tenant context — one instance per request, populated by TenantContextMiddleware.
+        services.AddScoped<ITenantContext, RequestTenantContext>();
 
         // ApiKey aggregate
         services.AddScoped<IApiKeyRepository, ApiKeyRepository>();
@@ -203,8 +207,25 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ITokenService>(m =>
         {
             var opts = m.GetRequiredService<EnvironmentOptions>();
-            // OAUTH2_AUDIENCE must differ from AUTH_ISSUER to prevent audience confusion attacks (RFC 8707).
             var audience = opts.OAUTH2_AUDIENCE;
+
+            // Load optional previous signing key for JWKS publication during rotation window.
+            // Old tokens stay verifiable until they expire (≤ 900 s), then remove the env var.
+            RsaSecurityKey? previousKey = null;
+            if (!string.IsNullOrEmpty(opts.OAUTH2_PREVIOUS_PRIVATE_KEY))
+            {
+                try
+                {
+                    var prevRsa = RSA.Create();
+                    prevRsa.ImportFromPem(opts.OAUTH2_PREVIOUS_PRIVATE_KEY);
+                    var p = prevRsa.ExportParameters(false);
+                    var km = (p.Modulus ?? []).Concat(p.Exponent ?? []).ToArray();
+                    var prevKid = Convert.ToBase64String(SHA256.HashData(km), 0, 16)
+                        .TrimEnd('=').Replace('+', '-').Replace('/', '_');
+                    previousKey = new RsaSecurityKey(prevRsa) { KeyId = prevKid };
+                }
+                catch { /* ignore malformed previous key — log in production via ILogger */ }
+            }
 
             return new TokenService(
                 m.GetRequiredService<DomainIUnitOfWork>(),
@@ -216,7 +237,9 @@ public static class ServiceCollectionExtensions
                 m.GetRequiredService<RsaSecurityKey>(),
                 opts.AUTH_ISSUER,
                 audience,
-                opts.TOKEN_EXPIRES_IN_MINUTES * 60);
+                opts.TOKEN_EXPIRES_IN_MINUTES * 60,
+                opts.HASH_SECRET_KEY,
+                previousKey);
         });
 
         // ── JWT Bearer authentication ──────────────────────────────────────────────────
@@ -227,16 +250,38 @@ public static class ServiceCollectionExtensions
             .AddJwtBearer();
 
         services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)
-            .Configure<RsaSecurityKey>((jwtOptions, rsaKey) =>
+            .Configure<RsaSecurityKey, EnvironmentOptions>((jwtOptions, rsaKey, opts) =>
             {
-                var audience = options.OAUTH2_AUDIENCE;
+                var audience = opts.OAUTH2_AUDIENCE;
+
+                // Build signing key list — current key + optional previous key for rotation window.
+                var signingKeys = new List<SecurityKey> { rsaKey };
+                if (!string.IsNullOrEmpty(opts.OAUTH2_PREVIOUS_PRIVATE_KEY))
+                {
+                    try
+                    {
+                        var prevRsa = RSA.Create();
+                        prevRsa.ImportFromPem(opts.OAUTH2_PREVIOUS_PRIVATE_KEY);
+                        var p = prevRsa.ExportParameters(false);
+                        var km = (p.Modulus ?? []).Concat(p.Exponent ?? []).ToArray();
+                        var prevKid = Convert.ToBase64String(SHA256.HashData(km), 0, 16)
+                            .TrimEnd('=').Replace('+', '-').Replace('/', '_');
+                        signingKeys.Add(new RsaSecurityKey(prevRsa) { KeyId = prevKid });
+                    }
+                    catch { /* ignore malformed previous key */ }
+                }
+
+                // Capture HMAC key bytes for use in the OnTokenValidated closure below.
+                // The same keyed hash function is used by TokenService.HashToken so DB lookups match.
+                var hashKeyBytes = System.Text.Encoding.UTF8.GetBytes(opts.HASH_SECRET_KEY ?? string.Empty);
 
                 jwtOptions.MapInboundClaims = false; // keep claims as-is; do not remap to WS-Security URIs
 
                 jwtOptions.TokenValidationParameters = new TokenValidationParameters
                 {
                     ValidateIssuerSigningKey = true,
-                    IssuerSigningKey        = rsaKey,            // RS256 key from the singleton
+                    // Use the plural form so the validator tries all keys — supports key rotation.
+                    IssuerSigningKeys       = signingKeys,
 
                     // Restrict accepted algorithms — prevents alg=none and HS256 confusion attacks.
                     ValidAlgorithms         = new[] { SecurityAlgorithms.RsaSha256 },
@@ -246,7 +291,7 @@ public static class ServiceCollectionExtensions
                     ValidTypes              = new[] { "at+JWT" },
 
                     ValidateIssuer          = true,
-                    ValidIssuer             = options.AUTH_ISSUER,
+                    ValidIssuer             = opts.AUTH_ISSUER,
 
                     ValidateAudience        = true,
                     ValidAudience           = audience,
@@ -277,9 +322,15 @@ public static class ServiceCollectionExtensions
                             .GetRequiredService<IAccessTokenRepository>();
 
                         var rawToken = ctx.SecurityToken.UnsafeToString();
-                        var tokenHash = System.Convert.ToHexString(
-                            System.Security.Cryptography.SHA256.HashData(
-                                System.Text.Encoding.UTF8.GetBytes(rawToken))).ToLowerInvariant();
+                        // HMAC-SHA256 must match the algorithm used in TokenService.HashToken.
+                        var tokenBytes = System.Text.Encoding.UTF8.GetBytes(rawToken);
+                        var tokenHash = hashKeyBytes.Length > 0
+                            ? System.Convert.ToHexString(
+                                System.Security.Cryptography.HMACSHA256.HashData(hashKeyBytes, tokenBytes))
+                                .ToLowerInvariant()
+                            : System.Convert.ToHexString(
+                                System.Security.Cryptography.SHA256.HashData(tokenBytes))
+                                .ToLowerInvariant();
 
                         // Check explicit revocation list first (covers RFC 7009 POST /revoke).
                         if (await revokedRepo.IsRevokedAsync(tokenHash))
@@ -315,6 +366,7 @@ public static class ServiceCollectionExtensions
                 m.GetRequiredService<IPasswordResetRepository>(),
                 m.GetRequiredService<IPasswordHistoryRepository>(),
                 m.GetRequiredService<ILoginAttemptRepository>(),
+                m.GetRequiredService<IAuditLogRepository>(),
                 m.GetRequiredService<IUserRoleRepository>(),
                 m.GetRequiredService<IRoleRepository>(),
                 m.GetRequiredService<IRefreshTokenRepository>(),

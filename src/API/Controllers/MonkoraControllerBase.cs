@@ -1,5 +1,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Mvc;
+using MonkoraEdge.Core.Auth.Domain.Exceptions;
+using MonkoraEdge.Core.DotNet.AggregatesModel.ConstantAggregate;
 
 namespace MonkoraEdge.Core.Auth.API.Controllers;
 
@@ -20,7 +22,7 @@ public abstract class MonkoraControllerBase : ControllerBase
     {
         var sub = User.FindFirstValue("sub") ?? User.FindFirstValue(ClaimTypes.NameIdentifier);
         if (!Guid.TryParse(sub, out var id))
-            throw new UnauthorizedAccessException("Invalid user token.");
+            throw new DomainException("auth", MonkoraEdge.Core.DotNet.AggregatesModel.ConstantAggregate.ErrorCodeType.UNAUTHORIZED, "Invalid or missing user identity claim.");
         return id;
     }
 
@@ -58,6 +60,11 @@ public abstract class MonkoraControllerBase : ControllerBase
 
     /// <summary>
     /// Resolve the caller User-Agent string for security telemetry.
+    /// Truncated to 512 characters to prevent oversized values from reaching the DB.
     /// </summary>
-    protected string? GetUserAgent() => Request.Headers.UserAgent.ToString();
+    protected string? GetUserAgent()
+    {
+        var ua = Request.Headers.UserAgent.ToString();
+        return string.IsNullOrEmpty(ua) ? null : (ua.Length > 512 ? ua[..512] : ua);
+    }
 }

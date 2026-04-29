@@ -38,10 +38,11 @@ public class OAuth2Controller : MonkoraControllerBase
     [HttpGet("/authorize")]
     [HttpPost("/authorize")]
     [EnableRateLimiting("default")]
-    public async Task<IActionResult> Authorize([FromQuery] AuthorizeRequest request)
+    public async Task<IActionResult> Authorize([FromQuery] AuthorizeQueryRequest query)
     {
         try
         {
+            var request = MapQueryToAuthorizeRequest(query);
             var response = await _oauth2Service.ProcessAuthorizeRequestAsync(request, GetAuthenticatedUserId());
             return ToActionResult(response);
         }
@@ -50,6 +51,22 @@ public class OAuth2Controller : MonkoraControllerBase
             return OAuthError("invalid_request", ex.ErrorMessage, StatusCodes.Status400BadRequest);
         }
     }
+
+    private static AuthorizeRequest MapQueryToAuthorizeRequest(AuthorizeQueryRequest q) => new()
+    {
+        ResponseType        = q.ResponseType,
+        ClientId            = q.ClientId,
+        RedirectUri         = q.RedirectUri,
+        Scope               = q.Scope,
+        State               = q.State,
+        CodeChallenge       = q.CodeChallenge,
+        CodeChallengeMethod = q.CodeChallengeMethod,
+        Nonce               = q.Nonce,
+        Prompt              = q.Prompt,
+        MaxAge              = q.MaxAge,
+        LoginHint           = q.LoginHint,
+        RequestUri          = q.RequestUri,
+    };
 
     /// <summary>
     /// Consent submission endpoint used after UI consent screen.
@@ -136,6 +153,7 @@ public class OAuth2Controller : MonkoraControllerBase
     [HttpPost("revoke")]
     [HttpPost("/revoke")]
     [Consumes("application/x-www-form-urlencoded")]
+    [Produces("application/json")]
     [EnableRateLimiting("auth")]
     public async Task<IActionResult> Revoke([FromForm] RevocationFormRequest formRequest)
     {
@@ -180,6 +198,7 @@ public class OAuth2Controller : MonkoraControllerBase
     [HttpPost("introspect")]
     [HttpPost("/introspect")]
     [Consumes("application/x-www-form-urlencoded")]
+    [Produces("application/json")]
     [EnableRateLimiting("auth")]
     public async Task<IActionResult> Introspect([FromForm] IntrospectFormRequest formRequest)
     {
@@ -219,7 +238,10 @@ public class OAuth2Controller : MonkoraControllerBase
     /// OIDC UserInfo endpoint that returns allowed claims for authenticated subject.
     /// </summary>
     [HttpGet("userinfo")]
+    [HttpPost("userinfo")]
     [Authorize]
+    [Produces("application/json")]
+    [EnableRateLimiting("auth")]
     public async Task<IActionResult> UserInfo()
     {
         var headerValue = Request.Headers[HeaderNames.Authorization].ToString();
@@ -235,6 +257,7 @@ public class OAuth2Controller : MonkoraControllerBase
         try
         {
             var result = await _oauth2Service.GetUserInfoAsync(token);
+            ApplyNoStoreHeaders();
             return Ok(result);
         }
         catch (DomainException ex)
@@ -273,6 +296,7 @@ public class OAuth2Controller : MonkoraControllerBase
         if (!string.IsNullOrEmpty(validatedRedirectUri))
             return Redirect(validatedRedirectUri);
 
+        ApplyNoStoreHeaders();
         return Ok(new { message = "Session ended." });
     }
 
@@ -385,17 +409,15 @@ public class OAuth2Controller : MonkoraControllerBase
         return response.Kind switch
         {
             AuthorizeResponseKind.Redirect => Redirect(response.RedirectUrl!),
-            AuthorizeResponseKind.LoginRequired => Ok(new
+            AuthorizeResponseKind.LoginRequired => Ok(new AuthorizeLoginRequiredResponse
             {
-                requires_login = true,
-                client = response.Client,
-                requested_scopes = response.RequestedScopes
+                Client          = response.Client,
+                RequestedScopes = response.RequestedScopes
             }),
-            AuthorizeResponseKind.ConsentRequired => Ok(new
+            AuthorizeResponseKind.ConsentRequired => Ok(new AuthorizeConsentRequiredResponse
             {
-                requires_consent = true,
-                client = response.Client,
-                requested_scopes = response.RequestedScopes
+                Client          = response.Client,
+                RequestedScopes = response.RequestedScopes
             }),
             _ => BadRequest(new { error = response.Error, error_description = response.ErrorDescription })
         };

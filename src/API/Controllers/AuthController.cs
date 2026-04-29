@@ -37,7 +37,7 @@ public class AuthController : MonkoraControllerBase
     /// Returns access/refresh tokens, or a 2FA challenge response when required.
     /// </summary>
     [HttpPost("login")]
-    [EnableRateLimiting("default")]
+    [EnableRateLimiting("auth")]
     public async Task<IActionResult> Login([FromBody] LoginRequest request)
     {
         var result = await _authService.LoginAsync(request, GetIpAddress(), GetUserAgent());
@@ -48,7 +48,7 @@ public class AuthController : MonkoraControllerBase
     /// Register a new local account and trigger verification workflow.
     /// </summary>
     [HttpPost("register")]
-    [EnableRateLimiting("default")]
+    [EnableRateLimiting("auth")]
     public async Task<IActionResult> Register([FromBody] RegisterRequest request)
     {
         var result = await _authService.RegisterAsync(request, GetIpAddress());
@@ -71,7 +71,7 @@ public class AuthController : MonkoraControllerBase
     /// Compatibility refresh endpoint that proxies to OAuth2 refresh_token grant processing.
     /// </summary>
     [HttpPost("refresh")]
-    [EnableRateLimiting("default")]
+    [EnableRateLimiting("auth")]
     public async Task<IActionResult> Refresh([FromBody] RefreshTokenRequest request)
     {
         try
@@ -106,7 +106,7 @@ public class AuthController : MonkoraControllerBase
     /// Start forgot-password flow and send reset instructions (email/link) if account exists.
     /// </summary>
     [HttpPost("forgot-password")]
-    [EnableRateLimiting("default")]
+    [EnableRateLimiting("auth")]
     public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordRequest request)
     {
         await _authService.ForgotPasswordAsync(request);
@@ -117,7 +117,7 @@ public class AuthController : MonkoraControllerBase
     /// Complete password reset using a valid reset token issued by forgot-password flow.
     /// </summary>
     [HttpPost("reset-password")]
-    [EnableRateLimiting("default")]
+    [EnableRateLimiting("auth")]
     public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordRequest request)
     {
         await _authService.ResetPasswordAsync(request);

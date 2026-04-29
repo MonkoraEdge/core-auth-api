@@ -23,6 +23,8 @@ public class TokenService : ITokenService
     private readonly string _issuer;
     private readonly string _audience;
     private readonly int _defaultAccessTokenLifetimeSeconds;
+    private readonly string? _hashSecretKey;
+    private readonly RsaSecurityKey? _previousSigningKey;
 
     // OAuth 2.1 recommends short-lived access tokens; 15 minutes is the hard ceiling enforced here.
     private const int MaxAccessTokenLifetimeSeconds = 900;
@@ -37,7 +39,9 @@ public class TokenService : ITokenService
         RsaSecurityKey signingKey,
         string issuer,
         string audience,
-        int defaultAccessTokenLifetimeSeconds = 900)
+        int defaultAccessTokenLifetimeSeconds = 900,
+        string? hashSecretKey = null,
+        RsaSecurityKey? previousSigningKey = null)
     {
         if (signingKey.Rsa.KeySize < 2048)
             throw new InvalidOperationException(
@@ -54,6 +58,8 @@ public class TokenService : ITokenService
         // Silently cap rather than throw — prevents a misconfigured env var from hard-crashing startup.
         _defaultAccessTokenLifetimeSeconds = Math.Min(defaultAccessTokenLifetimeSeconds, MaxAccessTokenLifetimeSeconds);
         _signingKey = signingKey;
+        _hashSecretKey = hashSecretKey;
+        _previousSigningKey = previousSigningKey;
     }
 
     // ─── RFC 6749 §5.1: expires_in MUST equal actual JWT exp − iat ────────────────
@@ -64,12 +70,33 @@ public class TokenService : ITokenService
         return Math.Min(requestedSeconds.Value, MaxAccessTokenLifetimeSeconds);
     }
 
-    public Task<string> GenerateAccessTokenAsync(Guid clientId, Guid? userId, string[] scopes, string? grantType, string? ipAddress, string? userAgent, int? lifetimeSeconds = null, string? dpopJkt = null)
+    public Task<string> GenerateAccessTokenAsync(Guid clientId, Guid? userId, string[] scopes, string? grantType, Guid? sessionId = null, string? ipAddress = null, string? userAgent = null, int? lifetimeSeconds = null, string? dpopJkt = null)
     {
         var now = DateTime.UtcNow;
-        var jti = Guid.NewGuid().ToString("N");
         var effectiveLifetime = GetAccessTokenLifetimeSeconds(lifetimeSeconds);
         var expiry = now.AddSeconds(effectiveLifetime);
+
+        // Pre-create the entity so its auto-generated Id can be reused as the JWT jti.
+        // This guarantees that the jti inside the signed token always matches the DB row Id,
+        // so introspection can return the canonical jti without storing a separate column.
+        var entity = new AccessToken
+        {
+            // Id is set to Guid.NewGuid() by BaseEntity — captured before JWT is built.
+            TokenHash = string.Empty, // overwritten after JWT is signed
+            TokenType = "Bearer",
+            ClientId = clientId,
+            UserId = userId,
+            SessionId = sessionId,
+            Scopes = scopes,
+            GrantType = grantType,
+            IpAddress = ipAddress,
+            UserAgent = userAgent,
+            IssuedAt = now,
+            ExpiresAt = expiry
+        };
+
+        // Use the entity's DB ID as the JWT jti — single source of truth for token identity.
+        var jti = entity.Id.ToString();
 
         var claims = new List<Claim>
         {
@@ -105,21 +132,8 @@ public class TokenService : ITokenService
             issuedAt: now);
 
         var tokenString = new JwtSecurityTokenHandler().WriteToken(new JwtSecurityToken(header, payload));
-        var tokenHash = HashToken(tokenString);
-
-        _accessTokenRepo.Insert(new AccessToken
-        {
-            TokenHash = tokenHash,
-            TokenType = "Bearer",
-            ClientId = clientId,
-            UserId = userId,
-            Scopes = scopes,
-            GrantType = grantType,
-            IpAddress = ipAddress,
-            UserAgent = userAgent,
-            IssuedAt = now,
-            ExpiresAt = expiry
-        });
+        entity.TokenHash = HashToken(tokenString);
+        _accessTokenRepo.Insert(entity);
 
         return Task.FromResult(tokenString);
     }
@@ -130,6 +144,7 @@ public class TokenService : ITokenService
             .TrimEnd('=').Replace('+', '-').Replace('/', '_');
         var tokenHash = HashToken(rawToken);
         var tokenId = Guid.NewGuid(); // generated here so the caller can link ReplacedByTokenId
+        var now = DateTime.UtcNow; // single clock read — IssuedAt and ExpiresAt share the same anchor
 
         _refreshTokenRepo.Insert(new RefreshToken
         {
@@ -142,8 +157,8 @@ public class TokenService : ITokenService
             Scopes = scopes,
             IpAddress = ipAddress,
             UserAgent = userAgent,
-            IssuedAt = DateTime.UtcNow,
-            ExpiresAt = DateTime.UtcNow.AddSeconds(lifetimeSeconds)
+            IssuedAt = now,
+            ExpiresAt = now.AddSeconds(lifetimeSeconds)
         });
 
         return Task.FromResult((rawToken, tokenId));
@@ -154,6 +169,7 @@ public class TokenService : ITokenService
         var rawCode = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32))
             .TrimEnd('=').Replace('+', '-').Replace('/', '_');
         var codeHash = HashToken(rawCode);
+        var now = DateTime.UtcNow; // single clock read — AuthTime and ExpiresAt share the same anchor
 
         _authCodeRepo.Insert(new AuthorizationCode
         {
@@ -166,8 +182,8 @@ public class TokenService : ITokenService
             CodeChallenge = codeChallenge,
             CodeChallengeMethod = codeChallengeMethod ?? "S256",
             Nonce = nonce,
-            AuthTime = DateTime.UtcNow,
-            ExpiresAt = DateTime.UtcNow.AddSeconds(60)
+            AuthTime = now,
+            ExpiresAt = now.AddSeconds(60)
         });
 
         return Task.FromResult(rawCode);
@@ -196,6 +212,9 @@ public class TokenService : ITokenService
                 ClientId = accessToken.ClientId.ToString(),
                 Scope = string.Join(" ", accessToken.Scopes),
                 Issuer = _issuer,
+                // RFC 7662 §2.2: aud SHOULD be present — it equals the configured audience value
+                // so relying parties can verify the token was meant for them.
+                Aud = _audience,
                 Exp = new DateTimeOffset(accessToken.ExpiresAt).ToUnixTimeSeconds(),
                 Iat = new DateTimeOffset(accessToken.IssuedAt).ToUnixTimeSeconds(),
                 Jti = accessToken.Id.ToString(),
@@ -320,27 +339,37 @@ public class TokenService : ITokenService
 
     public string HashToken(string token)
     {
-        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(token));
+        var data = Encoding.UTF8.GetBytes(token);
+        // Use HMAC-SHA256 when a secret key is configured — stored hashes are then keyed so
+        // an attacker who reads the token table cannot verify arbitrary tokens without the key.
+        // Falls back to plain SHA-256 in test environments where no key is supplied.
+        var bytes = string.IsNullOrEmpty(_hashSecretKey)
+            ? SHA256.HashData(data)
+            : HMACSHA256.HashData(Encoding.UTF8.GetBytes(_hashSecretKey), data);
         return Convert.ToHexString(bytes).ToLowerInvariant();
     }
 
     public JwksResponse GetJwks()
     {
-        var parameters = _signingKey.Rsa.ExportParameters(false);
-        return new JwksResponse
+        var keys = new List<JwkKey> { BuildJwkKey(_signingKey) };
+        // Publish previous key during rotation window so tokens signed with the old key remain
+        // verifiable by clients until they expire (max 900 s). Remove once all old tokens expire.
+        if (_previousSigningKey != null)
+            keys.Add(BuildJwkKey(_previousSigningKey));
+        return new JwksResponse { Keys = keys };
+    }
+
+    private static JwkKey BuildJwkKey(RsaSecurityKey key)
+    {
+        var parameters = key.Rsa.ExportParameters(false);
+        return new JwkKey
         {
-            Keys = new List<JwkKey>
-            {
-                new JwkKey
-                {
-                    Kty = "RSA",
-                    Use = "sig",
-                    Kid = _signingKey.KeyId,
-                    Alg = "RS256",
-                    N = Base64UrlEncoder.Encode(parameters.Modulus),
-                    E = Base64UrlEncoder.Encode(parameters.Exponent)
-                }
-            }
+            Kty = "RSA",
+            Use = "sig",
+            Kid = key.KeyId,
+            Alg = "RS256",
+            N = Base64UrlEncoder.Encode(parameters.Modulus),
+            E = Base64UrlEncoder.Encode(parameters.Exponent)
         };
     }
 

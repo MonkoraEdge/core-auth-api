@@ -161,7 +161,7 @@ public class SocialLoginService : ISocialLoginService
         var socialClientId = socialClient?.Id ?? Guid.Empty;
         var scopes = new[] { "openid", "profile", "email" };
         var accessToken = await _tokenService.GenerateAccessTokenAsync(
-            socialClientId, localUser.Id, scopes, "social", ipAddress, userAgent);
+            socialClientId, localUser.Id, scopes, "social", null, ipAddress, userAgent);
         (string refreshRaw, Guid _rtId) = await _tokenService.GenerateRefreshTokenAsync(
             socialClientId, localUser.Id, null, scopes, lifetimeSeconds: 30 * 24 * 3600,
             ipAddress: ipAddress, userAgent: userAgent);

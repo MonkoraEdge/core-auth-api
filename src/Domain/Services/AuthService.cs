@@ -22,6 +22,7 @@ public class AuthService : IAuthService
     private readonly IPasswordResetRepository _passwordResetRepo;
     private readonly IPasswordHistoryRepository _passwordHistoryRepo;
     private readonly ILoginAttemptRepository _loginAttemptRepo;
+    private readonly IAuditLogRepository _auditLogRepo;
     private readonly IUserRoleRepository _userRoleRepo;
     private readonly IRoleRepository _roleRepo;
     private readonly IRefreshTokenRepository _refreshTokenRepo;
@@ -35,6 +36,9 @@ public class AuthService : IAuthService
     // How long a 2FA challenge token is valid after the password step.
     private static readonly TimeSpan TwoFactorChallengeExpiry = TimeSpan.FromMinutes(5);
 
+    // Maximum consecutive failed login attempts before the identity is locked out.
+    private const int LockoutThreshold = 5;
+
     public AuthService(
         IUnitOfWork unitOfWork,
         IUserRepository userRepo,
@@ -45,6 +49,7 @@ public class AuthService : IAuthService
         IPasswordResetRepository passwordResetRepo,
         IPasswordHistoryRepository passwordHistoryRepo,
         ILoginAttemptRepository loginAttemptRepo,
+        IAuditLogRepository auditLogRepo,
         IUserRoleRepository userRoleRepo,
         IRoleRepository roleRepo,
         IRefreshTokenRepository refreshTokenRepo,
@@ -64,6 +69,7 @@ public class AuthService : IAuthService
         _passwordResetRepo = passwordResetRepo;
         _passwordHistoryRepo = passwordHistoryRepo;
         _loginAttemptRepo = loginAttemptRepo;
+        _auditLogRepo = auditLogRepo;
         _userRoleRepo = userRoleRepo;
         _roleRepo = roleRepo;
         _refreshTokenRepo = refreshTokenRepo;
@@ -127,7 +133,7 @@ public class AuthService : IAuthService
 
         if (!_passwordService.VerifyPassword(request.Password, identity.PasswordHash))
         {
-            identity.RecordFailedAttempt(5, _signinFailedMinutes);
+            identity.RecordFailedAttempt(LockoutThreshold, _signinFailedMinutes);
             _identityRepo.Update(identity);
 
             await RecordLoginAttemptAsync(user.Id, request.Username, null, ipAddress, userAgent, false, "INVALID_PASSWORD", request.ClientId);
@@ -146,7 +152,7 @@ public class AuthService : IAuthService
         {
             if (string.IsNullOrEmpty(request.TwoFactorCode) && string.IsNullOrEmpty(request.TwoFactorRecoveryCode))
             {
-                user.LastActivityAt = DateTime.UtcNow;
+                user.RecordActivity();
                 _userRepo.Update(user);
                 await _unitOfWork.SaveChangesAsync();
 
@@ -261,7 +267,7 @@ public class AuthService : IAuthService
         var user = await _userRepo.GetByIdAsync(userId);
         if (user != null)
         {
-            user.LastActivityAt = DateTime.UtcNow;
+            user.RecordActivity();
             _userRepo.Update(user);
             await _unitOfWork.SaveChangesAsync();
         }
@@ -320,10 +326,8 @@ public class AuthService : IAuthService
 
         _passwordHistoryRepo.Insert(new PasswordHistory { UserId = user.Id, PasswordHash = oldHash });
 
-        user.LastPasswordChangedAt = DateTime.UtcNow;
+        user.RecordPasswordChanged();
         _userRepo.Update(user);
-
-        await _tokenService.RevokeAllUserTokensAsync(user.Id, reason: "password_reset");
         await _unitOfWork.SaveChangesAsync();
 
         return new UpdateResponse { Id = user.Id, IsSuccess = true, Message = "Password has been reset." };
@@ -352,7 +356,7 @@ public class AuthService : IAuthService
         _passwordHistoryRepo.Insert(new PasswordHistory { UserId = userId, PasswordHash = oldHash });
 
         var user = await _userRepo.GetByIdAsync(userId);
-        if (user != null) { user.LastPasswordChangedAt = DateTime.UtcNow; _userRepo.Update(user); }
+        if (user != null) { user.RecordPasswordChanged(); _userRepo.Update(user); }
 
         await _unitOfWork.SaveChangesAsync();
         return new UpdateResponse { Id = userId, IsSuccess = true, Message = "Password changed." };
@@ -562,7 +566,7 @@ public class AuthService : IAuthService
         // RFC 6749 §5.1: ExpiresIn MUST reflect the actual JWT lifetime.
         var expiresIn = _tokenService.GetAccessTokenLifetimeSeconds(accessLifetime);
         var accessToken = await _tokenService.GenerateAccessTokenAsync(
-            resolvedClientId, user.Id, scopes, "direct", ipAddress, userAgent, expiresIn);
+            resolvedClientId, user.Id, scopes, "direct", null, ipAddress, userAgent, expiresIn);
         var (refreshToken, _) = await _tokenService.GenerateRefreshTokenAsync(
             resolvedClientId, user.Id, null, scopes, refreshLifetime,
             ipAddress: ipAddress, userAgent: userAgent);
@@ -573,6 +577,18 @@ public class AuthService : IAuthService
         await RecordLoginAttemptAsync(user.Id, user.Email,
             resolvedClientId == Guid.Empty ? null : resolvedClientId,
             ipAddress, userAgent, true, null, clientId);
+        _auditLogRepo.Insert(new AuditLog
+        {
+            UserId = user.Id,
+            ClientId = resolvedClientId == Guid.Empty ? (Guid?)null : resolvedClientId,
+            ActorType = "user",
+            Action = "login_success",
+            EntityName = "User",
+            EntityId = user.Id,
+            IpAddress = ipAddress,
+            UserAgent = userAgent,
+            Result = "success"
+        });
         await _unitOfWork.SaveChangesAsync();
 
         var userRoles = await _userRoleRepo.GetByUserIdAsync(user.Id);
@@ -700,7 +716,7 @@ public class AuthService : IAuthService
         var expiresIn = _tokenService.GetAccessTokenLifetimeSeconds(null);
 
         var accessToken = await _tokenService.GenerateAccessTokenAsync(
-            Guid.Empty, user.Id, scopes, "magic_link", ipAddress, userAgent, expiresIn);
+            Guid.Empty, user.Id, scopes, "magic_link", null, ipAddress, userAgent, expiresIn);
         var (refreshToken, _) = await _tokenService.GenerateRefreshTokenAsync(
             Guid.Empty, user.Id, null, scopes, 30 * 24 * 60, // 30-day refresh
             ipAddress: ipAddress, userAgent: userAgent);

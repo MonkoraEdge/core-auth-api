@@ -28,7 +28,7 @@ public class WellKnownController : ControllerBase
     [Produces("application/json")]
     public IActionResult GetOpenIdConfiguration()
     {
-        var baseUrl = $"{Request.Scheme}://{Request.Host}";
+        var baseUrl = _tokenService.GetIssuer();
         Response.Headers[Microsoft.Net.Http.Headers.HeaderNames.CacheControl] = "public, max-age=3600";
         return Ok(_oauth2Service.GetOpenIdConfiguration(baseUrl));
     }
@@ -40,7 +40,7 @@ public class WellKnownController : ControllerBase
     [Produces("application/json")]
     public IActionResult GetAuthorizationServerMetadata()
     {
-        var baseUrl = $"{Request.Scheme}://{Request.Host}";
+        var baseUrl = _tokenService.GetIssuer();
         Response.Headers[Microsoft.Net.Http.Headers.HeaderNames.CacheControl] = "public, max-age=3600";
         return Ok(_oauth2Service.GetAuthorizationServerMetadata(baseUrl));
     }

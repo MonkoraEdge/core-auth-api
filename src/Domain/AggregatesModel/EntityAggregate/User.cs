@@ -63,4 +63,7 @@ public class User : BaseEntity, ISoftDelete, IAggregateRoot
         if (Status == UserStatus.Inactive)
             Status = UserStatus.Active;
     }
+
+    /// <summary>Records the timestamp of a successful password change.</summary>
+    public void RecordPasswordChanged() => LastPasswordChangedAt = DateTime.UtcNow;
 }

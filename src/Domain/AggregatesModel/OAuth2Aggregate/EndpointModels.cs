@@ -38,6 +38,36 @@ public sealed class ConsentResponse
     public string RedirectUrl { get; init; } = string.Empty;
 }
 
+/// <summary>
+/// Returned by /authorize when the user must authenticate before the flow can continue.
+/// </summary>
+public sealed class AuthorizeLoginRequiredResponse
+{
+    [JsonPropertyName("requires_login")]
+    public bool RequiresLogin { get; init; } = true;
+
+    [JsonPropertyName("client")]
+    public AuthorizationClientInfo? Client { get; init; }
+
+    [JsonPropertyName("requested_scopes")]
+    public string[] RequestedScopes { get; init; } = Array.Empty<string>();
+}
+
+/// <summary>
+/// Returned by /authorize when the user has authenticated but must grant consent.
+/// </summary>
+public sealed class AuthorizeConsentRequiredResponse
+{
+    [JsonPropertyName("requires_consent")]
+    public bool RequiresConsent { get; init; } = true;
+
+    [JsonPropertyName("client")]
+    public AuthorizationClientInfo? Client { get; init; }
+
+    [JsonPropertyName("requested_scopes")]
+    public string[] RequestedScopes { get; init; } = Array.Empty<string>();
+}
+
 public sealed class AuthorizationServerMetadataResponse
 {
     [JsonPropertyName("issuer")]
@@ -87,6 +117,28 @@ public sealed class AuthorizationServerMetadataResponse
     [JsonPropertyName("dpop_signing_alg_values_supported")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string[]? DPoPSigningAlgValuesSupported { get; set; }
+
+    /// <summary>RFC 9207: server appends iss to authorization responses to prevent mix-up attacks.</summary>
+    [JsonPropertyName("authorization_response_iss_parameter_supported")]
+    public bool AuthorizationResponseIssParameterSupported { get; set; }
+
+    // OIDC Discovery §3 — optional but recommended for OIDC-capable servers
+
+    [JsonPropertyName("subject_types_supported")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string[]? SubjectTypesSupported { get; set; }
+
+    [JsonPropertyName("id_token_signing_alg_values_supported")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string[]? IdTokenSigningAlgValuesSupported { get; set; }
+
+    [JsonPropertyName("scopes_supported")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string[]? ScopesSupported { get; set; }
+
+    [JsonPropertyName("claims_supported")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string[]? ClaimsSupported { get; set; }
 }
 
 // ─── RFC 9126 — Pushed Authorization Requests ────────────────────────────────

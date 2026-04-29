@@ -9,6 +9,7 @@ using MonkoraEdge.Core.DotNet.Extensions.Middlewares;
 using MonkoraEdge.Core.DotNet.Middleware;
 using Asp.Versioning;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Options;
 using Microsoft.OpenApi.Models;
@@ -16,6 +17,7 @@ using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using Serilog;
 using System.Diagnostics.Metrics;
+using System.Net;
 using System.Threading.RateLimiting;
 
 // Bootstrap Serilog early so startup errors are captured before the host is built.
@@ -132,16 +134,18 @@ builder.Services.AddRateLimiter(o =>
     });
 
     // Stricter policy for authentication endpoints (token, revoke, introspect).
-    // 10 requests/min per IP prevents brute-force and credential stuffing attacks.
+    // Sliding window: 10 requests/min per IP. Unlike fixed-window, sliding window prevents
+    // burst attacks at window boundaries (e.g. 10 + 10 = 20 req in 2 seconds when windows flip).
     o.AddPolicy("auth", context =>
     {
         var ip = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
 
-        return RateLimitPartition.GetFixedWindowLimiter(partitionKey: $"auth:{ip}", factory: _ =>
-            new FixedWindowRateLimiterOptions
+        return RateLimitPartition.GetSlidingWindowLimiter(partitionKey: $"auth:{ip}", factory: _ =>
+            new SlidingWindowRateLimiterOptions
             {
                 PermitLimit = 10,
                 Window = TimeSpan.FromMinutes(1),
+                SegmentsPerWindow = 6,           // 10-second resolution within the 1-minute window
                 QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
                 QueueLimit = 0
             });
@@ -225,6 +229,26 @@ builder.Services.AddSwaggerGen(setup =>
 
 var app = builder.Build();
 
+// RFC: When running behind a reverse proxy (nginx, Traefik, K8s ingress), Kestrel sees the
+// proxy's IP as RemoteIpAddress. UseForwardedHeaders rewrites RemoteIpAddress from
+// X-Forwarded-For so that rate limiting, audit logs, and IP-based security checks use
+// the real client IP. KnownProxies restricts processing to configured proxy addresses to
+// prevent IP spoofing from untrusted clients.
+var forwardedHeadersOptions = new ForwardedHeadersOptions
+{
+    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto,
+    // Restrict to loopback by default. In production, add the ingress proxy CIDRs via
+    // ForwardedHeadersOptions:KnownProxies / KnownNetworks in appsettings.json or env vars.
+    RequireHeaderSymmetry = false,
+    ForwardLimit = 1
+};
+forwardedHeadersOptions.KnownNetworks.Clear();
+forwardedHeadersOptions.KnownProxies.Clear();
+// Trust loopback (Docker overlay / sidecar patterns on same host)
+forwardedHeadersOptions.KnownProxies.Add(IPAddress.Loopback);
+forwardedHeadersOptions.KnownProxies.Add(IPAddress.IPv6Loopback);
+app.UseForwardedHeaders(forwardedHeadersOptions);
+
 app.UseHttpsRedirection();
 
 // HSTS is skipped in development to avoid locking out localhost with a long-lived HSTS header.
@@ -236,9 +260,14 @@ app.UseCookiePolicy();
 
 app.UpdateDatabase<AuthenticationDbContext>();
 
+var swaggerEnabled = app.Environment.IsDevelopment()
+    || builder.Configuration.GetValue<bool>("SwaggerOptions:Enabled");
+
 if (app.Environment.IsDevelopment())
-{
     app.UseDeveloperExceptionPage();
+
+if (swaggerEnabled)
+{
     app.UseSwagger();
     app.UseSwaggerUI();
 }
@@ -252,6 +281,11 @@ app.UseRequestLoggingMiddleware();
 
 app.UseErrorHandling(new ErrorHandlingOptions("authentication"));
 app.UseMiddleware<DomainExceptionHandlingMiddleware>();
+
+// Resolve tenant from JWT "tid" claim or X-Tenant-Id header and expose via ITenantContext.
+// Placed after error/correlation middleware so any resolution errors are properly handled,
+// but before routing/auth so controllers can rely on ITenantContext being populated.
+app.UseMiddleware<TenantContextMiddleware>();
 
 // Security headers — prevent clickjacking, MIME sniffing, and information leakage
 app.Use(async (ctx, next) =>
@@ -291,7 +325,9 @@ app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => fa
 // In production, restrict by IP using the allowlist in appsettings.json ("Metrics:AllowedCidrs").
 // The simple IP-filter below guards against accidental public exposure.
 app.MapPrometheusScrapingEndpoint("/metrics")
-   .RequireHost(builder.Configuration.GetSection("Metrics:AllowedHosts").Get<string[]>() ?? new[] { "*" })
+   // Fail-closed: restrict to localhost when AllowedHosts is not explicitly configured.
+   // In production, set Metrics:AllowedHosts to the scraper host(s) (e.g., ["prometheus.internal"]).
+   .RequireHost(builder.Configuration.GetSection("Metrics:AllowedHosts").Get<string[]>() ?? new[] { "localhost", "127.0.0.1", "::1" })
    .AllowAnonymous();
 
 app.Run();

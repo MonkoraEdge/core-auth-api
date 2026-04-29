@@ -336,7 +336,7 @@ public class SamlController : MonkoraControllerBase
                 .Replace("-----BEGIN CERTIFICATE-----", "")
                 .Replace("-----END CERTIFICATE-----", "")
                 .Replace("\n", "").Replace("\r", "").Trim();
-            try { return new X509Certificate2(Convert.FromBase64String(base64)); }
+            try { return X509CertificateLoader.LoadCertificate(Convert.FromBase64String(base64)); }
             catch { return null; }
         }
     }

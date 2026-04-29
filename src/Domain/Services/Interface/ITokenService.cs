@@ -11,7 +11,7 @@ public interface ITokenService
     /// When <paramref name="dpopJkt"/> is provided (RFC 9449), the token embeds a <c>cnf.jkt</c>
     /// claim binding it to the client's DPoP public key.
     /// </summary>
-    Task<string> GenerateAccessTokenAsync(Guid clientId, Guid? userId, string[] scopes, string? grantType, string? ipAddress, string? userAgent, int? lifetimeSeconds = null, string? dpopJkt = null);
+    Task<string> GenerateAccessTokenAsync(Guid clientId, Guid? userId, string[] scopes, string? grantType, Guid? sessionId = null, string? ipAddress = null, string? userAgent = null, int? lifetimeSeconds = null, string? dpopJkt = null);
 
     /// <summary>
     /// Return the effective access-token lifetime in seconds after applying the server cap.

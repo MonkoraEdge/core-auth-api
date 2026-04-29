@@ -263,7 +263,7 @@ public class SamlService : ISamlService
         var expiresIn = _tokenService.GetAccessTokenLifetimeSeconds(null);
 
         var accessToken = await _tokenService.GenerateAccessTokenAsync(
-            Guid.Empty, user.Id, scopes, "saml", ipAddress, userAgent, expiresIn);
+            Guid.Empty, user.Id, scopes, "saml", null, ipAddress, userAgent, expiresIn);
 
         var (refreshToken, _) = await _tokenService.GenerateRefreshTokenAsync(
             Guid.Empty, user.Id, null, scopes,

@@ -23,7 +23,7 @@ public class OAuth2Service : IOAuth2Service
     private readonly IPasswordService _passwordService;
     private readonly IRefreshTokenProcessor _refreshTokenProcessor;
     private readonly IAuditLogRepository _auditLogRepo;
-    private readonly IDistributedCache _cache;
+    private readonly IDistributedCache? _cache;
     private readonly IClientService _clientService;
     private readonly string _authIssuer;
 
@@ -57,7 +57,7 @@ public class OAuth2Service : IOAuth2Service
         _refreshTokenProcessor = refreshTokenProcessor;
         _auditLogRepo = auditLogRepo;
         _clientService = clientService;
-        _cache = cache!;
+        _cache = cache;
         _authIssuer = authIssuer;
     }
 
@@ -388,7 +388,7 @@ public class OAuth2Service : IOAuth2Service
         var scopes = authCode.Scopes;
         var expiresIn = _tokenService.GetAccessTokenLifetimeSeconds(client.AccessTokenLifetime);
         var accessToken = await _tokenService.GenerateAccessTokenAsync(
-            client.Id, authCode.UserId, scopes, "AUTHORIZATION_CODE", ipAddress, userAgent,
+            client.Id, authCode.UserId, scopes, "AUTHORIZATION_CODE", authCode.SessionId, ipAddress, userAgent,
             expiresIn, dpopJkt);
         string? refreshToken = null;
         if (scopes.Contains("offline_access", StringComparer.Ordinal))
@@ -471,7 +471,7 @@ public class OAuth2Service : IOAuth2Service
         var finalScopes = requestedScopes.Distinct(StringComparer.Ordinal).ToArray();
         var expiresIn = _tokenService.GetAccessTokenLifetimeSeconds(client.AccessTokenLifetime);
         var accessToken = await _tokenService.GenerateAccessTokenAsync(
-            client.Id, null, finalScopes, "CLIENT_CREDENTIALS", ipAddress, userAgent, expiresIn, dpopJkt);
+            client.Id, null, finalScopes, "CLIENT_CREDENTIALS", null, ipAddress, userAgent, expiresIn, dpopJkt);
 
         _auditLogRepo.Insert(new AuditLog
         {
@@ -656,7 +656,9 @@ public class OAuth2Service : IOAuth2Service
             PushedAuthorizationRequestEndpoint = $"{baseUrl}/oauth2/par",
             RegistrationEndpoint = $"{baseUrl}/oauth2/register",
             // RFC 9449: advertise DPoP as optional — clients that attach DPoP proofs get bound tokens.
-            DPoPSigningAlgValuesSupported = new[] { "RS256", "RS384", "RS512", "ES256", "ES384", "ES512", "PS256", "PS384", "PS512" }
+            DPoPSigningAlgValuesSupported = new[] { "RS256", "RS384", "RS512", "ES256", "ES384", "ES512", "PS256", "PS384", "PS512" },
+            // RFC 9207: this server appends iss to all authorization responses.
+            AuthorizationResponseIssParameterSupported = true
         };
     }
 
@@ -678,7 +680,21 @@ public class OAuth2Service : IOAuth2Service
             DeviceAuthorizationEndpoint = $"{baseUrl}/oauth2/device_authorization",
             PushedAuthorizationRequestEndpoint = $"{baseUrl}/oauth2/par",
             RegistrationEndpoint = $"{baseUrl}/oauth2/register",
-            DPoPSigningAlgValuesSupported = new[] { "RS256", "RS384", "RS512", "ES256", "ES384", "ES512", "PS256", "PS384", "PS512" }
+            DPoPSigningAlgValuesSupported = new[] { "RS256", "RS384", "RS512", "ES256", "ES384", "ES512", "PS256", "PS384", "PS512" },
+            // RFC 9207
+            AuthorizationResponseIssParameterSupported = true,
+            // OIDC Discovery §3 — advertised so OIDC clients can validate token claims
+            SubjectTypesSupported = new[] { "public" },
+            IdTokenSigningAlgValuesSupported = new[] { "RS256" },
+            ScopesSupported = new[] { "openid", "profile", "email", "phone", "offline_access" },
+            ClaimsSupported = new[]
+            {
+                "sub", "iss", "aud", "iat", "exp", "jti",
+                "auth_time", "nonce", "at_hash",
+                "name", "locale", "zoneinfo", "updated_at",
+                "email", "email_verified",
+                "phone_number", "phone_number_verified"
+            }
         };
     }
 
@@ -729,17 +745,19 @@ public class OAuth2Service : IOAuth2Service
     // ─── Private helpers ─────────────────────────────────────────────────────────
     // (All client auth and scope logic has moved to ClientAuthenticator)
 
-    private static string BuildCodeRedirectUrl(string redirectUri, string code, string? state)
+    private string BuildCodeRedirectUrl(string redirectUri, string code, string? state)
     {
-        var url = $"{redirectUri}?code={Uri.EscapeDataString(code)}";
+        // RFC 9207 §2: include iss in every successful authorization response to prevent mix-up attacks.
+        var url = $"{redirectUri}?code={Uri.EscapeDataString(code)}&iss={Uri.EscapeDataString(_tokenService.GetIssuer())}";
         if (!string.IsNullOrEmpty(state))
             url += $"&state={Uri.EscapeDataString(state)}";
         return url;
     }
 
-    private static string BuildErrorRedirectUrl(string redirectUri, string error, string? errorDescription, string? state)
+    private string BuildErrorRedirectUrl(string redirectUri, string error, string? errorDescription, string? state)
     {
-        var url = $"{redirectUri}?error={Uri.EscapeDataString(error)}";
+        // RFC 9207 §2: iss MUST also appear in error responses so clients can detect server identity.
+        var url = $"{redirectUri}?error={Uri.EscapeDataString(error)}&iss={Uri.EscapeDataString(_tokenService.GetIssuer())}";
         if (!string.IsNullOrEmpty(errorDescription))
             url += $"&error_description={Uri.EscapeDataString(errorDescription)}";
         if (!string.IsNullOrEmpty(state))
@@ -792,7 +810,7 @@ public class OAuth2Service : IOAuth2Service
 
         var atLifetime  = _tokenService.GetAccessTokenLifetimeSeconds();
         var accessToken = await _tokenService.GenerateAccessTokenAsync(
-            client.Id, entry.UserId, scopes, "urn:ietf:params:oauth:grant-type:device_code", ipAddress, userAgent, atLifetime);
+            client.Id, entry.UserId, scopes, "urn:ietf:params:oauth:grant-type:device_code", null, ipAddress, userAgent, atLifetime);
         (string refreshRaw, Guid _rtId) = await _tokenService.GenerateRefreshTokenAsync(
             client.Id, entry.UserId, null, scopes,
             lifetimeSeconds: 30 * 24 * 3600, ipAddress: ipAddress, userAgent: userAgent);
@@ -1069,7 +1087,7 @@ public class OAuth2Service : IOAuth2Service
         var expiresIn = _tokenService.GetAccessTokenLifetimeSeconds(client.AccessTokenLifetime);
         var newAccessToken = await _tokenService.GenerateAccessTokenAsync(
             client.Id, subjectUserId, requestedScopes,
-            "urn:ietf:params:oauth:grant-type:token-exchange", ipAddress, userAgent, expiresIn, dpopJkt);
+            "urn:ietf:params:oauth:grant-type:token-exchange", null, ipAddress, userAgent, expiresIn, dpopJkt);
 
         _auditLogRepo.Insert(new AuditLog
         {

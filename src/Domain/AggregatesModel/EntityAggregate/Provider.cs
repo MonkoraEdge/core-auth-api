@@ -27,4 +27,14 @@ public class Provider : BaseEntity, ISoftDelete
     public bool IsActive { get; set; }
     public DateTime? DeletedAt { get; set; }
     public string? DeletedBy { get; set; }
+
+    // ─── Behavior ──────────────────────────────────────────────────────
+
+    /// <summary>Soft-deletes the provider so it can no longer be used for social login.</summary>
+    public void SoftDelete(string? deletedBy)
+    {
+        DeletedAt = DateTime.UtcNow;
+        DeletedBy = deletedBy;
+        IsActive = false;
+    }
 }

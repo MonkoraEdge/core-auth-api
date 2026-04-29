@@ -80,9 +80,7 @@ public class ScopeService : IScopeService
         var scope = await _scopeRepo.GetByIdAsync(id);
         if (scope == null) throw new DomainException("scope", "Scope not found.");
         if (scope.IsSystemScope) throw new DomainException("scope", "System scopes cannot be deleted.");
-        scope.DeletedAt = DateTime.UtcNow;
-        scope.DeletedBy = deletedBy;
-        scope.IsActive = false;
+        scope.SoftDelete(deletedBy);
         _scopeRepo.Update(scope);
         await _unitOfWork.SaveChangesAsync();
         return new DeleteResponse { Id = scope.Id, IsSuccess = true, Message = "Scope deleted." };
@@ -189,9 +187,7 @@ public class RoleService : IRoleService
     {
         var role = await _roleRepo.GetByIdAsync(id);
         if (role == null) throw new DomainException("role", "Role not found.");
-        role.DeletedAt = DateTime.UtcNow;
-        role.DeletedBy = deletedBy;
-        role.IsActive = false;
+        role.SoftDelete(deletedBy);
         _roleRepo.Update(role);
         await _unitOfWork.SaveChangesAsync();
         return new DeleteResponse { Id = role.Id, IsSuccess = true, Message = "Role deleted." };
@@ -225,38 +221,7 @@ public class RoleService : IRoleService
         return new UpdateResponse { Id = roleId, IsSuccess = true, Message = "Permissions removed." };
     }
 
-    private async Task<RoleResponse> MapToResponseAsync(Role role)
-    {
-        var rolePerms = await _rolePermissionRepo.GetByRoleIdAsync(role.Id);
-        var permissions = new List<PermissionResponse>();
-        foreach (var rp in rolePerms)
-        {
-            var perm = await _permissionRepo.GetByIdAsync(rp.PermissionId);
-            if (perm != null)
-                permissions.Add(new PermissionResponse
-                {
-                    Id = perm.Id.ToString(),
-                    PermissionCode = perm.PermissionCode,
-                    PermissionName = perm.PermissionCode,
-                    Resource = perm.Resource ?? string.Empty,
-                    Action = perm.Action ?? string.Empty,
-                    IsActive = perm.IsActive
-                });
-        }
-
-        return new RoleResponse
-        {
-            Id = role.Id.ToString(),
-            TenantId = role.TenantId?.ToString(),
-            RoleCode = role.RoleCode,
-            RoleName = role.RoleCode,
-            IsActive = role.IsActive,
-            Permissions = permissions,
-            CreatedAt = role.CreatedAt
-        };
-    }
-
-    // Sync mapping used by GetListAsync with pre-loaded batch data to avoid N+1 queries.
+    // Batch-mapped response — all data is pre-loaded by callers to avoid N+1 queries.
     private static RoleResponse MapToResponse(
         Role role,
         Dictionary<Guid, List<RolePermission>> rpsByRole,
@@ -353,9 +318,7 @@ public class PermissionService : IPermissionService
     {
         var perm = await _permissionRepo.GetByIdAsync(id);
         if (perm == null) throw new DomainException("permission", "Permission not found.");
-        perm.DeletedAt = DateTime.UtcNow;
-        perm.DeletedBy = deletedBy;
-        perm.IsActive = false;
+        perm.SoftDelete(deletedBy);
         _permissionRepo.Update(perm);
         await _unitOfWork.SaveChangesAsync();
         return new DeleteResponse { Id = perm.Id, IsSuccess = true, Message = "Permission deleted." };
@@ -437,10 +400,7 @@ public class ApiKeyService : IApiKeyService
     {
         var key = await _apiKeyRepo.GetByIdAsync(id);
         if (key == null) throw new DomainException("api_key", "API key not found.");
-        key.RevokedAt = DateTime.UtcNow;
-        key.IsActive = false;
-        key.DeletedAt = DateTime.UtcNow;
-        key.DeletedBy = revokedBy;
+        key.Revoke(revokedBy);
         _apiKeyRepo.Update(key);
         await _unitOfWork.SaveChangesAsync();
         return new DeleteResponse { Id = key.Id, IsSuccess = true, Message = "API key revoked." };
@@ -450,7 +410,7 @@ public class ApiKeyService : IApiKeyService
     {
         var key = await _apiKeyRepo.GetByIdAsync(id);
         if (key == null) return new UpdateResponse { Id = id, IsSuccess = false };
-        key.LastUsedAt = DateTime.UtcNow;
+        key.RecordUsage();
         _apiKeyRepo.Update(key);
         await _unitOfWork.SaveChangesAsync();
         return new UpdateResponse { Id = id, IsSuccess = true };
@@ -594,9 +554,7 @@ public class ProviderService : IProviderService
     {
         var provider = await _providerRepo.GetByIdAsync(id);
         if (provider == null) throw new DomainException("provider", "Provider not found.");
-        provider.DeletedAt = DateTime.UtcNow;
-        provider.DeletedBy = deletedBy;
-        provider.IsActive = false;
+        provider.SoftDelete(deletedBy);
         _providerRepo.Update(provider);
         await _unitOfWork.SaveChangesAsync();
         return new DeleteResponse { Id = provider.Id, IsSuccess = true, Message = "Provider deleted." };
@@ -718,9 +676,7 @@ public class AgreementService : IAgreementService
     {
         var agreement = await _agreementRepo.GetByIdAsync(id);
         if (agreement == null) throw new DomainException("agreement", "Agreement not found.");
-        agreement.DeletedAt = DateTime.UtcNow;
-        agreement.DeletedBy = deletedBy;
-        agreement.IsActive = false;
+        agreement.SoftDelete(deletedBy);
         _agreementRepo.Update(agreement);
         await _unitOfWork.SaveChangesAsync();
         return new DeleteResponse { Id = agreement.Id, IsSuccess = true, Message = "Agreement deleted." };
