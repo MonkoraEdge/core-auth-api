@@ -15,4 +15,10 @@ public class AuthorizeRequest
     public string? LoginHint { get; set; }
     /// <summary>RFC 9126: PAR request_uri returned by the /par endpoint.</summary>
     public string? RequestUri { get; set; }
+    /// <summary>
+    /// The authenticated user's current session ID extracted from the bearer token <c>sid</c> claim.
+    /// Populated by the controller; used to bind the issued authorization code to its originating
+    /// UserSession, enabling accurate session-scoped token revocation.
+    /// </summary>
+    public Guid? SessionId { get; set; }
 }

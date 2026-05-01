@@ -38,13 +38,21 @@ public class OAuth2Controller : MonkoraControllerBase
     [HttpGet("/authorize")]
     [HttpPost("/authorize")]
     [EnableRateLimiting("default")]
-    public async Task<IActionResult> Authorize([FromQuery] AuthorizeQueryRequest query)
+    public async Task<IActionResult> Authorize([FromQuery] AuthorizeQueryRequest query, CancellationToken ct = default)
     {
         try
         {
-            var request = MapQueryToAuthorizeRequest(query);
+            // Check for client disconnect before starting the DB-heavy authorize flow.
+            // Service-layer CT propagation is a future task (service interfaces updated separately).
+            ct.ThrowIfCancellationRequested();
+
+            var request = MapQueryToAuthorizeRequest(query, GetSessionId());
             var response = await _oauth2Service.ProcessAuthorizeRequestAsync(request, GetAuthenticatedUserId());
             return ToActionResult(response);
+        }
+        catch (OperationCanceledException)
+        {
+            return StatusCode(StatusCodes.Status499ClientClosedRequest);
         }
         catch (DomainException ex)
         {
@@ -52,7 +60,7 @@ public class OAuth2Controller : MonkoraControllerBase
         }
     }
 
-    private static AuthorizeRequest MapQueryToAuthorizeRequest(AuthorizeQueryRequest q) => new()
+    private static AuthorizeRequest MapQueryToAuthorizeRequest(AuthorizeQueryRequest q, Guid? sessionId) => new()
     {
         ResponseType        = q.ResponseType,
         ClientId            = q.ClientId,
@@ -66,6 +74,7 @@ public class OAuth2Controller : MonkoraControllerBase
         MaxAge              = q.MaxAge,
         LoginHint           = q.LoginHint,
         RequestUri          = q.RequestUri,
+        SessionId           = sessionId,
     };
 
     /// <summary>
@@ -83,20 +92,28 @@ public class OAuth2Controller : MonkoraControllerBase
         var userId = GetAuthenticatedUserId();
         if (userId == null) return Unauthorized();
 
-        var response = await _oauth2Service.ProcessConsentAsync(new ConsentRequest
+        try
         {
-            ClientId = request.ClientId,
-            RedirectUri = request.RedirectUri,
-            Scope = request.Scope,
-            State = request.State,
-            CodeChallenge = request.CodeChallenge,
-            CodeChallengeMethod = request.CodeChallengeMethod,
-            Nonce = request.Nonce,
-            Approved = request.Approved,
-            RememberConsent = request.RememberConsent
-        }, userId.Value);
+            var response = await _oauth2Service.ProcessConsentAsync(new ConsentRequest
+            {
+                ClientId = request.ClientId,
+                RedirectUri = request.RedirectUri,
+                Scope = request.Scope,
+                State = request.State,
+                CodeChallenge = request.CodeChallenge,
+                CodeChallengeMethod = request.CodeChallengeMethod,
+                Nonce = request.Nonce,
+                Approved = request.Approved,
+                RememberConsent = request.RememberConsent
+            }, userId.Value);
 
-        return Redirect(response.RedirectUrl);
+            return Redirect(response.RedirectUrl);
+        }
+        catch (DomainException ex)
+        {
+            // RFC 6749 §5.2: consent errors must be returned as { error, error_description }.
+            return MapTokenDomainException(ex);
+        }
     }
 
     /// <summary>
@@ -108,8 +125,10 @@ public class OAuth2Controller : MonkoraControllerBase
     [Consumes("application/x-www-form-urlencoded")]
     [Produces("application/json")]
     [EnableRateLimiting("auth")]
-    public async Task<IActionResult> Token([FromForm] TokenFormRequest formRequest)
+    public async Task<IActionResult> Token([FromForm] TokenFormRequest formRequest, CancellationToken ct = default)
     {
+        ct.ThrowIfCancellationRequested();
+
         if (string.IsNullOrWhiteSpace(formRequest.GrantType))
             return OAuthError("invalid_request", "grant_type is required.", StatusCodes.Status400BadRequest);
 
@@ -139,6 +158,10 @@ public class OAuth2Controller : MonkoraControllerBase
 
             ApplyNoStoreHeaders();
             return Ok(response);
+        }
+        catch (OperationCanceledException)
+        {
+            return StatusCode(StatusCodes.Status499ClientClosedRequest);
         }
         catch (DomainException ex)
         {
@@ -242,8 +265,10 @@ public class OAuth2Controller : MonkoraControllerBase
     [Authorize]
     [Produces("application/json")]
     [EnableRateLimiting("auth")]
-    public async Task<IActionResult> UserInfo()
+    public async Task<IActionResult> UserInfo(CancellationToken ct = default)
     {
+        ct.ThrowIfCancellationRequested();
+
         var headerValue = Request.Headers[HeaderNames.Authorization].ToString();
         var token = headerValue.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)
             ? headerValue["Bearer ".Length..].Trim()
@@ -289,15 +314,23 @@ public class OAuth2Controller : MonkoraControllerBase
         [FromQuery] string? post_logout_redirect_uri,
         [FromQuery] string? client_id)
     {
-        var userId = GetAuthenticatedUserId();
-        var validatedRedirectUri = await _oauth2Service.EndSessionAsync(
-            userId, id_token_hint, post_logout_redirect_uri, client_id);
+        try
+        {
+            var userId = GetAuthenticatedUserId();
+            var validatedRedirectUri = await _oauth2Service.EndSessionAsync(
+                userId, id_token_hint, post_logout_redirect_uri, client_id);
 
-        if (!string.IsNullOrEmpty(validatedRedirectUri))
-            return Redirect(validatedRedirectUri);
+            if (!string.IsNullOrEmpty(validatedRedirectUri))
+                return Redirect(validatedRedirectUri);
 
-        ApplyNoStoreHeaders();
-        return Ok(new { message = "Session ended." });
+            ApplyNoStoreHeaders();
+            return Ok(new { message = "Session ended." });
+        }
+        catch (DomainException ex)
+        {
+            // RFC 6749 §5.2: end-session errors must be returned as { error, error_description }.
+            return MapTokenDomainException(ex);
+        }
     }
 
     /// <summary>

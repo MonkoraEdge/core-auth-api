@@ -113,6 +113,28 @@ builder.Services.AddRateLimiter(o =>
 {
     o.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
 
+    // RFC 6585 §4: emit Retry-After on every 429 response.
+    // For OAuth endpoints, also write a RFC 6749 §5.2 compliant error body.
+    o.OnRejected = async (context, ct) =>
+    {
+        var path = context.HttpContext.Request.Path.Value ?? string.Empty;
+        var retryAfter = context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfterValue)
+            ? (int)retryAfterValue.TotalSeconds
+            : 60;
+
+        context.HttpContext.Response.Headers.RetryAfter = retryAfter.ToString();
+
+        if (path.StartsWith("/oauth2", StringComparison.OrdinalIgnoreCase)
+            || path.StartsWith("/authorize", StringComparison.OrdinalIgnoreCase)
+            || path.StartsWith("/token", StringComparison.OrdinalIgnoreCase))
+        {
+            context.HttpContext.Response.ContentType = "application/json";
+            await context.HttpContext.Response.WriteAsync(
+                $"{{\"error\":\"slow_down\",\"error_description\":\"Too many requests. Retry after {retryAfter} seconds.\"}}",
+                cancellationToken: ct);
+        }
+    };
+
     o.AddPolicy("default", context =>
     {
         // Use the TCP-level RemoteIpAddress as the primary partition key so that a caller

@@ -46,6 +46,16 @@ public abstract class MonkoraControllerBase : ControllerBase
         return Guid.TryParse(sub, out var id) ? id : null;
     }
 
+    /// <summary>
+    /// Resolve the session id from the <c>sid</c> JWT claim (OIDC Session Management).
+    /// Returns <c>null</c> when the bearer token carries no session claim.
+    /// </summary>
+    protected Guid? GetSessionId()
+    {
+        var sid = User.FindFirstValue("sid");
+        return Guid.TryParse(sid, out var id) ? id : null;
+    }
+
     // ─── Request-context helpers ───────────────────────────────────────────────
 
     /// <summary>

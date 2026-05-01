@@ -112,6 +112,12 @@ public class TokenService : ITokenService
         if (!string.IsNullOrEmpty(grantType))
             claims.Add(new Claim("grant_type", grantType));
 
+        // OIDC Front-Channel Logout / OIDC Session Management: embed sid when the token
+        // is bound to an active UserSession. Allows the /authorize endpoint and OIDC
+        // id_token_hint validation to propagate session affinity downstream.
+        if (sessionId.HasValue)
+            claims.Add(new Claim("sid", sessionId.Value.ToString()));
+
         // RFC 9449 §4.2: embed cnf.jkt when the token is DPoP-bound.
         if (!string.IsNullOrEmpty(dpopJkt))
             claims.Add(new Claim("cnf", $"{{\"jkt\":\"{dpopJkt}\"}}", "JSON"));

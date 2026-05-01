@@ -313,7 +313,7 @@ public class OAuth2Service : IOAuth2Service
         // GenerateAuthorizationCodeAsync inserts but does NOT save — consent + code
         // land in one atomic commit below
         var code = await _tokenService.GenerateAuthorizationCodeAsync(
-            client.Id, userId, null, scopes, request.RedirectUri!,
+            client.Id, userId, request.SessionId, scopes, request.RedirectUri!,
             request.CodeChallenge, request.CodeChallengeMethod, request.Nonce);
 
         _auditLogRepo.Insert(new AuditLog
