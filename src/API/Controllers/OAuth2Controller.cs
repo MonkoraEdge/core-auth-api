@@ -37,7 +37,9 @@ public class OAuth2Controller : MonkoraControllerBase
     [HttpPost("authorize")]
     [HttpGet("/authorize")]
     [HttpPost("/authorize")]
-    [EnableRateLimiting("default")]
+    [HttpGet("/connect/authorize")]
+    [HttpPost("/connect/authorize")]
+    [EnableRateLimiting("authorize")]
     public async Task<IActionResult> Authorize([FromQuery] AuthorizeQueryRequest query, CancellationToken ct = default)
     {
         try
@@ -122,6 +124,7 @@ public class OAuth2Controller : MonkoraControllerBase
     /// </summary>
     [HttpPost("token")]
     [HttpPost("/token")]
+    [HttpPost("/connect/token")]
     [Consumes("application/x-www-form-urlencoded")]
     [Produces("application/json")]
     [EnableRateLimiting("auth")]
@@ -175,6 +178,7 @@ public class OAuth2Controller : MonkoraControllerBase
     /// </summary>
     [HttpPost("revoke")]
     [HttpPost("/revoke")]
+    [HttpPost("/connect/revoke")]
     [Consumes("application/x-www-form-urlencoded")]
     [Produces("application/json")]
     [EnableRateLimiting("auth")]
@@ -220,6 +224,7 @@ public class OAuth2Controller : MonkoraControllerBase
     /// </summary>
     [HttpPost("introspect")]
     [HttpPost("/introspect")]
+    [HttpPost("/connect/introspect")]
     [Consumes("application/x-www-form-urlencoded")]
     [Produces("application/json")]
     [EnableRateLimiting("auth")]
@@ -262,6 +267,8 @@ public class OAuth2Controller : MonkoraControllerBase
     /// </summary>
     [HttpGet("userinfo")]
     [HttpPost("userinfo")]
+    [HttpGet("/connect/userinfo")]
+    [HttpPost("/connect/userinfo")]
     [Authorize]
     [Produces("application/json")]
     [EnableRateLimiting("auth")]

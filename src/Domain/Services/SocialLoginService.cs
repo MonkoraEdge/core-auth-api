@@ -211,9 +211,10 @@ public class SocialLoginService : ISocialLoginService
 
         if (!response.IsSuccessStatusCode)
         {
-            var body = await response.Content.ReadAsStringAsync();
-            _logger.LogWarning("Social token exchange failed. Provider={Provider} Status={Status} Body={Body}",
-                provider.ProviderCode, response.StatusCode, body);
+            // Read status only — never log the body: provider token responses contain access_token
+            // and refresh_token in plaintext. Logging the body would write bearer credentials to disk.
+            _logger.LogWarning("Social token exchange failed. Provider={Provider} Status={Status}",
+                provider.ProviderCode, (int)response.StatusCode);
             throw new DomainException("social", "Failed to exchange authorization code with external provider.");
         }
 

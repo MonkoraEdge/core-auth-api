@@ -543,7 +543,8 @@ public class OAuth2Service : IOAuth2Service
             EntityName = "AccessToken",
             IpAddress = ipAddress,
             UserAgent = userAgent,
-            Result = "success"
+            Result = "success",
+            Metadata = $"{{\"grant\":\"refresh_token\",\"scopes\":\"{string.Join(" ", tokenResponse.Scope?.Split(' ') ?? rt.Scopes)}\"}}"
         });
 
         await _unitOfWork.SaveChangesAsync();

@@ -2,6 +2,9 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
+using Microsoft.Extensions.Caching.Distributed;
+using Microsoft.Extensions.Caching.Memory;
 using MonkoraEdge.Core.Auth.Domain.AggregatesModel.AuthorizationAggregate.Interfaces;
 using MonkoraEdge.Core.Auth.Domain.AggregatesModel.EntityAggregate;
 using MonkoraEdge.Core.Auth.Domain.AggregatesModel.OAuth2Aggregate;
@@ -19,6 +22,8 @@ public class TokenService : ITokenService
     private readonly IAuthorizationCodeRepository _authCodeRepo;
     private readonly IRevokedTokenRepository _revokedTokenRepo;
     private readonly IUserRepository _userRepo;
+    private readonly IMemoryCache _memoryCache;
+    private readonly IDistributedCache _distributedCache;
     private readonly RsaSecurityKey _signingKey;
     private readonly string _issuer;
     private readonly string _audience;
@@ -28,6 +33,15 @@ public class TokenService : ITokenService
 
     // OAuth 2.1 recommends short-lived access tokens; 15 minutes is the hard ceiling enforced here.
     private const int MaxAccessTokenLifetimeSeconds = 900;
+    // JWKS is derived from an in-process RSA singleton — cache server-side to avoid repeated
+    // ExportParameters/Base64 work on every /.well-known/jwks.json hit.
+    private const string JwksCacheKey = "jwks:v1";
+    private static readonly TimeSpan JwksCacheTtl = TimeSpan.FromHours(24);
+    // Introspection cache prefix — keyed by token hash so revocation can delete the entry.
+    private const string IntrospectCachePrefix = "introspect:";
+    // Cap introspection cache TTL at 15 min regardless of actual token lifetime so a
+    // revocation is reflected at most 15 min late if Redis eviction occurs before RemoveAsync.
+    private static readonly TimeSpan IntrospectMaxCacheTtl = TimeSpan.FromMinutes(15);
 
     public TokenService(
         IUnitOfWork unitOfWork,
@@ -36,6 +50,8 @@ public class TokenService : ITokenService
         IAuthorizationCodeRepository authCodeRepo,
         IRevokedTokenRepository revokedTokenRepo,
         IUserRepository userRepo,
+        IMemoryCache memoryCache,
+        IDistributedCache distributedCache,
         RsaSecurityKey signingKey,
         string issuer,
         string audience,
@@ -53,6 +69,8 @@ public class TokenService : ITokenService
         _authCodeRepo = authCodeRepo;
         _revokedTokenRepo = revokedTokenRepo;
         _userRepo = userRepo;
+        _memoryCache = memoryCache;
+        _distributedCache = distributedCache;
         _issuer = issuer;
         _audience = audience;
         // Silently cap rather than throw — prevents a misconfigured env var from hard-crashing startup.
@@ -144,13 +162,14 @@ public class TokenService : ITokenService
         return Task.FromResult(tokenString);
     }
 
-    public Task<(string Token, Guid Id)> GenerateRefreshTokenAsync(Guid clientId, Guid? userId, Guid? sessionId, string[] scopes, int lifetimeSeconds, Guid? familyId = null, string? ipAddress = null, string? userAgent = null)
+    public Task<(string Token, Guid Id)> GenerateRefreshTokenAsync(Guid clientId, Guid? userId, Guid? sessionId, string[] scopes, int lifetimeSeconds, Guid? familyId = null, string? ipAddress = null, string? userAgent = null, DateTime? absoluteExpiresAt = null)
     {
         var rawToken = Convert.ToBase64String(RandomNumberGenerator.GetBytes(64))
             .TrimEnd('=').Replace('+', '-').Replace('/', '_');
         var tokenHash = HashToken(rawToken);
         var tokenId = Guid.NewGuid(); // generated here so the caller can link ReplacedByTokenId
         var now = DateTime.UtcNow; // single clock read — IssuedAt and ExpiresAt share the same anchor
+        var expiresAt = now.AddSeconds(lifetimeSeconds);
 
         _refreshTokenRepo.Insert(new RefreshToken
         {
@@ -164,7 +183,11 @@ public class TokenService : ITokenService
             IpAddress = ipAddress,
             UserAgent = userAgent,
             IssuedAt = now,
-            ExpiresAt = now.AddSeconds(lifetimeSeconds)
+            ExpiresAt = expiresAt,
+            // On first issuance (familyId == null) anchor absolute expiry to ExpiresAt.
+            // On rotation the caller passes the parent's AbsoluteExpiresAt so the hard
+            // deadline never slides forward regardless of how many times the chain rotates.
+            AbsoluteExpiresAt = absoluteExpiresAt ?? expiresAt
         });
 
         return Task.FromResult((rawToken, tokenId));
@@ -195,7 +218,9 @@ public class TokenService : ITokenService
         return Task.FromResult(rawCode);
     }
 
-    public async Task<IntrospectResponse> IntrospectTokenAsync(string token, string? tokenTypeHint)
+    private string IntrospectCacheKey(string tokenHash) => IntrospectCachePrefix + tokenHash;
+
+    public async Task<IntrospectResponse> IntrospectTokenAsync(string token, string? tokenTypeHint, CancellationToken ct = default)
     {
         var inactive = new IntrospectResponse { Active = false };
 
@@ -203,16 +228,24 @@ public class TokenService : ITokenService
             return inactive;
 
         var tokenHash = HashToken(token);
-        if (await _revokedTokenRepo.IsRevokedAsync(tokenHash))
+
+        // Fast path: return cached active response. Cache is invalidated by Revoke* methods,
+        // so a hit here is safe for up to IntrospectMaxCacheTtl after revocation at worst.
+        var cacheKey = IntrospectCacheKey(tokenHash);
+        var cachedBytes = await _distributedCache.GetAsync(cacheKey, ct).ConfigureAwait(false);
+        if (cachedBytes != null)
+            return JsonSerializer.Deserialize<IntrospectResponse>(cachedBytes) ?? inactive;
+
+        if (await _revokedTokenRepo.IsRevokedAsync(tokenHash).ConfigureAwait(false))
             return inactive;
 
-        var accessToken = await _accessTokenRepo.GetByTokenHashAsync(tokenHash);
+        var accessToken = await _accessTokenRepo.GetByTokenHashAsync(tokenHash).ConfigureAwait(false);
         if (accessToken != null)
         {
             if (accessToken.ExpiresAt <= DateTime.UtcNow || accessToken.RevokedAt.HasValue)
                 return inactive;
 
-            return new IntrospectResponse
+            var activeResponse = new IntrospectResponse
             {
                 Active = true,
                 ClientId = accessToken.ClientId.ToString(),
@@ -227,15 +260,17 @@ public class TokenService : ITokenService
                 TokenType = "Bearer",
                 Sub = accessToken.UserId.HasValue ? accessToken.UserId.Value.ToString() : null
             };
+            await CacheIntrospectResponseAsync(cacheKey, activeResponse, accessToken.ExpiresAt, ct).ConfigureAwait(false);
+            return activeResponse;
         }
 
-        var refreshToken = await _refreshTokenRepo.GetByTokenHashAsync(tokenHash);
+        var refreshToken = await _refreshTokenRepo.GetByTokenHashAsync(tokenHash).ConfigureAwait(false);
         if (refreshToken != null)
         {
             if (refreshToken.ExpiresAt <= DateTime.UtcNow || refreshToken.RevokedAt.HasValue)
                 return inactive;
 
-            return new IntrospectResponse
+            var activeResponse = new IntrospectResponse
             {
                 Active = true,
                 Sub = refreshToken.UserId != Guid.Empty ? refreshToken.UserId.ToString() : null,
@@ -247,18 +282,31 @@ public class TokenService : ITokenService
                 // token_type omitted: "refresh_token" is not a valid OAuth token type value
                 // per RFC 6749 §7.1 — token_type only applies to access tokens.
             };
+            await CacheIntrospectResponseAsync(cacheKey, activeResponse, refreshToken.ExpiresAt, ct).ConfigureAwait(false);
+            return activeResponse;
         }
 
         return inactive;
     }
 
-    public async Task RevokeTokenAsync(string token, string? tokenTypeHint, Guid clientId, string? reason = "revoked")
+    private async Task CacheIntrospectResponseAsync(string cacheKey, IntrospectResponse response, DateTime tokenExpiresAt, CancellationToken ct)
+    {
+        var remaining = tokenExpiresAt - DateTime.UtcNow;
+        if (remaining <= TimeSpan.Zero) return;
+        var ttl = remaining < IntrospectMaxCacheTtl ? remaining : IntrospectMaxCacheTtl;
+        var bytes = JsonSerializer.SerializeToUtf8Bytes(response);
+        await _distributedCache.SetAsync(cacheKey, bytes,
+            new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = ttl }, ct)
+            .ConfigureAwait(false);
+    }
+
+    public async Task RevokeTokenAsync(string token, string? tokenTypeHint, Guid clientId, string? reason = "revoked", CancellationToken ct = default)
     {
         var tokenHash = HashToken(token);
         var now = DateTime.UtcNow;
         var revokedAny = false;
 
-        var accessToken = await _accessTokenRepo.GetByTokenHashAsync(tokenHash);
+        var accessToken = await _accessTokenRepo.GetByTokenHashAsync(tokenHash).ConfigureAwait(false);
         if (accessToken != null && accessToken.ClientId == clientId && accessToken.RevokedAt == null)
         {
             accessToken.RevokedAt = now;
@@ -266,7 +314,8 @@ public class TokenService : ITokenService
             revokedAny = true;
         }
 
-        var refreshToken = await _refreshTokenRepo.GetByTokenHashAsync(tokenHash);
+        RefreshToken? refreshToken = null;
+        refreshToken = await _refreshTokenRepo.GetByTokenHashAsync(tokenHash).ConfigureAwait(false);
         if (refreshToken != null && refreshToken.ClientId == clientId && refreshToken.RevokedAt == null)
         {
             refreshToken.RevokedAt = now;
@@ -278,7 +327,7 @@ public class TokenService : ITokenService
         if (!revokedAny)
             return;
 
-        var existing = await _revokedTokenRepo.GetByTokenHashAsync(tokenHash);
+        var existing = await _revokedTokenRepo.GetByTokenHashAsync(tokenHash).ConfigureAwait(false);
         if (existing == null)
         {
             _revokedTokenRepo.Insert(new RevokedToken
@@ -293,12 +342,23 @@ public class TokenService : ITokenService
             });
         }
 
-        await _unitOfWork.SaveChangesAsync();
+        await _unitOfWork.SaveChangesAsync(ct).ConfigureAwait(false);
+        // Evict introspection cache so the next call reflects the revocation immediately.
+        await _distributedCache.RemoveAsync(IntrospectCacheKey(tokenHash), ct).ConfigureAwait(false);
+
+        // Cascade: when a refresh token is explicitly revoked, kill every other token in the
+        // same rotation family. This prevents an attacker (or stale device) from holding onto
+        // a sibling token from the same grant chain after the caller revoked the one they knew.
+        // SaveChanges above has already committed the specific token's revocation to the DB, so
+        // GetByFamilyIdAsync will see RevokedAt != null on it and skip the duplicate update.
+        if (refreshToken != null && refreshToken.FamilyId != Guid.Empty)
+            await RevokeTokenFamilyAsync(refreshToken.FamilyId, reason ?? "revoked_by_client", ct).ConfigureAwait(false);
     }
 
-    public async Task RevokeAllUserTokensAsync(Guid userId, Guid? sessionId = null, string reason = "logout")
+    public async Task RevokeAllUserTokensAsync(Guid userId, Guid? sessionId = null, string reason = "logout", CancellationToken ct = default)
     {
-        var activeTokens = await _accessTokenRepo.GetActiveByUserIdAsync(userId);
+        var activeTokens = await _accessTokenRepo.GetActiveByUserIdAsync(userId).ConfigureAwait(false);
+        var revokedAccessHashes = new List<string>();
         foreach (var token in activeTokens)
         {
             if (sessionId.HasValue && token.SessionId != sessionId)
@@ -306,6 +366,7 @@ public class TokenService : ITokenService
 
             token.RevokedAt = DateTime.UtcNow;
             _accessTokenRepo.Update(token);
+            revokedAccessHashes.Add(token.TokenHash);
 
             _revokedTokenRepo.Insert(new RevokedToken
             {
@@ -319,7 +380,8 @@ public class TokenService : ITokenService
             });
         }
 
-        var activeRefreshTokens = await _refreshTokenRepo.GetActiveByUserIdAsync(userId);
+        var activeRefreshTokens = await _refreshTokenRepo.GetActiveByUserIdAsync(userId).ConfigureAwait(false);
+        var revokedRefreshHashes = new List<string>();
         foreach (var token in activeRefreshTokens)
         {
             if (sessionId.HasValue && token.SessionId != sessionId)
@@ -327,6 +389,7 @@ public class TokenService : ITokenService
 
             token.RevokedAt = DateTime.UtcNow;
             _refreshTokenRepo.Update(token);
+            revokedRefreshHashes.Add(token.RefreshTokenHash);
 
             _revokedTokenRepo.Insert(new RevokedToken
             {
@@ -340,7 +403,12 @@ public class TokenService : ITokenService
             });
         }
 
-        await _unitOfWork.SaveChangesAsync();
+        await _unitOfWork.SaveChangesAsync(ct).ConfigureAwait(false);
+
+        // Evict introspection cache entries for every revoked token.
+        var evictTasks = revokedAccessHashes.Concat(revokedRefreshHashes)
+            .Select(h => _distributedCache.RemoveAsync(IntrospectCacheKey(h), ct));
+        await Task.WhenAll(evictTasks).ConfigureAwait(false);
     }
 
     public string HashToken(string token)
@@ -357,12 +425,18 @@ public class TokenService : ITokenService
 
     public JwksResponse GetJwks()
     {
+        if (_memoryCache.TryGetValue(JwksCacheKey, out JwksResponse? cached) && cached != null)
+            return cached;
+
         var keys = new List<JwkKey> { BuildJwkKey(_signingKey) };
         // Publish previous key during rotation window so tokens signed with the old key remain
         // verifiable by clients until they expire (max 900 s). Remove once all old tokens expire.
         if (_previousSigningKey != null)
             keys.Add(BuildJwkKey(_previousSigningKey));
-        return new JwksResponse { Keys = keys };
+
+        var response = new JwksResponse { Keys = keys };
+        _memoryCache.Set(JwksCacheKey, response, JwksCacheTtl);
+        return response;
     }
 
     private static JwkKey BuildJwkKey(RsaSecurityKey key)
@@ -381,12 +455,12 @@ public class TokenService : ITokenService
 
     public string GetIssuer() => _issuer;
 
-    public async Task<string> GenerateIdTokenAsync(string clientId, Guid userId, string[] scopes, string? nonce, DateTime authTime, string? accessToken = null)
+    public async Task<string> GenerateIdTokenAsync(string clientId, Guid userId, string[] scopes, string? nonce, DateTime authTime, string? accessToken = null, CancellationToken ct = default)
     {
         var now = DateTime.UtcNow;
         var expiry = now.AddMinutes(5);
 
-        var user = await _userRepo.GetByIdAsync(userId);
+        var user = await _userRepo.GetByIdAsync(userId).ConfigureAwait(false);
 
         // iss, aud, iat, nbf, exp are handled by JwtPayload constructor — no duplicate claims.
         // This mirrors the access token pattern: dedicated constructor params own the registered fields.
@@ -449,15 +523,17 @@ public class TokenService : ITokenService
         return new JwtSecurityTokenHandler().WriteToken(new JwtSecurityToken(header, payload));
     }
 
-    public async Task RevokeTokenFamilyAsync(Guid familyId, string reason = "refresh_token_reuse")
+    public async Task RevokeTokenFamilyAsync(Guid familyId, string reason = "refresh_token_reuse", CancellationToken ct = default)
     {
         var now = DateTime.UtcNow;
-        var familyTokens = await _refreshTokenRepo.GetByFamilyIdAsync(familyId);
+        var familyTokens = await _refreshTokenRepo.GetByFamilyIdAsync(familyId).ConfigureAwait(false);
 
+        var revokedRefreshHashes = new List<string>();
         foreach (var token in familyTokens.Where(t => t.RevokedAt == null))
         {
             token.RevokedAt = now;
             _refreshTokenRepo.Update(token);
+            revokedRefreshHashes.Add(token.RefreshTokenHash);
         }
 
         // Cascade: revoke all active access tokens for every user/client pair in this family.
@@ -469,13 +545,15 @@ public class TokenService : ITokenService
             .Select(g => g.Key)
             .ToList();
 
+        var revokedAccessHashes = new List<string>();
         foreach (var (userId, clientId) in affected)
         {
-            var activeAccessTokens = await _accessTokenRepo.GetActiveByUserIdAsync(userId);
+            var activeAccessTokens = await _accessTokenRepo.GetActiveByUserIdAsync(userId).ConfigureAwait(false);
             foreach (var at in activeAccessTokens.Where(at => at.ClientId == clientId && at.RevokedAt == null))
             {
                 at.RevokedAt = now;
                 _accessTokenRepo.Update(at);
+                revokedAccessHashes.Add(at.TokenHash);
                 _revokedTokenRepo.Insert(new RevokedToken
                 {
                     TokenHash = at.TokenHash,
@@ -489,7 +567,12 @@ public class TokenService : ITokenService
             }
         }
 
-        await _unitOfWork.SaveChangesAsync();
+        await _unitOfWork.SaveChangesAsync(ct).ConfigureAwait(false);
+
+        // Evict introspection cache for all revoked tokens in the family.
+        var evictTasks = revokedRefreshHashes.Concat(revokedAccessHashes)
+            .Select(h => _distributedCache.RemoveAsync(IntrospectCacheKey(h), ct));
+        await Task.WhenAll(evictTasks).ConfigureAwait(false);
     }
 
 }

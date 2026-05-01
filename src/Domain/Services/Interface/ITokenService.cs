@@ -25,26 +25,31 @@ public interface ITokenService
     /// and the newly created entity ID. The ID is used by the caller to link
     /// <c>ReplacedByTokenId</c> on the rotated-out token, preserving the rotation chain.
     /// </summary>
-    Task<(string Token, Guid Id)> GenerateRefreshTokenAsync(Guid clientId, Guid? userId, Guid? sessionId, string[] scopes, int lifetimeSeconds, Guid? familyId = null, string? ipAddress = null, string? userAgent = null);
+    /// <param name="absoluteExpiresAt">
+    /// Hard deadline inherited from the rotation chain. Pass the parent token's
+    /// <c>AbsoluteExpiresAt</c> on rotation; omit (or pass null) on first issuance — the
+    /// server will anchor it to <c>ExpiresAt</c> of the new token.
+    /// </param>
+    Task<(string Token, Guid Id)> GenerateRefreshTokenAsync(Guid clientId, Guid? userId, Guid? sessionId, string[] scopes, int lifetimeSeconds, Guid? familyId = null, string? ipAddress = null, string? userAgent = null, DateTime? absoluteExpiresAt = null);
 
     /// <summary>Generate a signed OIDC ID token — audience is the client_id string, nonce prevents replay.
     /// Pass <paramref name="accessToken"/> to include the required at_hash claim (OIDC Core §3.1.3.6).</summary>
-    Task<string> GenerateIdTokenAsync(string clientId, Guid userId, string[] scopes, string? nonce, DateTime authTime, string? accessToken = null);
+    Task<string> GenerateIdTokenAsync(string clientId, Guid userId, string[] scopes, string? nonce, DateTime authTime, string? accessToken = null, CancellationToken ct = default);
 
     /// <summary>Generate a short-lived authorization code with PKCE</summary>
     Task<string> GenerateAuthorizationCodeAsync(Guid clientId, Guid userId, Guid? sessionId, string[] scopes, string redirectUri, string? codeChallenge, string? codeChallengeMethod, string? nonce);
 
     /// <summary>Validate and introspect a token — returns null if invalid/revoked</summary>
-    Task<IntrospectResponse> IntrospectTokenAsync(string token, string? tokenTypeHint);
+    Task<IntrospectResponse> IntrospectTokenAsync(string token, string? tokenTypeHint, CancellationToken ct = default);
 
     /// <summary>Revoke an access or refresh token</summary>
-    Task RevokeTokenAsync(string token, string? tokenTypeHint, Guid clientId, string? reason = "revoked");
+    Task RevokeTokenAsync(string token, string? tokenTypeHint, Guid clientId, string? reason = "revoked", CancellationToken ct = default);
 
     /// <summary>Revoke all tokens for a user session</summary>
-    Task RevokeAllUserTokensAsync(Guid userId, Guid? sessionId = null, string reason = "logout");
+    Task RevokeAllUserTokensAsync(Guid userId, Guid? sessionId = null, string reason = "logout", CancellationToken ct = default);
 
     /// <summary>Revoke all refresh tokens in a family — called when token reuse/theft is detected</summary>
-    Task RevokeTokenFamilyAsync(Guid familyId, string reason = "refresh_token_reuse");
+    Task RevokeTokenFamilyAsync(Guid familyId, string reason = "refresh_token_reuse", CancellationToken ct = default);
 
     /// <summary>Hash a token for secure storage</summary>
     string HashToken(string token);

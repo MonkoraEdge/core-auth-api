@@ -137,6 +137,18 @@ public class AuthService : IAuthService
             _identityRepo.Update(identity);
 
             await RecordLoginAttemptAsync(user.Id, request.Username, null, ipAddress, userAgent, false, "INVALID_PASSWORD", request.ClientId);
+            _auditLogRepo.Insert(new AuditLog
+            {
+                UserId = user.Id,
+                ActorType = "user",
+                Action = "login_failed",
+                EntityName = "User",
+                EntityId = user.Id,
+                IpAddress = ipAddress,
+                UserAgent = userAgent,
+                Result = "failure",
+                Metadata = "{\"reason\":\"INVALID_PASSWORD\"}"
+            });
             await _unitOfWork.SaveChangesAsync();
             throw new DomainException("login", "Invalid username or password.");
         }

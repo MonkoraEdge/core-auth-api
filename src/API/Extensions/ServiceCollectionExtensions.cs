@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Caching.Memory;
 using MonkoraEdge.Core.Auth.Domain.AggregatesModel.TenantAggregate.Interfaces;
 using MonkoraEdge.Core.Auth.Domain.AggregatesModel.UserAggregate.Interfaces;
 using MonkoraEdge.Core.Auth.Domain.AggregatesModel.ProviderAggregate.Interfaces;
@@ -234,6 +235,8 @@ public static class ServiceCollectionExtensions
                 m.GetRequiredService<IAuthorizationCodeRepository>(),
                 m.GetRequiredService<IRevokedTokenRepository>(),
                 m.GetRequiredService<IUserRepository>(),
+                m.GetRequiredService<IMemoryCache>(),
+                m.GetRequiredService<IDistributedCache>(),
                 m.GetRequiredService<RsaSecurityKey>(),
                 opts.AUTH_ISSUER,
                 audience,
@@ -383,7 +386,8 @@ public static class ServiceCollectionExtensions
             m.GetRequiredService<IAuthorizationClientRepository>(),
             m.GetRequiredService<IAuthorizationClientScopeRepository>(),
             m.GetRequiredService<IScopeRepository>(),
-            m.GetRequiredService<IPasswordService>()));
+            m.GetRequiredService<IPasswordService>(),
+            m.GetRequiredService<IDistributedCache>()));
 
         // OAuth2 service
         services.AddScoped<IOAuth2Service>(m =>

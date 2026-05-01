@@ -13,10 +13,12 @@ public class RefreshTokenEntityTypeConfiguration : IEntityTypeConfiguration<Refr
 
         builder.Property(m => m.Scopes).HasColumnType("text[]");
         builder.Property(m => m.IpAddress).HasColumnName("ip_address");
+        builder.Property(m => m.AbsoluteExpiresAt).HasColumnName("absolute_expires_at");
 
         builder.HasIndex(m => m.RefreshTokenHash).IsUnique();
         builder.HasIndex(m => m.FamilyId); // family revocation queries
         builder.HasIndex(m => m.UserId);
         builder.HasIndex(m => m.ExpiresAt);
+        builder.HasIndex(m => m.AbsoluteExpiresAt); // cleanup + expiry queries
     }
 }

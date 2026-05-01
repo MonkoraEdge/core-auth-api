@@ -14,7 +14,7 @@ public class RefreshTokenRepository : AuthRepositoryBase<RefreshToken>, IRefresh
         await Context.RefreshTokens.FirstOrDefaultAsync(m => m.RefreshTokenHash == tokenHash);
 
     public async Task<IEnumerable<RefreshToken>> GetActiveByUserIdAsync(Guid userId) =>
-        await Context.RefreshTokens.Where(m => m.UserId == userId && m.ExpiresAt > DateTime.UtcNow && m.RevokedAt == null).ToListAsync();
+        await Context.RefreshTokens.Where(m => m.UserId == userId && m.ExpiresAt > DateTime.UtcNow && m.AbsoluteExpiresAt > DateTime.UtcNow && m.RevokedAt == null).ToListAsync();
 
     public async Task<IEnumerable<RefreshToken>> GetByFamilyIdAsync(Guid familyId) =>
         await Context.RefreshTokens.Where(m => m.FamilyId == familyId).ToListAsync();

@@ -155,6 +155,24 @@ builder.Services.AddRateLimiter(o =>
             });
     });
 
+    // Moderate policy for the authorize endpoint — real users drive this, but it must still
+    // be protected against redirect-loop abuse and enumeration. Sliding window prevents
+    // burst at window boundaries.
+    o.AddPolicy("authorize", context =>
+    {
+        var ip = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+
+        return RateLimitPartition.GetSlidingWindowLimiter(partitionKey: $"authorize:{ip}", factory: _ =>
+            new SlidingWindowRateLimiterOptions
+            {
+                PermitLimit = 30,
+                Window = TimeSpan.FromMinutes(1),
+                SegmentsPerWindow = 6,           // 10-second resolution within the 1-minute window
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                QueueLimit = 0
+            });
+    });
+
     // Stricter policy for authentication endpoints (token, revoke, introspect).
     // Sliding window: 10 requests/min per IP. Unlike fixed-window, sliding window prevents
     // burst attacks at window boundaries (e.g. 10 + 10 = 20 req in 2 seconds when windows flip).

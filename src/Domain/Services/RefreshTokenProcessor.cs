@@ -70,7 +70,9 @@ public sealed class RefreshTokenProcessor : IRefreshTokenProcessor
         var (newRefreshToken, newRefreshTokenId) = await _tokenService.GenerateRefreshTokenAsync(
             client.Id, userId, refreshToken.SessionId, scopes,
             refreshTokenLifetimeSeconds, familyId: refreshToken.FamilyId,
-            ipAddress: ipAddress, userAgent: userAgent);
+            ipAddress: ipAddress, userAgent: userAgent,
+            // Inherit the chain's hard deadline: absolute expiry never slides forward on rotation.
+            absoluteExpiresAt: refreshToken.AbsoluteExpiresAt);
 
         // Atomically revoke the old token and record its replacement in a single UPDATE.
         // - If this returns false, a concurrent rotation or reuse beat us here.
