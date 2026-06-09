@@ -2,40 +2,55 @@
   "info": {
     "_postman_id": "f8f0bc6e-7bb5-4978-ae29-e3f7a2751f12",
     "name": "MonkoraEdge Core Auth API",
-    "description": "Postman collection for MonkoraEdge Core Auth API (updated 2026-04-02). Includes Auth, OAuth2/OIDC, and IAM management flows with PKCE helpers and token auto-save scripts. Note: client_credentials grant rejects OIDC scopes (openid, profile, email, phone, offline_access) — use resource-level scopes only.",
+    "description": "Enterprise OAuth 2.1 Authentication Server — MonkoraEdge Core Auth API.\n\nCovers: Auth, OAuth2/OIDC (Authorization Code+PKCE, Client Credentials, Refresh Token, Device Grant), PAR (RFC 9126), Dynamic Client Registration (RFC 7591), Introspection (RFC 7662), Revocation (RFC 7009), DPoP (RFC 9449), UserInfo, End-Session, SAML 2.0 SP, Social Login, Magic Link, Passkeys (WebAuthn/FIDO2), 2FA (TOTP/SMS/EMAIL), IAM (Tenants, Users, Roles, Permissions, Scopes, Clients, API Keys, Agreements, Providers, Webhooks).\n\n**CRITICAL — Authorize endpoint:** All parameters MUST be snake_case per RFC 6749 (`response_type`, `client_id`, `redirect_uri`, `code_challenge`, `code_challenge_method`). The pre-request script auto-generates PKCE verifier/challenge (S256).\n\n**client_credentials grant:** OIDC scopes (openid, profile, email, phone, offline_access) are rejected. Use resource-level scopes only (e.g. `api.access`).\n\n**2FA verify:** Use `twoFactorToken` from the Login response challenge, NOT userId.\n\nUpdated: 2026-06-09",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
-    { "key": "baseUrl", "value": "http://localhost:5000" },
-    { "key": "bearerToken", "value": "" },
-    { "key": "idToken", "value": "" },
-    { "key": "basicAuth", "value": "" },
-    { "key": "clientId", "value": "monkora-demo-spa" },
-    { "key": "clientSecret", "value": "" },
-    { "key": "refreshToken", "value": "" },
-    { "key": "authorizationCode", "value": "" },
-    { "key": "codeVerifier", "value": "" },
-    { "key": "redirectUri", "value": "http://localhost:3000/auth/callback" },
-    { "key": "state", "value": "sample-state" },
-    { "key": "nonce", "value": "sample-nonce" },
-    { "key": "codeChallenge", "value": "" },
-    { "key": "oauthScope", "value": "openid profile email" },
+    { "key": "baseUrl",                     "value": "http://localhost:5000" },
+    { "key": "bearerToken",                 "value": "" },
+    { "key": "idToken",                     "value": "" },
+    { "key": "basicAuth",                   "value": "" },
+    { "key": "clientId",                    "value": "monkora-demo-spa" },
+    { "key": "clientSecret",                "value": "" },
+    { "key": "refreshToken",                "value": "" },
+    { "key": "authorizationCode",           "value": "" },
+    { "key": "codeVerifier",                "value": "" },
+    { "key": "codeChallenge",               "value": "" },
+    { "key": "redirectUri",                 "value": "http://localhost:3000/auth/callback" },
+    { "key": "state",                       "value": "sample-state" },
+    { "key": "nonce",                       "value": "sample-nonce" },
+    { "key": "oauthScope",                  "value": "openid profile email" },
+    { "key": "oauthScopeWithOfflineAccess", "value": "openid profile email offline_access" },
+    { "key": "clientCredentialsScope",      "value": "api.access" },
+    { "key": "tenantId",                    "value": "00000000-0000-0000-0000-000000000001" },
+    { "key": "userId",                      "value": "00000000-0000-0000-0000-000000000002" },
+    { "key": "roleId",                      "value": "00000000-0000-0000-0000-000000000003" },
+    { "key": "permissionId",                "value": "00000000-0000-0000-0000-000000000004" },
+    { "key": "scopeId",                     "value": "00000000-0000-0000-0000-000000000005" },
+    { "key": "clientGuid",                  "value": "00000000-0000-0000-0000-000000000006" },
+    { "key": "apiKeyId",                    "value": "00000000-0000-0000-0000-000000000007" },
+    { "key": "twoFactorToken",              "value": "" },
+    { "key": "consoleTenantId",             "value": "00000000-0000-0000-0000-000000000008" },
+    { "key": "agreementId",                 "value": "00000000-0000-0000-0000-000000000009" },
+    { "key": "providerId",                  "value": "00000000-0000-0000-0000-000000000010" },
+    { "key": "webhookEndpointId",           "value": "00000000-0000-0000-0000-000000000011" },
+    { "key": "deviceCode",                  "value": "" },
+    { "key": "userCode",                    "value": "" },
+    { "key": "passkeyChallengId",           "value": "" },
+    { "key": "samlProviderCode",            "value": "saml-idp" },
+    { "key": "socialProviderCode",          "value": "google" }
+  ],
+  "event": [
     {
-      "key": "oauthScopeWithOfflineAccess",
-      "value": "openid profile email offline_access"
-    },
-    { "key": "clientCredentialsScope", "value": "api.access" },
-    { "key": "tenantId", "value": "00000000-0000-0000-0000-000000000001" },
-    { "key": "userId", "value": "00000000-0000-0000-0000-000000000002" },
-    { "key": "roleId", "value": "00000000-0000-0000-0000-000000000003" },
-    { "key": "permissionId", "value": "00000000-0000-0000-0000-000000000004" },
-    { "key": "scopeId", "value": "00000000-0000-0000-0000-000000000005" },
-    { "key": "clientGuid", "value": "00000000-0000-0000-0000-000000000006" },
-    { "key": "apiKeyId", "value": "00000000-0000-0000-0000-000000000007" },
-    { "key": "twoFactorToken", "value": "" },
-    {
-      "key": "consoleTenantId",
-      "value": "00000000-0000-0000-0000-000000000008"
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "pm.test('Response time < 10 000 ms', () => {",
+          "  pm.expect(pm.response.responseTime).to.be.below(10000);",
+          "});"
+        ]
+      }
     }
   ],
   "item": [
@@ -44,951 +59,1215 @@
       "item": [
         {
           "name": "Health Ready",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/health/ready",
-              "host": ["{{baseUrl}}"],
-              "path": ["health", "ready"]
-            },
-            "description": "Readiness probe documented in README."
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Has status field', () => pm.expect(pm.response.json()).to.have.property('status'));"
+          ]}}],
+          "request": { "method": "GET", "header": [],
+            "url": { "raw": "{{baseUrl}}/health/ready", "host": ["{{baseUrl}}"], "path": ["health","ready"] },
+            "description": "Readiness probe — PostgreSQL + Redis health checks must both pass."
           }
         },
         {
           "name": "Health Live",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/health/live",
-              "host": ["{{baseUrl}}"],
-              "path": ["health", "live"]
-            },
-            "description": "Liveness probe documented in README."
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));"
+          ]}}],
+          "request": { "method": "GET", "header": [],
+            "url": { "raw": "{{baseUrl}}/health/live", "host": ["{{baseUrl}}"], "path": ["health","live"] }
           }
         },
         {
           "name": "OpenID Configuration",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/.well-known/openid-configuration",
-              "host": ["{{baseUrl}}"],
-              "path": [".well-known", "openid-configuration"]
-            }
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Has issuer',   () => pm.expect(pm.response.json().issuer).to.be.a('string'));",
+            "pm.test('Has jwks_uri', () => pm.expect(pm.response.json().jwks_uri).to.be.a('string'));"
+          ]}}],
+          "request": { "method": "GET", "header": [],
+            "url": { "raw": "{{baseUrl}}/.well-known/openid-configuration", "host": ["{{baseUrl}}"], "path": [".well-known","openid-configuration"] }
           }
         },
         {
-          "name": "Authorization Server Metadata",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/.well-known/oauth-authorization-server",
-              "host": ["{{baseUrl}}"],
-              "path": [".well-known", "oauth-authorization-server"]
-            }
+          "name": "Authorization Server Metadata (RFC 8414)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Has issuer',  () => pm.expect(pm.response.json().issuer).to.be.a('string'));"
+          ]}}],
+          "request": { "method": "GET", "header": [],
+            "url": { "raw": "{{baseUrl}}/.well-known/oauth-authorization-server", "host": ["{{baseUrl}}"], "path": [".well-known","oauth-authorization-server"] }
           }
         },
         {
-          "name": "JWKS",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/.well-known/jwks.json",
-              "host": ["{{baseUrl}}"],
-              "path": [".well-known", "jwks.json"]
-            }
+          "name": "JWKS (Public Signing Keys)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Has keys[]', () => pm.expect(pm.response.json().keys).to.be.an('array').with.length.above(0));"
+          ]}}],
+          "request": { "method": "GET", "header": [],
+            "description": "RS256 public keys for at+JWT validation. Cache-Control: public, max-age=3600.",
+            "url": { "raw": "{{baseUrl}}/.well-known/jwks.json", "host": ["{{baseUrl}}"], "path": [".well-known","jwks.json"] }
           }
         }
       ]
     },
+
     {
       "name": "Auth",
       "item": [
         {
           "name": "Login",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "if (pm.response.code === 200) {",
-                  "  const data = pm.response.json();",
-                  "  if (data.access_token) pm.collectionVariables.set('bearerToken', data.access_token);",
-                  "  if (data.refresh_token) pm.collectionVariables.set('refreshToken', data.refresh_token);",
-                  "  if (data.id_token) pm.collectionVariables.set('idToken', data.id_token);",
-                  "  if (data.two_factor_token) pm.collectionVariables.set('twoFactorToken', data.two_factor_token);",
-                  "}"
-                ]
-              }
-            }
-          ],
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "if (pm.response.code === 200) {",
+            "  const d = pm.response.json();",
+            "  if (d.access_token)     pm.collectionVariables.set('bearerToken', d.access_token);",
+            "  if (d.refresh_token)    pm.collectionVariables.set('refreshToken', d.refresh_token);",
+            "  if (d.id_token)         pm.collectionVariables.set('idToken', d.id_token);",
+            "  if (d.two_factor_token) pm.collectionVariables.set('twoFactorToken', d.two_factor_token);",
+            "}"
+          ]}}],
           "request": {
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "description": "Authenticate with username/password. If 2FA is enrolled, response contains requires_two_factor=true and two_factor_token. The test script auto-saves tokens. Pass two_factor_token to POST /auth/2fa/verify.",
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"username\": \"user@example.com\",\n  \"password\": \"P@ssw0rd!\",\n  \"clientId\": \"{{clientId}}\",\n  \"twoFactorCode\": null,\n  \"twoFactorRecoveryCode\": null,\n  \"deviceFingerprint\": \"browser-fingerprint\",\n  \"deviceName\": \"Chrome on Windows\"\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/auth/login",
-              "host": ["{{baseUrl}}"],
-              "path": ["auth", "login"]
-            }
+            "description": "Authenticate user. Returns access/refresh tokens, or `requires_two_factor:true` + `two_factor_token` for 2FA accounts. Test script auto-saves tokens.",
+            "body": { "mode": "raw", "raw": "{\n  \"username\": \"user@example.com\",\n  \"password\": \"P@ssw0rd!\",\n  \"clientId\": \"{{clientId}}\",\n  \"twoFactorCode\": null,\n  \"twoFactorRecoveryCode\": null,\n  \"deviceFingerprint\": \"browser-fingerprint-001\",\n  \"deviceName\": \"Chrome 124 on Windows 11\"\n}" },
+            "url": { "raw": "{{baseUrl}}/auth/login", "host": ["{{baseUrl}}"], "path": ["auth","login"] }
           }
         },
         {
           "name": "Register",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));"
+          ]}}],
           "request": {
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"email\": \"new.user@example.com\",\n  \"password\": \"P@ssw0rd!\",\n  \"phoneNumber\": \"0812345678\",\n  \"firstName\": \"New\",\n  \"lastName\": \"User\",\n  \"displayName\": \"New User\",\n  \"locale\": \"en\",\n  \"tenantId\": \"{{tenantId}}\",\n  \"clientId\": \"{{clientId}}\"\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/auth/register",
-              "host": ["{{baseUrl}}"],
-              "path": ["auth", "register"]
-            }
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"new.user@example.com\",\n  \"password\": \"P@ssw0rd!\",\n  \"phoneNumber\": \"0812345678\",\n  \"firstName\": \"New\",\n  \"lastName\": \"User\",\n  \"displayName\": \"New User\",\n  \"locale\": \"en\",\n  \"tenantId\": \"{{tenantId}}\",\n  \"clientId\": \"{{clientId}}\"\n}" },
+            "url": { "raw": "{{baseUrl}}/auth/register", "host": ["{{baseUrl}}"], "path": ["auth","register"] }
           }
         },
         {
           "name": "Logout",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 204', () => pm.response.to.have.status(204));"
+          ]}}],
           "request": {
             "method": "POST",
             "header": [
               { "key": "Authorization", "value": "Bearer {{bearerToken}}" },
-              { "key": "Content-Type", "value": "application/json" }
+              { "key": "Content-Type",  "value": "application/json" }
             ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\",\n  \"logoutAllDevices\": true\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/auth/logout",
-              "host": ["{{baseUrl}}"],
-              "path": ["auth", "logout"]
-            }
+            "body": { "mode": "raw", "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\",\n  \"logoutAllDevices\": false\n}" },
+            "url": { "raw": "{{baseUrl}}/auth/logout", "host": ["{{baseUrl}}"], "path": ["auth","logout"] }
           }
         },
         {
-          "name": "Refresh",
+          "name": "Logout (All Devices)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 204', () => pm.response.to.have.status(204));"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{bearerToken}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\",\n  \"logoutAllDevices\": true\n}" },
+            "url": { "raw": "{{baseUrl}}/auth/logout", "host": ["{{baseUrl}}"], "path": ["auth","logout"] }
+          }
+        },
+        {
+          "name": "Refresh Token (Legacy /auth/refresh)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "if (pm.response.code === 200) {",
+            "  const d = pm.response.json();",
+            "  if (d.access_token)  pm.collectionVariables.set('bearerToken', d.access_token);",
+            "  if (d.refresh_token) pm.collectionVariables.set('refreshToken', d.refresh_token);",
+            "}"
+          ]}}],
           "request": {
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\",\n  \"clientId\": \"{{clientId}}\",\n  \"clientSecret\": \"{{clientSecret}}\"\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/auth/refresh",
-              "host": ["{{baseUrl}}"],
-              "path": ["auth", "refresh"]
-            }
+            "description": "Compatibility refresh endpoint. Prefer POST /oauth2/token with grant_type=refresh_token.",
+            "body": { "mode": "raw", "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\",\n  \"clientId\": \"{{clientId}}\",\n  \"clientSecret\": \"{{clientSecret}}\"\n}" },
+            "url": { "raw": "{{baseUrl}}/auth/refresh", "host": ["{{baseUrl}}"], "path": ["auth","refresh"] }
           }
         },
         {
           "name": "Forgot Password",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 204 (no enumeration)', () => pm.response.to.have.status(204));"
+          ]}}],
           "request": {
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"email\": \"user@example.com\",\n  \"clientId\": \"{{clientId}}\"\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/auth/forgot-password",
-              "host": ["{{baseUrl}}"],
-              "path": ["auth", "forgot-password"]
-            }
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"user@example.com\",\n  \"clientId\": \"{{clientId}}\"\n}" },
+            "url": { "raw": "{{baseUrl}}/auth/forgot-password", "host": ["{{baseUrl}}"], "path": ["auth","forgot-password"] }
           }
         },
         {
           "name": "Reset Password",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 204', () => pm.response.to.have.status(204));"
+          ]}}],
           "request": {
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"token\": \"reset-token\",\n  \"email\": \"user@example.com\",\n  \"newPassword\": \"N3wP@ssw0rd!\"\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/auth/reset-password",
-              "host": ["{{baseUrl}}"],
-              "path": ["auth", "reset-password"]
-            }
+            "body": { "mode": "raw", "raw": "{\n  \"token\": \"paste-reset-token-from-email\",\n  \"email\": \"user@example.com\",\n  \"newPassword\": \"N3wP@ssw0rd!\"\n}" },
+            "url": { "raw": "{{baseUrl}}/auth/reset-password", "host": ["{{baseUrl}}"], "path": ["auth","reset-password"] }
           }
         },
         {
           "name": "Change Password",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));"
+          ]}}],
           "request": {
             "method": "POST",
             "header": [
               { "key": "Authorization", "value": "Bearer {{bearerToken}}" },
-              { "key": "Content-Type", "value": "application/json" }
+              { "key": "Content-Type",  "value": "application/json" }
             ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"currentPassword\": \"OldP@ssw0rd!\",\n  \"newPassword\": \"N3wP@ssw0rd!\"\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/auth/change-password",
-              "host": ["{{baseUrl}}"],
-              "path": ["auth", "change-password"]
-            }
+            "body": { "mode": "raw", "raw": "{\n  \"currentPassword\": \"OldP@ssw0rd!\",\n  \"newPassword\": \"N3wP@ssw0rd!\"\n}" },
+            "url": { "raw": "{{baseUrl}}/auth/change-password", "host": ["{{baseUrl}}"], "path": ["auth","change-password"] }
           }
         },
         {
           "name": "Verify Email",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));"
+          ]}}],
           "request": {
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"token\": \"verification-token\",\n  \"email\": \"user@example.com\"\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/auth/verify-email",
-              "host": ["{{baseUrl}}"],
-              "path": ["auth", "verify-email"]
-            }
+            "body": { "mode": "raw", "raw": "{\n  \"token\": \"paste-verification-token-from-email\",\n  \"email\": \"user@example.com\"\n}" },
+            "url": { "raw": "{{baseUrl}}/auth/verify-email", "host": ["{{baseUrl}}"], "path": ["auth","verify-email"] }
           }
         },
         {
-          "name": "Resend Verification",
+          "name": "Resend Verification Email",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 204', () => pm.response.to.have.status(204));"
+          ]}}],
           "request": {
             "method": "POST",
             "header": [
               { "key": "Authorization", "value": "Bearer {{bearerToken}}" },
-              { "key": "Content-Type", "value": "application/json" }
+              { "key": "Content-Type",  "value": "application/json" }
             ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"email\": \"user@example.com\"\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/auth/resend-verification",
-              "host": ["{{baseUrl}}"],
-              "path": ["auth", "resend-verification"]
-            }
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"user@example.com\"\n}" },
+            "url": { "raw": "{{baseUrl}}/auth/resend-verification", "host": ["{{baseUrl}}"], "path": ["auth","resend-verification"] }
           }
         },
         {
-          "name": "2FA Setup",
+          "name": "2FA Setup (TOTP)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));"
+          ]}}],
           "request": {
             "method": "GET",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{bearerToken}}" }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/auth/2fa/setup?deviceType=TOTP",
-              "host": ["{{baseUrl}}"],
-              "path": ["auth", "2fa", "setup"],
-              "query": [{ "key": "deviceType", "value": "TOTP" }]
-            }
+            "header": [{ "key": "Authorization", "value": "Bearer {{bearerToken}}" }],
+            "url": { "raw": "{{baseUrl}}/auth/2fa/setup?deviceType=TOTP", "host": ["{{baseUrl}}"], "path": ["auth","2fa","setup"], "query": [{ "key": "deviceType", "value": "TOTP" }] }
           }
         },
         {
           "name": "2FA Enable",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));"
+          ]}}],
           "request": {
             "method": "POST",
             "header": [
               { "key": "Authorization", "value": "Bearer {{bearerToken}}" },
-              { "key": "Content-Type", "value": "application/json" }
+              { "key": "Content-Type",  "value": "application/json" }
             ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"code\": \"123456\",\n  \"deviceType\": \"TOTP\"\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/auth/2fa/enable",
-              "host": ["{{baseUrl}}"],
-              "path": ["auth", "2fa", "enable"]
-            }
+            "body": { "mode": "raw", "raw": "{\n  \"code\": \"123456\",\n  \"deviceType\": \"TOTP\"\n}" },
+            "url": { "raw": "{{baseUrl}}/auth/2fa/enable", "host": ["{{baseUrl}}"], "path": ["auth","2fa","enable"] }
           }
         },
         {
           "name": "2FA Disable",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));"
+          ]}}],
           "request": {
             "method": "POST",
             "header": [
               { "key": "Authorization", "value": "Bearer {{bearerToken}}" },
-              { "key": "Content-Type", "value": "application/json" }
+              { "key": "Content-Type",  "value": "application/json" }
             ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"code\": \"123456\",\n  \"password\": \"P@ssw0rd!\"\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/auth/2fa/disable",
-              "host": ["{{baseUrl}}"],
-              "path": ["auth", "2fa", "disable"]
-            }
+            "body": { "mode": "raw", "raw": "{\n  \"code\": \"123456\",\n  \"password\": \"P@ssw0rd!\"\n}" },
+            "url": { "raw": "{{baseUrl}}/auth/2fa/disable", "host": ["{{baseUrl}}"], "path": ["auth","2fa","disable"] }
           }
         },
         {
-          "name": "2FA Verify Login",
+          "name": "2FA Verify Login (TOTP)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "if (pm.response.code === 200) {",
+            "  const d = pm.response.json();",
+            "  if (d.access_token)  pm.collectionVariables.set('bearerToken', d.access_token);",
+            "  if (d.refresh_token) pm.collectionVariables.set('refreshToken', d.refresh_token);",
+            "  if (d.id_token)      pm.collectionVariables.set('idToken', d.id_token);",
+            "}"
+          ]}}],
           "request": {
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "description": "Complete 2FA login using the twoFactorToken from the Login response (auto-saved to {{twoFactorToken}} by the Login test script). The server resolves user identity from this opaque token — do not supply userId.",
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"twoFactorToken\": \"{{twoFactorToken}}\",\n  \"code\": \"123456\",\n  \"deviceType\": \"TOTP\"\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/auth/2fa/verify",
-              "host": ["{{baseUrl}}"],
-              "path": ["auth", "2fa", "verify"]
-            }
+            "description": "Complete 2FA login using `twoFactorToken` from the Login challenge response (auto-saved by Login test script). Do NOT supply userId — the server resolves identity from twoFactorToken.",
+            "body": { "mode": "raw", "raw": "{\n  \"twoFactorToken\": \"{{twoFactorToken}}\",\n  \"code\": \"123456\",\n  \"deviceType\": \"TOTP\"\n}" },
+            "url": { "raw": "{{baseUrl}}/auth/2fa/verify", "host": ["{{baseUrl}}"], "path": ["auth","2fa","verify"] }
           }
-        }
-      ]
-    },
-    {
-      "name": "OAuth2",
-      "item": [
+        },
         {
-          "name": "Authorize GET",
-          "event": [
-            {
-              "listen": "prerequest",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "const partA = pm.variables.replaceIn('{{$guid}}').replace(/-/g, '');",
-                  "const partB = pm.variables.replaceIn('{{$guid}}').replace(/-/g, '');",
-                  "const verifier = (partA + partB).slice(0, 86);",
-                  "const digest = CryptoJS.SHA256(verifier);",
-                  "const challenge = CryptoJS.enc.Base64.stringify(digest)",
-                  "  .replace(/\\+/g, '-')",
-                  "  .replace(/\\//g, '_')",
-                  "  .replace(/=+$/, '');",
-                  "pm.collectionVariables.set('codeVerifier', verifier);",
-                  "pm.collectionVariables.set('codeChallenge', challenge);"
-                ]
-              }
-            }
-          ],
+          "name": "2FA Verify Login (Recovery Code)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"twoFactorToken\": \"{{twoFactorToken}}\",\n  \"code\": \"AAAA-BBBB-CCCC\",\n  \"deviceType\": \"RECOVERY\"\n}" },
+            "url": { "raw": "{{baseUrl}}/auth/2fa/verify", "host": ["{{baseUrl}}"], "path": ["auth","2fa","verify"] }
+          }
+        },
+        {
+          "name": "Social Login — Initiate",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));"
+          ]}}],
           "request": {
             "method": "GET",
             "header": [],
-            "description": "Start Authorization Code + PKCE flow. Pre-request script auto-generates codeVerifier/codeChallenge (S256).",
+            "description": "Returns authorization URL for the external provider. Redirect the user's browser there. providerCode examples: google, facebook, apple, line, github.",
             "url": {
-              "raw": "{{baseUrl}}/oauth2/authorize?responseType=code&clientId={{clientId}}&redirectUri={{redirectUri}}&scope={{oauthScopeWithOfflineAccess}}&state={{state}}&codeChallenge={{codeChallenge}}&codeChallengeMethod=S256&nonce={{nonce}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["oauth2", "authorize"],
+              "raw": "{{baseUrl}}/auth/social/{{socialProviderCode}}?redirectUri={{redirectUri}}&state={{state}}",
+              "host": ["{{baseUrl}}"], "path": ["auth","social","{{socialProviderCode}}"],
               "query": [
-                { "key": "responseType", "value": "code" },
-                { "key": "clientId", "value": "{{clientId}}" },
                 { "key": "redirectUri", "value": "{{redirectUri}}" },
-                { "key": "scope", "value": "{{oauthScopeWithOfflineAccess}}" },
-                { "key": "state", "value": "{{state}}" },
-                { "key": "codeChallenge", "value": "{{codeChallenge}}" },
-                { "key": "codeChallengeMethod", "value": "S256" },
-                { "key": "nonce", "value": "{{nonce}}" }
+                { "key": "state",       "value": "{{state}}" }
               ]
             }
           }
         },
         {
-          "name": "Authorize POST",
-          "event": [
-            {
-              "listen": "prerequest",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "const partA = pm.variables.replaceIn('{{$guid}}').replace(/-/g, '');",
-                  "const partB = pm.variables.replaceIn('{{$guid}}').replace(/-/g, '');",
-                  "const verifier = (partA + partB).slice(0, 86);",
-                  "const digest = CryptoJS.SHA256(verifier);",
-                  "const challenge = CryptoJS.enc.Base64.stringify(digest)",
-                  "  .replace(/\\+/g, '-')",
-                  "  .replace(/\\//g, '_')",
-                  "  .replace(/=+$/, '');",
-                  "pm.collectionVariables.set('codeVerifier', verifier);",
-                  "pm.collectionVariables.set('codeChallenge', challenge);"
-                ]
-              }
+          "name": "Social Login — Callback",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "if (pm.response.code === 200) {",
+            "  const d = pm.response.json();",
+            "  if (d.access_token)  pm.collectionVariables.set('bearerToken', d.access_token);",
+            "  if (d.refresh_token) pm.collectionVariables.set('refreshToken', d.refresh_token);",
+            "  if (d.id_token)      pm.collectionVariables.set('idToken', d.id_token);",
+            "}"
+          ]}}],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "description": "Handle the provider callback. Exchanges provider code for local access + refresh tokens.",
+            "url": {
+              "raw": "{{baseUrl}}/auth/social/{{socialProviderCode}}/callback?code=provider-auth-code-here&state={{state}}",
+              "host": ["{{baseUrl}}"], "path": ["auth","social","{{socialProviderCode}}","callback"],
+              "query": [
+                { "key": "code",  "value": "provider-auth-code-here" },
+                { "key": "state", "value": "{{state}}" }
+              ]
             }
-          ],
+          }
+        },
+        {
+          "name": "Magic Link — Request",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200 (no enumeration)', () => pm.response.to.have.status(200));"
+          ]}}],
           "request": {
             "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "description": "Request a passwordless magic-link. Always returns 200 — link is sent only if email is registered.",
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"user@example.com\",\n  \"clientId\": \"{{clientId}}\",\n  \"redirectUri\": \"{{redirectUri}}\"\n}" },
+            "url": { "raw": "{{baseUrl}}/auth/magic-link", "host": ["{{baseUrl}}"], "path": ["auth","magic-link"] }
+          }
+        },
+        {
+          "name": "Magic Link — Verify",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "if (pm.response.code === 200) {",
+            "  const d = pm.response.json();",
+            "  if (d.access_token)  pm.collectionVariables.set('bearerToken', d.access_token);",
+            "  if (d.refresh_token) pm.collectionVariables.set('refreshToken', d.refresh_token);",
+            "  if (d.id_token)      pm.collectionVariables.set('idToken', d.id_token);",
+            "}"
+          ]}}],
+          "request": {
+            "method": "GET",
             "header": [],
-            "description": "Alternative authorize entrypoint with same semantics as GET for compatibility tests.",
             "url": {
-              "raw": "{{baseUrl}}/oauth2/authorize?responseType=code&clientId={{clientId}}&redirectUri={{redirectUri}}&scope={{oauthScopeWithOfflineAccess}}&state={{state}}&codeChallenge={{codeChallenge}}&codeChallengeMethod=S256&nonce={{nonce}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["oauth2", "authorize"],
+              "raw": "{{baseUrl}}/auth/magic-link/verify?token=paste-magic-link-token-here",
+              "host": ["{{baseUrl}}"], "path": ["auth","magic-link","verify"],
+              "query": [{ "key": "token", "value": "paste-magic-link-token-here" }]
+            }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "OAuth2 / OIDC",
+      "item": [
+        {
+          "name": "Authorize — GET (PKCE S256)",
+          "event": [
+            { "listen": "prerequest", "script": { "type": "text/javascript", "exec": [
+              "// RFC 7636 PKCE — S256 method. CryptoJS is available in the Postman sandbox.",
+              "const verifier  = CryptoJS.lib.WordArray.random(32).toString(CryptoJS.enc.Hex);",
+              "const digest    = CryptoJS.SHA256(verifier);",
+              "const challenge = CryptoJS.enc.Base64.stringify(digest)",
+              "  .replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=+$/, '');",
+              "pm.collectionVariables.set('codeVerifier',  verifier);",
+              "pm.collectionVariables.set('codeChallenge', challenge);",
+              "pm.collectionVariables.set('state', CryptoJS.lib.WordArray.random(16).toString(CryptoJS.enc.Hex));",
+              "pm.collectionVariables.set('nonce', CryptoJS.lib.WordArray.random(16).toString(CryptoJS.enc.Hex));"
+            ]}},
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "// 200 = login/consent required JSON; 302 = redirect with code",
+              "pm.test('Status 200 or 302', () => pm.expect([200, 302]).to.include(pm.response.code));"
+            ]}}
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "description": "Start Authorization Code + PKCE flow.\n\n**Pre-request script** auto-generates codeVerifier/codeChallenge (S256) + random state/nonce.\n\n**BUG FIX:** Parameters are snake_case per RFC 6749 (`response_type`, `client_id`, `redirect_uri`, `code_challenge`, `code_challenge_method`). Using camelCase would silently fail.\n\nOn success the server redirects to `redirect_uri?code=XXX&state=YYY` — copy the code value into `{{authorizationCode}}`.",
+            "url": {
+              "raw": "{{baseUrl}}/oauth2/authorize?response_type=code&client_id={{clientId}}&redirect_uri={{redirectUri}}&scope={{oauthScopeWithOfflineAccess}}&state={{state}}&code_challenge={{codeChallenge}}&code_challenge_method=S256&nonce={{nonce}}",
+              "host": ["{{baseUrl}}"], "path": ["oauth2","authorize"],
               "query": [
-                { "key": "responseType", "value": "code" },
-                { "key": "clientId", "value": "{{clientId}}" },
-                { "key": "redirectUri", "value": "{{redirectUri}}" },
-                { "key": "scope", "value": "{{oauthScopeWithOfflineAccess}}" },
-                { "key": "state", "value": "{{state}}" },
-                { "key": "codeChallenge", "value": "{{codeChallenge}}" },
-                { "key": "codeChallengeMethod", "value": "S256" },
-                { "key": "nonce", "value": "{{nonce}}" }
+                { "key": "response_type",         "value": "code" },
+                { "key": "client_id",             "value": "{{clientId}}" },
+                { "key": "redirect_uri",          "value": "{{redirectUri}}" },
+                { "key": "scope",                 "value": "{{oauthScopeWithOfflineAccess}}" },
+                { "key": "state",                 "value": "{{state}}" },
+                { "key": "code_challenge",        "value": "{{codeChallenge}}" },
+                { "key": "code_challenge_method", "value": "S256" },
+                { "key": "nonce",                 "value": "{{nonce}}" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Authorize — GET (prompt=none, Silent)",
+          "event": [
+            { "listen": "prerequest", "script": { "type": "text/javascript", "exec": [
+              "const verifier  = CryptoJS.lib.WordArray.random(32).toString(CryptoJS.enc.Hex);",
+              "const digest    = CryptoJS.SHA256(verifier);",
+              "const challenge = CryptoJS.enc.Base64.stringify(digest)",
+              "  .replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=+$/, '');",
+              "pm.collectionVariables.set('codeVerifier',  verifier);",
+              "pm.collectionVariables.set('codeChallenge', challenge);",
+              "pm.collectionVariables.set('state', CryptoJS.lib.WordArray.random(16).toString(CryptoJS.enc.Hex));",
+              "pm.collectionVariables.set('nonce', CryptoJS.lib.WordArray.random(16).toString(CryptoJS.enc.Hex));"
+            ]}}
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "description": "Silent authorization check — no UI interaction. Returns `login_required` or `interaction_required` when session is missing.",
+            "url": {
+              "raw": "{{baseUrl}}/oauth2/authorize?response_type=code&client_id={{clientId}}&redirect_uri={{redirectUri}}&scope={{oauthScope}}&state={{state}}&code_challenge={{codeChallenge}}&code_challenge_method=S256&nonce={{nonce}}&prompt=none",
+              "host": ["{{baseUrl}}"], "path": ["oauth2","authorize"],
+              "query": [
+                { "key": "response_type",         "value": "code" },
+                { "key": "client_id",             "value": "{{clientId}}" },
+                { "key": "redirect_uri",          "value": "{{redirectUri}}" },
+                { "key": "scope",                 "value": "{{oauthScope}}" },
+                { "key": "state",                 "value": "{{state}}" },
+                { "key": "code_challenge",        "value": "{{codeChallenge}}" },
+                { "key": "code_challenge_method", "value": "S256" },
+                { "key": "nonce",                 "value": "{{nonce}}" },
+                { "key": "prompt",                "value": "none" }
               ]
             }
           }
         },
         {
           "name": "Submit Consent",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200 or 302', () => pm.expect([200, 302]).to.include(pm.response.code));"
+          ]}}],
           "request": {
             "method": "POST",
-            "description": "Submit user consent. Origin/Referer headers are included to satisfy same-origin CSRF guard in API.",
             "header": [
               { "key": "Authorization", "value": "Bearer {{bearerToken}}" },
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Origin", "value": "{{baseUrl}}" },
-              { "key": "Referer", "value": "{{baseUrl}}/oauth2/authorize" }
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Origin",        "value": "{{baseUrl}}" },
+              { "key": "Referer",       "value": "{{baseUrl}}/oauth2/authorize" }
             ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"clientId\": \"{{clientId}}\",\n  \"redirectUri\": \"{{redirectUri}}\",\n  \"scope\": \"{{oauthScopeWithOfflineAccess}}\",\n  \"state\": \"{{state}}\",\n  \"codeChallenge\": \"{{codeChallenge}}\",\n  \"codeChallengeMethod\": \"S256\",\n  \"nonce\": \"{{nonce}}\",\n  \"approved\": true,\n  \"rememberConsent\": true\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/oauth2/authorize/consent",
-              "host": ["{{baseUrl}}"],
-              "path": ["oauth2", "authorize", "consent"]
-            }
+            "description": "Submit user consent decision. Origin and Referer headers satisfy the same-origin CSRF guard.",
+            "body": { "mode": "raw", "raw": "{\n  \"clientId\": \"{{clientId}}\",\n  \"redirectUri\": \"{{redirectUri}}\",\n  \"scope\": \"{{oauthScopeWithOfflineAccess}}\",\n  \"state\": \"{{state}}\",\n  \"codeChallenge\": \"{{codeChallenge}}\",\n  \"codeChallengeMethod\": \"S256\",\n  \"nonce\": \"{{nonce}}\",\n  \"approved\": true,\n  \"rememberConsent\": true\n}" },
+            "url": { "raw": "{{baseUrl}}/oauth2/authorize/consent", "host": ["{{baseUrl}}"], "path": ["oauth2","authorize","consent"] }
           }
         },
         {
-          "name": "Token - Authorization Code",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "if (pm.response.code === 200) {",
-                  "  const data = pm.response.json();",
-                  "  if (data.access_token) pm.collectionVariables.set('bearerToken', data.access_token);",
-                  "  if (data.refresh_token) pm.collectionVariables.set('refreshToken', data.refresh_token);",
-                  "  if (data.id_token) pm.collectionVariables.set('idToken', data.id_token);",
-                  "}"
-                ]
-              }
-            }
-          ],
+          "name": "Token — Authorization Code + PKCE",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "if (pm.response.code === 200) {",
+            "  const d = pm.response.json();",
+            "  pm.test('Has access_token',     () => pm.expect(d.access_token).to.be.a('string'));",
+            "  pm.test('token_type=bearer',    () => pm.expect(d.token_type).to.match(/^bearer$/i));",
+            "  pm.test('Cache-Control no-store', () => pm.expect(pm.response.headers.get('Cache-Control')).to.include('no-store'));",
+            "  if (d.access_token)  pm.collectionVariables.set('bearerToken', d.access_token);",
+            "  if (d.refresh_token) pm.collectionVariables.set('refreshToken', d.refresh_token);",
+            "  if (d.id_token)      pm.collectionVariables.set('idToken', d.id_token);",
+            "}"
+          ]}}],
           "request": {
             "method": "POST",
-            "description": "Exchange authorization code for tokens. Refresh token is returned only when offline_access scope was granted.",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/x-www-form-urlencoded"
-              }
-            ],
-            "body": {
-              "mode": "urlencoded",
-              "urlencoded": [
-                {
-                  "key": "grant_type",
-                  "value": "authorization_code",
-                  "type": "text"
-                },
-                {
-                  "key": "code",
-                  "value": "{{authorizationCode}}",
-                  "type": "text"
-                },
-                {
-                  "key": "redirect_uri",
-                  "value": "{{redirectUri}}",
-                  "type": "text"
-                },
-                {
-                  "key": "code_verifier",
-                  "value": "{{codeVerifier}}",
-                  "type": "text"
-                },
-                {
-                  "key": "scope",
-                  "value": "{{oauthScopeWithOfflineAccess}}",
-                  "type": "text"
-                },
-                { "key": "client_id", "value": "{{clientId}}", "type": "text" },
-                {
-                  "key": "client_secret",
-                  "value": "{{clientSecret}}",
-                  "type": "text"
-                }
-              ]
-            },
-            "url": {
-              "raw": "{{baseUrl}}/oauth2/token",
-              "host": ["{{baseUrl}}"],
-              "path": ["oauth2", "token"]
-            }
+            "header": [{ "key": "Content-Type", "value": "application/x-www-form-urlencoded" }],
+            "description": "Exchange authorization code for tokens. `code_verifier` must match the `code_challenge` sent in the authorize step. `refresh_token` is returned only when `offline_access` scope was granted.",
+            "body": { "mode": "urlencoded", "urlencoded": [
+              { "key": "grant_type",    "value": "authorization_code", "type": "text" },
+              { "key": "code",          "value": "{{authorizationCode}}", "type": "text" },
+              { "key": "redirect_uri",  "value": "{{redirectUri}}", "type": "text" },
+              { "key": "code_verifier", "value": "{{codeVerifier}}", "type": "text" },
+              { "key": "scope",         "value": "{{oauthScopeWithOfflineAccess}}", "type": "text" },
+              { "key": "client_id",     "value": "{{clientId}}", "type": "text" },
+              { "key": "client_secret", "value": "{{clientSecret}}", "type": "text" }
+            ]},
+            "url": { "raw": "{{baseUrl}}/oauth2/token", "host": ["{{baseUrl}}"], "path": ["oauth2","token"] }
           }
         },
         {
-          "name": "Token - Refresh Grant",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "if (pm.response.code === 200) {",
-                  "  const data = pm.response.json();",
-                  "  if (data.access_token) pm.collectionVariables.set('bearerToken', data.access_token);",
-                  "  if (data.refresh_token) pm.collectionVariables.set('refreshToken', data.refresh_token);",
-                  "}"
-                ]
-              }
-            }
-          ],
+          "name": "Token — Refresh Grant",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "if (pm.response.code === 200) {",
+            "  const d = pm.response.json();",
+            "  if (d.access_token)  pm.collectionVariables.set('bearerToken', d.access_token);",
+            "  if (d.refresh_token) pm.collectionVariables.set('refreshToken', d.refresh_token);",
+            "}"
+          ]}}],
           "request": {
             "method": "POST",
-            "description": "Rotate refresh token and obtain a fresh access token pair.",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/x-www-form-urlencoded"
-              }
-            ],
-            "body": {
-              "mode": "urlencoded",
-              "urlencoded": [
-                {
-                  "key": "grant_type",
-                  "value": "refresh_token",
-                  "type": "text"
-                },
-                {
-                  "key": "refresh_token",
-                  "value": "{{refreshToken}}",
-                  "type": "text"
-                },
-                { "key": "client_id", "value": "{{clientId}}", "type": "text" },
-                {
-                  "key": "client_secret",
-                  "value": "{{clientSecret}}",
-                  "type": "text"
-                }
-              ]
-            },
-            "url": {
-              "raw": "{{baseUrl}}/oauth2/token",
-              "host": ["{{baseUrl}}"],
-              "path": ["oauth2", "token"]
-            }
+            "header": [{ "key": "Content-Type", "value": "application/x-www-form-urlencoded" }],
+            "description": "Rotate refresh token. Old token is immediately invalidated. Family-based reuse detection cascades revocation on replay.",
+            "body": { "mode": "urlencoded", "urlencoded": [
+              { "key": "grant_type",    "value": "refresh_token", "type": "text" },
+              { "key": "refresh_token", "value": "{{refreshToken}}", "type": "text" },
+              { "key": "client_id",     "value": "{{clientId}}", "type": "text" },
+              { "key": "client_secret", "value": "{{clientSecret}}", "type": "text" }
+            ]},
+            "url": { "raw": "{{baseUrl}}/oauth2/token", "host": ["{{baseUrl}}"], "path": ["oauth2","token"] }
           }
         },
         {
-          "name": "Token - Client Credentials",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "if (pm.response.code === 200) {",
-                  "  const data = pm.response.json();",
-                  "  if (data.access_token) pm.collectionVariables.set('bearerToken', data.access_token);",
-                  "}"
-                ]
-              }
-            }
-          ],
+          "name": "Token — Client Credentials",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "if (pm.response.code === 200) {",
+            "  const d = pm.response.json();",
+            "  pm.test('Has access_token',     () => pm.expect(d.access_token).to.be.a('string'));",
+            "  pm.test('No refresh_token',     () => pm.expect(d).to.not.have.property('refresh_token'));",
+            "  if (d.access_token) pm.collectionVariables.set('bearerToken', d.access_token);",
+            "}"
+          ]}}],
           "request": {
             "method": "POST",
-            "description": "Client credentials grant. API requires explicit non-OIDC scope (openid, profile, email, phone, offline_access are all rejected). Use resource-level scopes registered for the client (e.g. api.access, orders.read).",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/x-www-form-urlencoded"
-              }
-            ],
-            "body": {
-              "mode": "urlencoded",
-              "urlencoded": [
-                {
-                  "key": "grant_type",
-                  "value": "client_credentials",
-                  "type": "text"
-                },
-                {
-                  "key": "scope",
-                  "value": "{{clientCredentialsScope}}",
-                  "type": "text"
-                },
-                { "key": "client_id", "value": "{{clientId}}", "type": "text" },
-                {
-                  "key": "client_secret",
-                  "value": "{{clientSecret}}",
-                  "type": "text"
-                }
-              ]
-            },
-            "url": {
-              "raw": "{{baseUrl}}/oauth2/token",
-              "host": ["{{baseUrl}}"],
-              "path": ["oauth2", "token"]
-            }
+            "header": [{ "key": "Content-Type", "value": "application/x-www-form-urlencoded" }],
+            "description": "Machine-to-machine grant. OIDC scopes (openid, profile, email, phone, offline_access) are **rejected** — use resource-level scopes only.",
+            "body": { "mode": "urlencoded", "urlencoded": [
+              { "key": "grant_type",    "value": "client_credentials", "type": "text" },
+              { "key": "scope",         "value": "{{clientCredentialsScope}}", "type": "text" },
+              { "key": "client_id",     "value": "{{clientId}}", "type": "text" },
+              { "key": "client_secret", "value": "{{clientSecret}}", "type": "text" }
+            ]},
+            "url": { "raw": "{{baseUrl}}/oauth2/token", "host": ["{{baseUrl}}"], "path": ["oauth2","token"] }
           }
         },
         {
-          "name": "Revoke",
+          "name": "Token — Client Credentials (Basic Auth)",
           "event": [
-            {
-              "listen": "prerequest",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "const creds = pm.collectionVariables.get('clientId') + ':' + pm.collectionVariables.get('clientSecret');",
-                  "pm.collectionVariables.set('basicAuth', btoa(creds));"
-                ]
-              }
-            }
+            { "listen": "prerequest", "script": { "type": "text/javascript", "exec": [
+              "pm.collectionVariables.set('basicAuth',",
+              "  btoa(pm.collectionVariables.get('clientId') + ':' + pm.collectionVariables.get('clientSecret')));"
+            ]}},
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('Status 200', () => pm.response.to.have.status(200));",
+              "if (pm.response.code === 200) {",
+              "  const d = pm.response.json();",
+              "  if (d.access_token) pm.collectionVariables.set('bearerToken', d.access_token);",
+              "}"
+            ]}}
           ],
           "request": {
             "method": "POST",
-            "description": "Revoke token for current authenticated client. Pre-request script auto-builds Basic auth header from clientId/clientSecret.",
             "header": [
               { "key": "Authorization", "value": "Basic {{basicAuth}}" },
-              {
-                "key": "Content-Type",
-                "value": "application/x-www-form-urlencoded"
-              }
+              { "key": "Content-Type",  "value": "application/x-www-form-urlencoded" }
             ],
-            "body": {
-              "mode": "urlencoded",
-              "urlencoded": [
-                { "key": "token", "value": "{{refreshToken}}", "type": "text" },
-                {
-                  "key": "token_type_hint",
-                  "value": "refresh_token",
-                  "type": "text"
-                }
-              ]
-            },
-            "url": {
-              "raw": "{{baseUrl}}/oauth2/revoke",
-              "host": ["{{baseUrl}}"],
-              "path": ["oauth2", "revoke"]
-            }
+            "description": "`client_secret_basic` auth method. Pre-request script builds the Basic header.",
+            "body": { "mode": "urlencoded", "urlencoded": [
+              { "key": "grant_type", "value": "client_credentials", "type": "text" },
+              { "key": "scope",      "value": "{{clientCredentialsScope}}", "type": "text" }
+            ]},
+            "url": { "raw": "{{baseUrl}}/oauth2/token", "host": ["{{baseUrl}}"], "path": ["oauth2","token"] }
           }
         },
         {
-          "name": "Introspect",
+          "name": "Revoke Refresh Token (RFC 7009)",
           "event": [
-            {
-              "listen": "prerequest",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "const creds = pm.collectionVariables.get('clientId') + ':' + pm.collectionVariables.get('clientSecret');",
-                  "pm.collectionVariables.set('basicAuth', btoa(creds));"
-                ]
-              }
-            }
+            { "listen": "prerequest", "script": { "type": "text/javascript", "exec": [
+              "pm.collectionVariables.set('basicAuth',",
+              "  btoa(pm.collectionVariables.get('clientId') + ':' + pm.collectionVariables.get('clientSecret')));"
+            ]}},
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('Status 200 (always per RFC 7009)', () => pm.response.to.have.status(200));"
+            ]}}
           ],
           "request": {
             "method": "POST",
-            "description": "Validate token activity/status for authorized client. Pre-request script auto-builds Basic auth header.",
             "header": [
               { "key": "Authorization", "value": "Basic {{basicAuth}}" },
-              {
-                "key": "Content-Type",
-                "value": "application/x-www-form-urlencoded"
-              }
+              { "key": "Content-Type",  "value": "application/x-www-form-urlencoded" }
             ],
-            "body": {
-              "mode": "urlencoded",
-              "urlencoded": [
-                { "key": "token", "value": "{{bearerToken}}", "type": "text" },
-                {
-                  "key": "token_type_hint",
-                  "value": "access_token",
-                  "type": "text"
-                }
-              ]
-            },
-            "url": {
-              "raw": "{{baseUrl}}/oauth2/introspect",
-              "host": ["{{baseUrl}}"],
-              "path": ["oauth2", "introspect"]
-            }
+            "description": "RFC 7009 token revocation. Always returns 200 for authenticated requests.",
+            "body": { "mode": "urlencoded", "urlencoded": [
+              { "key": "token",           "value": "{{refreshToken}}", "type": "text" },
+              { "key": "token_type_hint", "value": "refresh_token",   "type": "text" }
+            ]},
+            "url": { "raw": "{{baseUrl}}/oauth2/revoke", "host": ["{{baseUrl}}"], "path": ["oauth2","revoke"] }
           }
         },
         {
-          "name": "UserInfo",
+          "name": "Revoke Access Token",
+          "event": [
+            { "listen": "prerequest", "script": { "type": "text/javascript", "exec": [
+              "pm.collectionVariables.set('basicAuth',",
+              "  btoa(pm.collectionVariables.get('clientId') + ':' + pm.collectionVariables.get('clientSecret')));"
+            ]}},
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('Status 200', () => pm.response.to.have.status(200));"
+            ]}}
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Basic {{basicAuth}}" },
+              { "key": "Content-Type",  "value": "application/x-www-form-urlencoded" }
+            ],
+            "body": { "mode": "urlencoded", "urlencoded": [
+              { "key": "token",           "value": "{{bearerToken}}", "type": "text" },
+              { "key": "token_type_hint", "value": "access_token",   "type": "text" }
+            ]},
+            "url": { "raw": "{{baseUrl}}/oauth2/revoke", "host": ["{{baseUrl}}"], "path": ["oauth2","revoke"] }
+          }
+        },
+        {
+          "name": "Introspect (RFC 7662)",
+          "event": [
+            { "listen": "prerequest", "script": { "type": "text/javascript", "exec": [
+              "pm.collectionVariables.set('basicAuth',",
+              "  btoa(pm.collectionVariables.get('clientId') + ':' + pm.collectionVariables.get('clientSecret')));"
+            ]}},
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('Status 200', () => pm.response.to.have.status(200));",
+              "pm.test('Has active field', () => pm.expect(pm.response.json()).to.have.property('active'));"
+            ]}}
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Basic {{basicAuth}}" },
+              { "key": "Content-Type",  "value": "application/x-www-form-urlencoded" }
+            ],
+            "description": "Validate token and retrieve metadata. Returns `{active:true, ...claims}` or `{active:false}`.",
+            "body": { "mode": "urlencoded", "urlencoded": [
+              { "key": "token",           "value": "{{bearerToken}}", "type": "text" },
+              { "key": "token_type_hint", "value": "access_token",   "type": "text" }
+            ]},
+            "url": { "raw": "{{baseUrl}}/oauth2/introspect", "host": ["{{baseUrl}}"], "path": ["oauth2","introspect"] }
+          }
+        },
+        {
+          "name": "UserInfo (OIDC)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Has sub claim', () => pm.expect(pm.response.json().sub).to.be.a('string'));"
+          ]}}],
           "request": {
             "method": "GET",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{bearerToken}}" }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/oauth2/userinfo",
-              "host": ["{{baseUrl}}"],
-              "path": ["oauth2", "userinfo"]
-            }
+            "header": [{ "key": "Authorization", "value": "Bearer {{bearerToken}}" }],
+            "url": { "raw": "{{baseUrl}}/oauth2/userinfo", "host": ["{{baseUrl}}"], "path": ["oauth2","userinfo"] }
           }
         },
         {
-          "name": "End Session GET",
+          "name": "End Session — GET",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200 or 302', () => pm.expect([200, 302]).to.include(pm.response.code));"
+          ]}}],
           "request": {
             "method": "GET",
             "header": [],
+            "description": "RP-initiated logout. Redirects to `post_logout_redirect_uri` only when it matches a registered URI.",
             "url": {
-              "raw": "{{baseUrl}}/oauth2/end-session?id_token_hint=&post_logout_redirect_uri={{redirectUri}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["oauth2", "end-session"],
+              "raw": "{{baseUrl}}/oauth2/end-session?id_token_hint={{idToken}}&post_logout_redirect_uri={{redirectUri}}",
+              "host": ["{{baseUrl}}"], "path": ["oauth2","end-session"],
               "query": [
-                { "key": "id_token_hint", "value": "" },
-                {
-                  "key": "post_logout_redirect_uri",
-                  "value": "{{redirectUri}}"
-                }
+                { "key": "id_token_hint",            "value": "{{idToken}}" },
+                { "key": "post_logout_redirect_uri", "value": "{{redirectUri}}" }
               ]
             }
           }
         },
         {
-          "name": "End Session POST",
+          "name": "End Session — POST",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200 or 302', () => pm.expect([200, 302]).to.include(pm.response.code));"
+          ]}}],
           "request": {
             "method": "POST",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/oauth2/end-session?id_token_hint=&post_logout_redirect_uri={{redirectUri}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["oauth2", "end-session"],
+              "raw": "{{baseUrl}}/oauth2/end-session?id_token_hint={{idToken}}&post_logout_redirect_uri={{redirectUri}}",
+              "host": ["{{baseUrl}}"], "path": ["oauth2","end-session"],
               "query": [
-                { "key": "id_token_hint", "value": "" },
-                {
-                  "key": "post_logout_redirect_uri",
-                  "value": "{{redirectUri}}"
-                }
+                { "key": "id_token_hint",            "value": "{{idToken}}" },
+                { "key": "post_logout_redirect_uri", "value": "{{redirectUri}}" }
               ]
             }
+          }
+        },
+        {
+          "name": "PAR — Pushed Authorization Request (RFC 9126)",
+          "event": [
+            { "listen": "prerequest", "script": { "type": "text/javascript", "exec": [
+              "const verifier  = CryptoJS.lib.WordArray.random(32).toString(CryptoJS.enc.Hex);",
+              "const digest    = CryptoJS.SHA256(verifier);",
+              "const challenge = CryptoJS.enc.Base64.stringify(digest)",
+              "  .replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=+$/, '');",
+              "pm.collectionVariables.set('codeVerifier',  verifier);",
+              "pm.collectionVariables.set('codeChallenge', challenge);",
+              "pm.collectionVariables.set('state', CryptoJS.lib.WordArray.random(16).toString(CryptoJS.enc.Hex));",
+              "pm.collectionVariables.set('nonce', CryptoJS.lib.WordArray.random(16).toString(CryptoJS.enc.Hex));"
+            ]}},
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('Status 201', () => pm.response.to.have.status(201));",
+              "if (pm.response.code === 201) {",
+              "  const d = pm.response.json();",
+              "  pm.test('Has request_uri', () => pm.expect(d.request_uri).to.be.a('string'));",
+              "  pm.test('Has expires_in',  () => pm.expect(d.expires_in).to.be.a('number'));",
+              "}"
+            ]}}
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/x-www-form-urlencoded" }],
+            "description": "RFC 9126 PAR. POST authorization parameters to receive a short-lived `request_uri`. Then pass the `request_uri` to /authorize instead of inline parameters.",
+            "body": { "mode": "urlencoded", "urlencoded": [
+              { "key": "response_type",         "value": "code", "type": "text" },
+              { "key": "client_id",             "value": "{{clientId}}", "type": "text" },
+              { "key": "client_secret",         "value": "{{clientSecret}}", "type": "text" },
+              { "key": "redirect_uri",          "value": "{{redirectUri}}", "type": "text" },
+              { "key": "scope",                 "value": "{{oauthScopeWithOfflineAccess}}", "type": "text" },
+              { "key": "state",                 "value": "{{state}}", "type": "text" },
+              { "key": "code_challenge",        "value": "{{codeChallenge}}", "type": "text" },
+              { "key": "code_challenge_method", "value": "S256", "type": "text" },
+              { "key": "nonce",                 "value": "{{nonce}}", "type": "text" }
+            ]},
+            "url": { "raw": "{{baseUrl}}/oauth2/par", "host": ["{{baseUrl}}"], "path": ["oauth2","par"] }
+          }
+        },
+        {
+          "name": "Authorize via PAR request_uri",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200 or 302', () => pm.expect([200, 302]).to.include(pm.response.code));"
+          ]}}],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "description": "Use the request_uri from the PAR response to start the authorize flow. Replace the placeholder with the actual `urn:ietf:params:oauth:request_uri:...` value.",
+            "url": {
+              "raw": "{{baseUrl}}/oauth2/authorize?client_id={{clientId}}&request_uri=urn:ietf:params:oauth:request_uri:replace-me",
+              "host": ["{{baseUrl}}"], "path": ["oauth2","authorize"],
+              "query": [
+                { "key": "client_id",   "value": "{{clientId}}" },
+                { "key": "request_uri", "value": "urn:ietf:params:oauth:request_uri:replace-me" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Dynamic Client Registration (RFC 7591)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 201', () => pm.response.to.have.status(201));",
+            "if (pm.response.code === 201) {",
+            "  const d = pm.response.json();",
+            "  pm.test('Has client_id', () => pm.expect(d.client_id).to.be.a('string'));",
+            "  if (d.client_id)     pm.collectionVariables.set('clientId', d.client_id);",
+            "  if (d.client_secret) pm.collectionVariables.set('clientSecret', d.client_secret);",
+            "}"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "description": "RFC 7591 Dynamic Client Registration. No auth required. `client_secret` returned only once.",
+            "body": { "mode": "raw", "raw": "{\n  \"client_name\": \"My Dynamic SPA\",\n  \"redirect_uris\": [\"http://localhost:3000/auth/callback\"],\n  \"grant_types\": [\"authorization_code\", \"refresh_token\"],\n  \"response_types\": [\"code\"],\n  \"token_endpoint_auth_method\": \"none\",\n  \"scope\": \"openid profile email offline_access\",\n  \"application_type\": \"web\",\n  \"contacts\": [\"dev@example.com\"]\n}" },
+            "url": { "raw": "{{baseUrl}}/oauth2/register", "host": ["{{baseUrl}}"], "path": ["oauth2","register"] }
+          }
+        },
+        {
+          "name": "Device Authorization — Request Codes (RFC 8628 §3.1)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "if (pm.response.code === 200) {",
+            "  const d = pm.response.json();",
+            "  pm.test('Has device_code', () => pm.expect(d.device_code).to.be.a('string'));",
+            "  pm.test('Has user_code',   () => pm.expect(d.user_code).to.be.a('string'));",
+            "  if (d.device_code) pm.collectionVariables.set('deviceCode', d.device_code);",
+            "  if (d.user_code)   pm.collectionVariables.set('userCode',   d.user_code);",
+            "  console.log('User code:', d.user_code, '— visit:', d.verification_uri);",
+            "}"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/x-www-form-urlencoded" }],
+            "description": "Step 1: Get device_code + user_code. User navigates to verification_uri and enters user_code. Device polls the token endpoint until approved.",
+            "body": { "mode": "urlencoded", "urlencoded": [
+              { "key": "client_id",     "value": "{{clientId}}", "type": "text" },
+              { "key": "client_secret", "value": "{{clientSecret}}", "type": "text" },
+              { "key": "scope",         "value": "{{oauthScope}}", "type": "text" }
+            ]},
+            "url": { "raw": "{{baseUrl}}/oauth2/device_authorization", "host": ["{{baseUrl}}"], "path": ["oauth2","device_authorization"] }
+          }
+        },
+        {
+          "name": "Device Authorization — Approve (Authenticated User)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{bearerToken}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "description": "Step 2: Authenticated user approves the device login. userCode auto-saved from the Device Authorization request.",
+            "body": { "mode": "raw", "raw": "{\n  \"userCode\": \"{{userCode}}\",\n  \"approved\": true\n}" },
+            "url": { "raw": "{{baseUrl}}/oauth2/device_approval", "host": ["{{baseUrl}}"], "path": ["oauth2","device_approval"] }
+          }
+        },
+        {
+          "name": "Device Authorization — Token Poll (RFC 8628 §3.4)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "if (pm.response.code === 200) {",
+            "  const d = pm.response.json();",
+            "  if (d.access_token)  pm.collectionVariables.set('bearerToken', d.access_token);",
+            "  if (d.refresh_token) pm.collectionVariables.set('refreshToken', d.refresh_token);",
+            "  if (d.id_token)      pm.collectionVariables.set('idToken', d.id_token);",
+            "}",
+            "// 400 authorization_pending => retry with interval",
+            "// 400 slow_down => increase polling interval",
+            "// 400 expired_token => restart flow"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/x-www-form-urlencoded" }],
+            "description": "Step 3: Device polls until approved. Errors: `authorization_pending` (retry), `slow_down`, `expired_token`, `access_denied`.",
+            "body": { "mode": "urlencoded", "urlencoded": [
+              { "key": "grant_type",    "value": "urn:ietf:params:oauth:grant-type:device_code", "type": "text" },
+              { "key": "device_code",   "value": "{{deviceCode}}", "type": "text" },
+              { "key": "client_id",     "value": "{{clientId}}", "type": "text" },
+              { "key": "client_secret", "value": "{{clientSecret}}", "type": "text" }
+            ]},
+            "url": { "raw": "{{baseUrl}}/oauth2/token", "host": ["{{baseUrl}}"], "path": ["oauth2","token"] }
           }
         }
       ]
     },
+
+    {
+      "name": "Tenants",
+      "item": [
+        {
+          "name": "List Tenants",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));"
+          ]}}],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{bearerToken}}" }],
+            "url": { "raw": "{{baseUrl}}/tenants?page=1&pageSize=20&isActive=true", "host": ["{{baseUrl}}"], "path": ["tenants"],
+              "query": [
+                { "key": "page",     "value": "1" },
+                { "key": "pageSize", "value": "20" },
+                { "key": "isActive", "value": "true" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Tenant By Id",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));"
+          ]}}],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{bearerToken}}" }],
+            "url": { "raw": "{{baseUrl}}/tenants/{{tenantId}}", "host": ["{{baseUrl}}"], "path": ["tenants","{{tenantId}}"] }
+          }
+        },
+        {
+          "name": "Create Tenant",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "if (pm.response.code === 200) {",
+            "  const d = pm.response.json();",
+            "  if (d.id) pm.collectionVariables.set('tenantId', d.id);",
+            "}"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{bearerToken}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"tenantCode\": \"ACME\",\n  \"tenantName\": \"ACME Corporation\",\n  \"isActive\": true,\n  \"settings\": {}\n}" },
+            "url": { "raw": "{{baseUrl}}/tenants", "host": ["{{baseUrl}}"], "path": ["tenants"] }
+          }
+        },
+        {
+          "name": "Update Tenant",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));"
+          ]}}],
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{bearerToken}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"tenantName\": \"ACME Corporation (Updated)\",\n  \"isActive\": true\n}" },
+            "url": { "raw": "{{baseUrl}}/tenants/{{tenantId}}", "host": ["{{baseUrl}}"], "path": ["tenants","{{tenantId}}"] }
+          }
+        },
+        {
+          "name": "Delete Tenant",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));"
+          ]}}],
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{bearerToken}}" }],
+            "url": { "raw": "{{baseUrl}}/tenants/{{tenantId}}", "host": ["{{baseUrl}}"], "path": ["tenants","{{tenantId}}"] }
+          }
+        },
+        {
+          "name": "Activate Tenant",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{bearerToken}}" }],
+            "url": { "raw": "{{baseUrl}}/tenants/{{tenantId}}/activate", "host": ["{{baseUrl}}"], "path": ["tenants","{{tenantId}}","activate"] }
+          }
+        },
+        {
+          "name": "Deactivate Tenant",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{bearerToken}}" }],
+            "url": { "raw": "{{baseUrl}}/tenants/{{tenantId}}/deactivate", "host": ["{{baseUrl}}"], "path": ["tenants","{{tenantId}}","deactivate"] }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Agreements",
+      "item": [
+        {
+          "name": "List Agreements",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));"
+          ]}}],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{bearerToken}}" }],
+            "url": { "raw": "{{baseUrl}}/agreements?tenantId={{tenantId}}&activeOnly=true", "host": ["{{baseUrl}}"], "path": ["agreements"],
+              "query": [
+                { "key": "tenantId",   "value": "{{tenantId}}" },
+                { "key": "activeOnly", "value": "true" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Agreement By Id",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));"
+          ]}}],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{bearerToken}}" }],
+            "url": { "raw": "{{baseUrl}}/agreements/{{agreementId}}", "host": ["{{baseUrl}}"], "path": ["agreements","{{agreementId}}"] }
+          }
+        },
+        {
+          "name": "Get Agreements By Tenant",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));"
+          ]}}],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{bearerToken}}" }],
+            "url": { "raw": "{{baseUrl}}/agreements/tenant/{{tenantId}}", "host": ["{{baseUrl}}"], "path": ["agreements","tenant","{{tenantId}}"] }
+          }
+        },
+        {
+          "name": "Create Agreement",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "if (pm.response.code === 200) {",
+            "  const d = pm.response.json();",
+            "  if (d.id) pm.collectionVariables.set('agreementId', d.id);",
+            "}"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{bearerToken}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"tenantId\": \"{{tenantId}}\",\n  \"type\": \"TERMS_OF_SERVICE\",\n  \"version\": \"1.0\",\n  \"title\": \"Terms of Service\",\n  \"content\": \"By using this service you agree to our terms.\",\n  \"language\": \"en\",\n  \"effectiveAt\": \"2026-01-01T00:00:00Z\",\n  \"isActive\": true\n}" },
+            "url": { "raw": "{{baseUrl}}/agreements", "host": ["{{baseUrl}}"], "path": ["agreements"] }
+          }
+        },
+        {
+          "name": "Update Agreement",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));"
+          ]}}],
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{bearerToken}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"title\": \"Terms of Service (Updated)\",\n  \"content\": \"Updated content.\",\n  \"isActive\": true\n}" },
+            "url": { "raw": "{{baseUrl}}/agreements/{{agreementId}}", "host": ["{{baseUrl}}"], "path": ["agreements","{{agreementId}}"] }
+          }
+        },
+        {
+          "name": "Delete Agreement",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));"
+          ]}}],
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{bearerToken}}" }],
+            "url": { "raw": "{{baseUrl}}/agreements/{{agreementId}}", "host": ["{{baseUrl}}"], "path": ["agreements","{{agreementId}}"] }
+          }
+        },
+        {
+          "name": "Accept Agreement",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{bearerToken}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "description": "Record the authenticated user's acceptance. Idempotent.",
+            "body": { "mode": "raw", "raw": "{\n  \"version\": \"1.0\",\n  \"accepted\": true\n}" },
+            "url": { "raw": "{{baseUrl}}/agreements/{{agreementId}}/accept", "host": ["{{baseUrl}}"], "path": ["agreements","{{agreementId}}","accept"] }
+          }
+        }
+      ]
+    },
+
     {
       "name": "Users",
       "item": [
         {
           "name": "List Users",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));"
+          ]}}],
           "request": {
             "method": "GET",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{bearerToken}}" }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/users?page=1&pageSize=20&search=&tenantId={{tenantId}}&isActive=true&status=ACTIVE&sortBy=created_at&sortDir=desc",
-              "host": ["{{baseUrl}}"],
-              "path": ["users"],
+            "header": [{ "key": "Authorization", "value": "Bearer {{bearerToken}}" }],
+            "url": { "raw": "{{baseUrl}}/users?page=1&pageSize=20&search=&tenantId={{tenantId}}&status=ACTIVE&sortBy=created_at&sortDir=desc", "host": ["{{baseUrl}}"], "path": ["users"],
               "query": [
-                { "key": "page", "value": "1" },
+                { "key": "page",     "value": "1" },
                 { "key": "pageSize", "value": "20" },
-                { "key": "search", "value": "" },
+                { "key": "search",   "value": "" },
                 { "key": "tenantId", "value": "{{tenantId}}" },
-                { "key": "isActive", "value": "true" },
-                { "key": "status", "value": "ACTIVE" },
-                { "key": "sortBy", "value": "created_at" },
-                { "key": "sortDir", "value": "desc" }
+                { "key": "status",   "value": "ACTIVE" },
+                { "key": "sortBy",   "value": "created_at" },
+                { "key": "sortDir",  "value": "desc" }
               ]
             }
           }
         },
         {
           "name": "Get User By Id",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));"
+          ]}}],
           "request": {
             "method": "GET",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{bearerToken}}" }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/users/{{userId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["users", "{{userId}}"]
-            }
+            "header": [{ "key": "Authorization", "value": "Bearer {{bearerToken}}" }],
+            "url": { "raw": "{{baseUrl}}/users/{{userId}}", "host": ["{{baseUrl}}"], "path": ["users","{{userId}}"] }
           }
         },
         {
           "name": "Get Users By Tenant",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));"
+          ]}}],
           "request": {
             "method": "GET",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{bearerToken}}" }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/users/tenant/{{tenantId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["users", "tenant", "{{tenantId}}"]
-            }
+            "header": [{ "key": "Authorization", "value": "Bearer {{bearerToken}}" }],
+            "url": { "raw": "{{baseUrl}}/users/tenant/{{tenantId}}", "host": ["{{baseUrl}}"], "path": ["users","tenant","{{tenantId}}"] }
           }
         },
         {
           "name": "Create User",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "if (pm.response.code === 200) {",
+            "  const d = pm.response.json();",
+            "  if (d.id) pm.collectionVariables.set('userId', d.id);",
+            "}"
+          ]}}],
           "request": {
             "method": "POST",
             "header": [
               { "key": "Authorization", "value": "Bearer {{bearerToken}}" },
-              { "key": "Content-Type", "value": "application/json" }
+              { "key": "Content-Type",  "value": "application/json" }
             ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"email\": \"user.created@example.com\",\n  \"phoneNumber\": \"0812345678\",\n  \"firstNameEn\": \"Created\",\n  \"lastNameEn\": \"User\",\n  \"displayName\": \"Created User\",\n  \"password\": \"P@ssw0rd!\",\n  \"locale\": \"en\",\n  \"zoneinfo\": \"Asia/Bangkok\",\n  \"tenantId\": \"{{tenantId}}\",\n  \"isActive\": true\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/users",
-              "host": ["{{baseUrl}}"],
-              "path": ["users"]
-            }
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"created.user@example.com\",\n  \"phoneNumber\": \"0812345678\",\n  \"firstNameEn\": \"Created\",\n  \"lastNameEn\": \"User\",\n  \"displayName\": \"Created User\",\n  \"password\": \"P@ssw0rd!\",\n  \"locale\": \"en\",\n  \"zoneinfo\": \"Asia/Bangkok\",\n  \"tenantId\": \"{{tenantId}}\",\n  \"isActive\": true\n}" },
+            "url": { "raw": "{{baseUrl}}/users", "host": ["{{baseUrl}}"], "path": ["users"] }
           }
         },
         {
           "name": "Update User",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));"
+          ]}}],
           "request": {
             "method": "PUT",
             "header": [
               { "key": "Authorization", "value": "Bearer {{bearerToken}}" },
-              { "key": "Content-Type", "value": "application/json" }
+              { "key": "Content-Type",  "value": "application/json" }
             ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"phoneNumber\": \"0899999999\",\n  \"firstNameEn\": \"Updated\",\n  \"lastNameEn\": \"User\",\n  \"displayName\": \"Updated User\",\n  \"locale\": \"th\",\n  \"zoneinfo\": \"Asia/Bangkok\",\n  \"isActive\": true\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/users/{{userId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["users", "{{userId}}"]
-            }
+            "body": { "mode": "raw", "raw": "{\n  \"phoneNumber\": \"0899999999\",\n  \"firstNameEn\": \"Updated\",\n  \"lastNameEn\": \"User\",\n  \"displayName\": \"Updated User\",\n  \"locale\": \"th\",\n  \"zoneinfo\": \"Asia/Bangkok\",\n  \"isActive\": true\n}" },
+            "url": { "raw": "{{baseUrl}}/users/{{userId}}", "host": ["{{baseUrl}}"], "path": ["users","{{userId}}"] }
           }
         },
         {
-          "name": "Delete User",
+          "name": "Delete User (Soft)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));"
+          ]}}],
           "request": {
             "method": "DELETE",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{bearerToken}}" }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/users/{{userId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["users", "{{userId}}"]
-            }
+            "header": [{ "key": "Authorization", "value": "Bearer {{bearerToken}}" }],
+            "url": { "raw": "{{baseUrl}}/users/{{userId}}", "host": ["{{baseUrl}}"], "path": ["users","{{userId}}"] }
           }
         },
         {
           "name": "Activate User",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));"
+          ]}}],
           "request": {
             "method": "POST",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{bearerToken}}" }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/users/{{userId}}/activate",
-              "host": ["{{baseUrl}}"],
-              "path": ["users", "{{userId}}", "activate"]
-            }
+            "header": [{ "key": "Authorization", "value": "Bearer {{bearerToken}}" }],
+            "url": { "raw": "{{baseUrl}}/users/{{userId}}/activate", "host": ["{{baseUrl}}"], "path": ["users","{{userId}}","activate"] }
           }
         },
         {
           "name": "Deactivate User",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));"
+          ]}}],
           "request": {
             "method": "POST",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{bearerToken}}" }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/users/{{userId}}/deactivate",
-              "host": ["{{baseUrl}}"],
-              "path": ["users", "{{userId}}", "deactivate"]
-            }
+            "header": [{ "key": "Authorization", "value": "Bearer {{bearerToken}}" }],
+            "url": { "raw": "{{baseUrl}}/users/{{userId}}/deactivate", "host": ["{{baseUrl}}"], "path": ["users","{{userId}}","deactivate"] }
           }
         },
         {
-          "name": "Assign User Roles",
+          "name": "Assign Roles to User",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));"
+          ]}}],
           "request": {
             "method": "POST",
             "header": [
               { "key": "Authorization", "value": "Bearer {{bearerToken}}" },
-              { "key": "Content-Type", "value": "application/json" }
+              { "key": "Content-Type",  "value": "application/json" }
             ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"roleIds\": [\"{{roleId}}\"],\n  \"tenantId\": \"{{tenantId}}\",\n  \"expiresAt\": null\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/users/{{userId}}/roles",
-              "host": ["{{baseUrl}}"],
-              "path": ["users", "{{userId}}", "roles"]
-            }
+            "body": { "mode": "raw", "raw": "{\n  \"roleIds\": [\"{{roleId}}\"],\n  \"tenantId\": \"{{tenantId}}\",\n  \"expiresAt\": null\n}" },
+            "url": { "raw": "{{baseUrl}}/users/{{userId}}/roles", "host": ["{{baseUrl}}"], "path": ["users","{{userId}}","roles"] }
           }
         },
         {
-          "name": "Remove User Roles",
+          "name": "Remove Roles from User",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));"
+          ]}}],
           "request": {
             "method": "DELETE",
             "header": [
               { "key": "Authorization", "value": "Bearer {{bearerToken}}" },
-              { "key": "Content-Type", "value": "application/json" }
+              { "key": "Content-Type",  "value": "application/json" }
             ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"roleIds\": [\"{{roleId}}\"],\n  \"tenantId\": \"{{tenantId}}\",\n  \"expiresAt\": null\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/users/{{userId}}/roles",
-              "host": ["{{baseUrl}}"],
-              "path": ["users", "{{userId}}", "roles"]
-            }
+            "body": { "mode": "raw", "raw": "{\n  \"roleIds\": [\"{{roleId}}\"],\n  \"tenantId\": \"{{tenantId}}\"\n}" },
+            "url": { "raw": "{{baseUrl}}/users/{{userId}}/roles", "host": ["{{baseUrl}}"], "path": ["users","{{userId}}","roles"] }
           }
         }
       ]
     },
+
     {
       "name": "Clients",
       "item": [
         {
           "name": "List Clients",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));"
+          ]}}],
           "request": {
             "method": "GET",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{bearerToken}}" }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/clients?tenantId={{tenantId}}&page=1&pageSize=20&search=",
-              "host": ["{{baseUrl}}"],
-              "path": ["clients"],
+            "header": [{ "key": "Authorization", "value": "Bearer {{bearerToken}}" }],
+            "url": { "raw": "{{baseUrl}}/clients?tenantId={{tenantId}}&page=1&pageSize=20&search=", "host": ["{{baseUrl}}"], "path": ["clients"],
               "query": [
                 { "key": "tenantId", "value": "{{tenantId}}" },
-                { "key": "page", "value": "1" },
+                { "key": "page",     "value": "1" },
                 { "key": "pageSize", "value": "20" },
-                { "key": "search", "value": "" }
+                { "key": "search",   "value": "" }
               ]
             }
           }
         },
         {
           "name": "Get Clients By Tenant",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));"
+          ]}}],
           "request": {
             "method": "GET",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{bearerToken}}" }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/clients/tenant/{{tenantId}}?page=1&pageSize=20",
-              "host": ["{{baseUrl}}"],
-              "path": ["clients", "tenant", "{{tenantId}}"],
+            "header": [{ "key": "Authorization", "value": "Bearer {{bearerToken}}" }],
+            "url": { "raw": "{{baseUrl}}/clients/tenant/{{tenantId}}?page=1&pageSize=20", "host": ["{{baseUrl}}"], "path": ["clients","tenant","{{tenantId}}"],
               "query": [
-                { "key": "page", "value": "1" },
+                { "key": "page",     "value": "1" },
                 { "key": "pageSize", "value": "20" }
               ]
             }
@@ -996,130 +1275,144 @@
         },
         {
           "name": "Get Client By Id",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));"
+          ]}}],
           "request": {
             "method": "GET",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{bearerToken}}" }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/clients/{{clientGuid}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["clients", "{{clientGuid}}"]
-            }
+            "header": [{ "key": "Authorization", "value": "Bearer {{bearerToken}}" }],
+            "url": { "raw": "{{baseUrl}}/clients/{{clientGuid}}", "host": ["{{baseUrl}}"], "path": ["clients","{{clientGuid}}"] }
           }
         },
         {
-          "name": "Create Client",
+          "name": "Create Client (Confidential)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "if (pm.response.code === 200) {",
+            "  const d = pm.response.json();",
+            "  if (d.id)           pm.collectionVariables.set('clientGuid', d.id);",
+            "  if (d.clientId)     pm.collectionVariables.set('clientId', d.clientId);",
+            "  if (d.clientSecret) {",
+            "    pm.collectionVariables.set('clientSecret', d.clientSecret);",
+            "    console.log('SAVE THIS SECRET NOW:', d.clientSecret);",
+            "  }",
+            "}"
+          ]}}],
           "request": {
             "method": "POST",
             "header": [
               { "key": "Authorization", "value": "Bearer {{bearerToken}}" },
-              { "key": "Content-Type", "value": "application/json" }
+              { "key": "Content-Type",  "value": "application/json" }
             ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"tenantId\": \"{{tenantId}}\",\n  \"clientName\": \"Demo SPA\",\n  \"clientType\": \"PUBLIC\",\n  \"tokenEndpointAuthMethod\": \"CLIENT_SECRET_BASIC\",\n  \"requirePkce\": true,\n  \"requireConsent\": true,\n  \"redirectUris\": [\"http://localhost:3000/auth/callback\"],\n  \"postLogoutRedirectUris\": [\"http://localhost:3000/\"],\n  \"allowedGrantTypes\": [\"AUTHORIZATION_CODE\", \"REFRESH_TOKEN\"],\n  \"allowedResponseTypes\": [\"code\"],\n  \"scopeIds\": [\"{{scopeId}}\"],\n  \"accessTokenLifetime\": 3600,\n  \"refreshTokenLifetime\": 2592000,\n  \"logoUri\": null,\n  \"clientUri\": \"http://localhost:3000\",\n  \"jwksUri\": null\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/clients",
-              "host": ["{{baseUrl}}"],
-              "path": ["clients"]
-            }
+            "description": "clientSecret returned only once in this response — save it immediately.",
+            "body": { "mode": "raw", "raw": "{\n  \"tenantId\": \"{{tenantId}}\",\n  \"clientName\": \"My Backend API\",\n  \"clientType\": \"CONFIDENTIAL\",\n  \"tokenEndpointAuthMethod\": \"CLIENT_SECRET_BASIC\",\n  \"requirePkce\": true,\n  \"requireConsent\": false,\n  \"redirectUris\": [\"http://localhost:3000/auth/callback\"],\n  \"postLogoutRedirectUris\": [\"http://localhost:3000/\"],\n  \"allowedGrantTypes\": [\"AUTHORIZATION_CODE\", \"REFRESH_TOKEN\", \"CLIENT_CREDENTIALS\"],\n  \"allowedResponseTypes\": [\"code\"],\n  \"scopeIds\": [\"{{scopeId}}\"],\n  \"accessTokenLifetime\": 3600,\n  \"refreshTokenLifetime\": 2592000,\n  \"logoUri\": null,\n  \"clientUri\": \"http://localhost:3000\",\n  \"jwksUri\": null\n}" },
+            "url": { "raw": "{{baseUrl}}/clients", "host": ["{{baseUrl}}"], "path": ["clients"] }
+          }
+        },
+        {
+          "name": "Create Client (Public SPA)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "if (pm.response.code === 200) {",
+            "  const d = pm.response.json();",
+            "  if (d.id)       pm.collectionVariables.set('clientGuid', d.id);",
+            "  if (d.clientId) pm.collectionVariables.set('clientId', d.clientId);",
+            "}"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{bearerToken}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "description": "Public client (SPA/mobile). No clientSecret — PKCE is mandatory.",
+            "body": { "mode": "raw", "raw": "{\n  \"tenantId\": \"{{tenantId}}\",\n  \"clientName\": \"My SPA\",\n  \"clientType\": \"PUBLIC\",\n  \"tokenEndpointAuthMethod\": \"NONE\",\n  \"requirePkce\": true,\n  \"requireConsent\": true,\n  \"redirectUris\": [\"http://localhost:3000/auth/callback\"],\n  \"postLogoutRedirectUris\": [\"http://localhost:3000/\"],\n  \"allowedGrantTypes\": [\"AUTHORIZATION_CODE\", \"REFRESH_TOKEN\"],\n  \"allowedResponseTypes\": [\"code\"],\n  \"scopeIds\": [\"{{scopeId}}\"],\n  \"accessTokenLifetime\": 3600,\n  \"refreshTokenLifetime\": 2592000,\n  \"logoUri\": null,\n  \"clientUri\": \"http://localhost:3000\",\n  \"jwksUri\": null\n}" },
+            "url": { "raw": "{{baseUrl}}/clients", "host": ["{{baseUrl}}"], "path": ["clients"] }
           }
         },
         {
           "name": "Update Client",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));"
+          ]}}],
           "request": {
             "method": "PUT",
             "header": [
               { "key": "Authorization", "value": "Bearer {{bearerToken}}" },
-              { "key": "Content-Type", "value": "application/json" }
+              { "key": "Content-Type",  "value": "application/json" }
             ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"clientName\": \"Updated Demo SPA\",\n  \"requirePkce\": true,\n  \"requireConsent\": false,\n  \"redirectUris\": [\"http://localhost:3000/auth/callback\"],\n  \"postLogoutRedirectUris\": [\"http://localhost:3000/\"],\n  \"allowedGrantTypes\": [\"AUTHORIZATION_CODE\", \"REFRESH_TOKEN\"],\n  \"allowedResponseTypes\": [\"code\"],\n  \"scopeIds\": [\"{{scopeId}}\"],\n  \"accessTokenLifetime\": 3600,\n  \"refreshTokenLifetime\": 2592000,\n  \"logoUri\": null,\n  \"clientUri\": \"http://localhost:3000\",\n  \"isActive\": true\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/clients/{{clientGuid}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["clients", "{{clientGuid}}"]
-            }
+            "body": { "mode": "raw", "raw": "{\n  \"clientName\": \"My SPA (Updated)\",\n  \"requirePkce\": true,\n  \"requireConsent\": false,\n  \"redirectUris\": [\"http://localhost:3000/auth/callback\"],\n  \"postLogoutRedirectUris\": [\"http://localhost:3000/\"],\n  \"allowedGrantTypes\": [\"AUTHORIZATION_CODE\", \"REFRESH_TOKEN\"],\n  \"allowedResponseTypes\": [\"code\"],\n  \"scopeIds\": [\"{{scopeId}}\"],\n  \"accessTokenLifetime\": 3600,\n  \"refreshTokenLifetime\": 2592000,\n  \"isActive\": true\n}" },
+            "url": { "raw": "{{baseUrl}}/clients/{{clientGuid}}", "host": ["{{baseUrl}}"], "path": ["clients","{{clientGuid}}"] }
           }
         },
         {
           "name": "Delete Client",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));"
+          ]}}],
           "request": {
             "method": "DELETE",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{bearerToken}}" }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/clients/{{clientGuid}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["clients", "{{clientGuid}}"]
-            }
+            "header": [{ "key": "Authorization", "value": "Bearer {{bearerToken}}" }],
+            "url": { "raw": "{{baseUrl}}/clients/{{clientGuid}}", "host": ["{{baseUrl}}"], "path": ["clients","{{clientGuid}}"] }
           }
         },
         {
           "name": "Rotate Client Secret",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "if (pm.response.code === 200) {",
+            "  const d = pm.response.json();",
+            "  if (d.clientSecret) {",
+            "    pm.collectionVariables.set('clientSecret', d.clientSecret);",
+            "    console.log('NEW SECRET — save immediately:', d.clientSecret);",
+            "  }",
+            "}"
+          ]}}],
           "request": {
             "method": "POST",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{bearerToken}}" }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/clients/{{clientGuid}}/rotate-secret",
-              "host": ["{{baseUrl}}"],
-              "path": ["clients", "{{clientGuid}}", "rotate-secret"]
-            }
+            "header": [{ "key": "Authorization", "value": "Bearer {{bearerToken}}" }],
+            "url": { "raw": "{{baseUrl}}/clients/{{clientGuid}}/rotate-secret", "host": ["{{baseUrl}}"], "path": ["clients","{{clientGuid}}","rotate-secret"] }
           }
         },
         {
           "name": "Activate Client",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));"
+          ]}}],
           "request": {
             "method": "POST",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{bearerToken}}" }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/clients/{{clientGuid}}/activate",
-              "host": ["{{baseUrl}}"],
-              "path": ["clients", "{{clientGuid}}", "activate"]
-            }
+            "header": [{ "key": "Authorization", "value": "Bearer {{bearerToken}}" }],
+            "url": { "raw": "{{baseUrl}}/clients/{{clientGuid}}/activate", "host": ["{{baseUrl}}"], "path": ["clients","{{clientGuid}}","activate"] }
           }
         },
         {
           "name": "Deactivate Client",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));"
+          ]}}],
           "request": {
             "method": "POST",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{bearerToken}}" }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/clients/{{clientGuid}}/deactivate",
-              "host": ["{{baseUrl}}"],
-              "path": ["clients", "{{clientGuid}}", "deactivate"]
-            }
+            "header": [{ "key": "Authorization", "value": "Bearer {{bearerToken}}" }],
+            "url": { "raw": "{{baseUrl}}/clients/{{clientGuid}}/deactivate", "host": ["{{baseUrl}}"], "path": ["clients","{{clientGuid}}","deactivate"] }
           }
         }
       ]
     },
+
     {
       "name": "Roles",
       "item": [
         {
           "name": "List Roles",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));"
+          ]}}],
           "request": {
             "method": "GET",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{bearerToken}}" }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/roles?tenantId={{tenantId}}&activeOnly=true",
-              "host": ["{{baseUrl}}"],
-              "path": ["roles"],
+            "header": [{ "key": "Authorization", "value": "Bearer {{bearerToken}}" }],
+            "url": { "raw": "{{baseUrl}}/roles?tenantId={{tenantId}}&activeOnly=true", "host": ["{{baseUrl}}"], "path": ["roles"],
               "query": [
-                { "key": "tenantId", "value": "{{tenantId}}" },
+                { "key": "tenantId",   "value": "{{tenantId}}" },
                 { "key": "activeOnly", "value": "true" }
               ]
             }
@@ -1127,140 +1420,118 @@
         },
         {
           "name": "Get Roles By Tenant",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));"
+          ]}}],
           "request": {
             "method": "GET",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{bearerToken}}" }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/roles/tenant/{{tenantId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["roles", "tenant", "{{tenantId}}"]
-            }
+            "header": [{ "key": "Authorization", "value": "Bearer {{bearerToken}}" }],
+            "url": { "raw": "{{baseUrl}}/roles/tenant/{{tenantId}}", "host": ["{{baseUrl}}"], "path": ["roles","tenant","{{tenantId}}"] }
           }
         },
         {
           "name": "Get Role By Id",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));"
+          ]}}],
           "request": {
             "method": "GET",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{bearerToken}}" }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/roles/{{roleId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["roles", "{{roleId}}"]
-            }
+            "header": [{ "key": "Authorization", "value": "Bearer {{bearerToken}}" }],
+            "url": { "raw": "{{baseUrl}}/roles/{{roleId}}", "host": ["{{baseUrl}}"], "path": ["roles","{{roleId}}"] }
           }
         },
         {
           "name": "Create Role",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "if (pm.response.code === 200) {",
+            "  const d = pm.response.json();",
+            "  if (d.id) pm.collectionVariables.set('roleId', d.id);",
+            "}"
+          ]}}],
           "request": {
             "method": "POST",
             "header": [
               { "key": "Authorization", "value": "Bearer {{bearerToken}}" },
-              { "key": "Content-Type", "value": "application/json" }
+              { "key": "Content-Type",  "value": "application/json" }
             ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"roleCode\": \"CUSTOM_ADMIN\",\n  \"roleNameEn\": \"Custom Admin\",\n  \"tenantId\": \"{{tenantId}}\"\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/roles",
-              "host": ["{{baseUrl}}"],
-              "path": ["roles"]
-            }
+            "body": { "mode": "raw", "raw": "{\n  \"roleCode\": \"CUSTOM_ADMIN\",\n  \"roleNameEn\": \"Custom Admin\",\n  \"tenantId\": \"{{tenantId}}\"\n}" },
+            "url": { "raw": "{{baseUrl}}/roles", "host": ["{{baseUrl}}"], "path": ["roles"] }
           }
         },
         {
           "name": "Update Role",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));"
+          ]}}],
           "request": {
             "method": "PUT",
             "header": [
               { "key": "Authorization", "value": "Bearer {{bearerToken}}" },
-              { "key": "Content-Type", "value": "application/json" }
+              { "key": "Content-Type",  "value": "application/json" }
             ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"roleNameEn\": \"Custom Admin Updated\",\n  \"isActive\": true\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/roles/{{roleId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["roles", "{{roleId}}"]
-            }
+            "body": { "mode": "raw", "raw": "{\n  \"roleNameEn\": \"Custom Admin (Updated)\",\n  \"isActive\": true\n}" },
+            "url": { "raw": "{{baseUrl}}/roles/{{roleId}}", "host": ["{{baseUrl}}"], "path": ["roles","{{roleId}}"] }
           }
         },
         {
           "name": "Delete Role",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));"
+          ]}}],
           "request": {
             "method": "DELETE",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{bearerToken}}" }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/roles/{{roleId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["roles", "{{roleId}}"]
-            }
+            "header": [{ "key": "Authorization", "value": "Bearer {{bearerToken}}" }],
+            "url": { "raw": "{{baseUrl}}/roles/{{roleId}}", "host": ["{{baseUrl}}"], "path": ["roles","{{roleId}}"] }
           }
         },
         {
-          "name": "Assign Role Permissions",
+          "name": "Assign Permissions to Role",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));"
+          ]}}],
           "request": {
             "method": "POST",
             "header": [
               { "key": "Authorization", "value": "Bearer {{bearerToken}}" },
-              { "key": "Content-Type", "value": "application/json" }
+              { "key": "Content-Type",  "value": "application/json" }
             ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"permissionIds\": [\"{{permissionId}}\"]\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/roles/{{roleId}}/permissions",
-              "host": ["{{baseUrl}}"],
-              "path": ["roles", "{{roleId}}", "permissions"]
-            }
+            "body": { "mode": "raw", "raw": "{\n  \"permissionIds\": [\"{{permissionId}}\"]\n}" },
+            "url": { "raw": "{{baseUrl}}/roles/{{roleId}}/permissions", "host": ["{{baseUrl}}"], "path": ["roles","{{roleId}}","permissions"] }
           }
         },
         {
-          "name": "Remove Role Permissions",
+          "name": "Remove Permissions from Role",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));"
+          ]}}],
           "request": {
             "method": "DELETE",
             "header": [
               { "key": "Authorization", "value": "Bearer {{bearerToken}}" },
-              { "key": "Content-Type", "value": "application/json" }
+              { "key": "Content-Type",  "value": "application/json" }
             ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"permissionIds\": [\"{{permissionId}}\"]\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/roles/{{roleId}}/permissions",
-              "host": ["{{baseUrl}}"],
-              "path": ["roles", "{{roleId}}", "permissions"]
-            }
+            "body": { "mode": "raw", "raw": "{\n  \"permissionIds\": [\"{{permissionId}}\"]\n}" },
+            "url": { "raw": "{{baseUrl}}/roles/{{roleId}}/permissions", "host": ["{{baseUrl}}"], "path": ["roles","{{roleId}}","permissions"] }
           }
         }
       ]
     },
+
     {
       "name": "Permissions",
       "item": [
         {
           "name": "List Permissions",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));"
+          ]}}],
           "request": {
             "method": "GET",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{bearerToken}}" }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/permissions?tenantId={{tenantId}}&activeOnly=true",
-              "host": ["{{baseUrl}}"],
-              "path": ["permissions"],
+            "header": [{ "key": "Authorization", "value": "Bearer {{bearerToken}}" }],
+            "url": { "raw": "{{baseUrl}}/permissions?tenantId={{tenantId}}&activeOnly=true", "host": ["{{baseUrl}}"], "path": ["permissions"],
               "query": [
-                { "key": "tenantId", "value": "{{tenantId}}" },
+                { "key": "tenantId",   "value": "{{tenantId}}" },
                 { "key": "activeOnly", "value": "true" }
               ]
             }
@@ -1268,284 +1539,754 @@
         },
         {
           "name": "Get Permissions By Tenant",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));"
+          ]}}],
           "request": {
             "method": "GET",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{bearerToken}}" }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/permissions/tenant/{{tenantId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["permissions", "tenant", "{{tenantId}}"]
-            }
+            "header": [{ "key": "Authorization", "value": "Bearer {{bearerToken}}" }],
+            "url": { "raw": "{{baseUrl}}/permissions/tenant/{{tenantId}}", "host": ["{{baseUrl}}"], "path": ["permissions","tenant","{{tenantId}}"] }
           }
         },
         {
           "name": "Get Permission By Id",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));"
+          ]}}],
           "request": {
             "method": "GET",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{bearerToken}}" }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/permissions/{{permissionId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["permissions", "{{permissionId}}"]
-            }
+            "header": [{ "key": "Authorization", "value": "Bearer {{bearerToken}}" }],
+            "url": { "raw": "{{baseUrl}}/permissions/{{permissionId}}", "host": ["{{baseUrl}}"], "path": ["permissions","{{permissionId}}"] }
           }
         },
         {
           "name": "Create Permission",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "if (pm.response.code === 200) {",
+            "  const d = pm.response.json();",
+            "  if (d.id) pm.collectionVariables.set('permissionId', d.id);",
+            "}"
+          ]}}],
           "request": {
             "method": "POST",
             "header": [
               { "key": "Authorization", "value": "Bearer {{bearerToken}}" },
-              { "key": "Content-Type", "value": "application/json" }
+              { "key": "Content-Type",  "value": "application/json" }
             ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"permissionCode\": \"orders.read\",\n  \"permissionNameEn\": \"Read Orders\",\n  \"resource\": \"orders\",\n  \"action\": \"READ\",\n  \"tenantId\": \"{{tenantId}}\"\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/permissions",
-              "host": ["{{baseUrl}}"],
-              "path": ["permissions"]
-            }
+            "body": { "mode": "raw", "raw": "{\n  \"permissionCode\": \"orders.read\",\n  \"permissionNameEn\": \"Read Orders\",\n  \"resource\": \"orders\",\n  \"action\": \"READ\",\n  \"tenantId\": \"{{tenantId}}\"\n}" },
+            "url": { "raw": "{{baseUrl}}/permissions", "host": ["{{baseUrl}}"], "path": ["permissions"] }
           }
         },
         {
           "name": "Update Permission",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));"
+          ]}}],
           "request": {
             "method": "PUT",
             "header": [
               { "key": "Authorization", "value": "Bearer {{bearerToken}}" },
-              { "key": "Content-Type", "value": "application/json" }
+              { "key": "Content-Type",  "value": "application/json" }
             ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"permissionNameEn\": \"Read Orders Updated\",\n  \"resource\": \"orders\",\n  \"action\": \"READ\",\n  \"isActive\": true\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/permissions/{{permissionId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["permissions", "{{permissionId}}"]
-            }
+            "body": { "mode": "raw", "raw": "{\n  \"permissionNameEn\": \"Read Orders (Updated)\",\n  \"resource\": \"orders\",\n  \"action\": \"READ\",\n  \"isActive\": true\n}" },
+            "url": { "raw": "{{baseUrl}}/permissions/{{permissionId}}", "host": ["{{baseUrl}}"], "path": ["permissions","{{permissionId}}"] }
           }
         },
         {
           "name": "Delete Permission",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));"
+          ]}}],
           "request": {
             "method": "DELETE",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{bearerToken}}" }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/permissions/{{permissionId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["permissions", "{{permissionId}}"]
-            }
+            "header": [{ "key": "Authorization", "value": "Bearer {{bearerToken}}" }],
+            "url": { "raw": "{{baseUrl}}/permissions/{{permissionId}}", "host": ["{{baseUrl}}"], "path": ["permissions","{{permissionId}}"] }
           }
         }
       ]
     },
+
     {
       "name": "Scopes",
       "item": [
         {
           "name": "List Scopes",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));"
+          ]}}],
           "request": {
             "method": "GET",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{bearerToken}}" }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/scopes?activeOnly=true",
-              "host": ["{{baseUrl}}"],
-              "path": ["scopes"],
+            "header": [{ "key": "Authorization", "value": "Bearer {{bearerToken}}" }],
+            "url": { "raw": "{{baseUrl}}/scopes?activeOnly=true", "host": ["{{baseUrl}}"], "path": ["scopes"],
               "query": [{ "key": "activeOnly", "value": "true" }]
             }
           }
         },
         {
           "name": "Get Scope By Id",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));"
+          ]}}],
           "request": {
             "method": "GET",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{bearerToken}}" }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/scopes/{{scopeId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["scopes", "{{scopeId}}"]
-            }
+            "header": [{ "key": "Authorization", "value": "Bearer {{bearerToken}}" }],
+            "url": { "raw": "{{baseUrl}}/scopes/{{scopeId}}", "host": ["{{baseUrl}}"], "path": ["scopes","{{scopeId}}"] }
           }
         },
         {
           "name": "Create Scope",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "if (pm.response.code === 200) {",
+            "  const d = pm.response.json();",
+            "  if (d.id) pm.collectionVariables.set('scopeId', d.id);",
+            "}"
+          ]}}],
           "request": {
             "method": "POST",
             "header": [
               { "key": "Authorization", "value": "Bearer {{bearerToken}}" },
-              { "key": "Content-Type", "value": "application/json" }
+              { "key": "Content-Type",  "value": "application/json" }
             ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"scopeName\": \"orders.read\",\n  \"displayName\": \"Read orders\",\n  \"scopeType\": \"CUSTOM\",\n  \"claims\": [\"resource_access\"],\n  \"isSystemScope\": false\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/scopes",
-              "host": ["{{baseUrl}}"],
-              "path": ["scopes"]
-            }
+            "body": { "mode": "raw", "raw": "{\n  \"scopeName\": \"orders.read\",\n  \"displayName\": \"Read orders\",\n  \"scopeType\": \"CUSTOM\",\n  \"claims\": [\"resource_access\"],\n  \"isSystemScope\": false\n}" },
+            "url": { "raw": "{{baseUrl}}/scopes", "host": ["{{baseUrl}}"], "path": ["scopes"] }
           }
         },
         {
           "name": "Update Scope",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));"
+          ]}}],
           "request": {
             "method": "PUT",
             "header": [
               { "key": "Authorization", "value": "Bearer {{bearerToken}}" },
-              { "key": "Content-Type", "value": "application/json" }
+              { "key": "Content-Type",  "value": "application/json" }
             ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"displayName\": \"Read orders updated\",\n  \"claims\": [\"resource_access\"],\n  \"isActive\": true\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/scopes/{{scopeId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["scopes", "{{scopeId}}"]
-            }
+            "body": { "mode": "raw", "raw": "{\n  \"displayName\": \"Read orders (updated)\",\n  \"claims\": [\"resource_access\"],\n  \"isActive\": true\n}" },
+            "url": { "raw": "{{baseUrl}}/scopes/{{scopeId}}", "host": ["{{baseUrl}}"], "path": ["scopes","{{scopeId}}"] }
           }
         },
         {
           "name": "Delete Scope",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));"
+          ]}}],
           "request": {
             "method": "DELETE",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{bearerToken}}" }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/scopes/{{scopeId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["scopes", "{{scopeId}}"]
-            }
+            "header": [{ "key": "Authorization", "value": "Bearer {{bearerToken}}" }],
+            "description": "System scopes (openid, profile, etc.) cannot be deleted — server returns 409.",
+            "url": { "raw": "{{baseUrl}}/scopes/{{scopeId}}", "host": ["{{baseUrl}}"], "path": ["scopes","{{scopeId}}"] }
           }
         }
       ]
     },
+
     {
       "name": "API Keys",
       "item": [
         {
           "name": "List My API Keys",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));"
+          ]}}],
           "request": {
             "method": "GET",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{bearerToken}}" }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api-keys",
-              "host": ["{{baseUrl}}"],
-              "path": ["api-keys"]
-            }
+            "header": [{ "key": "Authorization", "value": "Bearer {{bearerToken}}" }],
+            "url": { "raw": "{{baseUrl}}/api-keys", "host": ["{{baseUrl}}"], "path": ["api-keys"] }
           }
         },
         {
           "name": "Get API Keys By Client",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));"
+          ]}}],
           "request": {
             "method": "GET",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{bearerToken}}" }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api-keys/client/{{clientGuid}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api-keys", "client", "{{clientGuid}}"]
-            }
+            "header": [{ "key": "Authorization", "value": "Bearer {{bearerToken}}" }],
+            "url": { "raw": "{{baseUrl}}/api-keys/client/{{clientGuid}}", "host": ["{{baseUrl}}"], "path": ["api-keys","client","{{clientGuid}}"] }
           }
         },
         {
           "name": "Get API Key By Id",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));"
+          ]}}],
           "request": {
             "method": "GET",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{bearerToken}}" }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api-keys/{{apiKeyId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api-keys", "{{apiKeyId}}"]
-            }
+            "header": [{ "key": "Authorization", "value": "Bearer {{bearerToken}}" }],
+            "url": { "raw": "{{baseUrl}}/api-keys/{{apiKeyId}}", "host": ["{{baseUrl}}"], "path": ["api-keys","{{apiKeyId}}"] }
           }
         },
         {
           "name": "Create API Key",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "if (pm.response.code === 200) {",
+            "  const d = pm.response.json();",
+            "  if (d.id)  pm.collectionVariables.set('apiKeyId', d.id);",
+            "  if (d.key) console.log('SAVE THIS KEY — returned only once:', d.key);",
+            "}"
+          ]}}],
           "request": {
             "method": "POST",
             "header": [
               { "key": "Authorization", "value": "Bearer {{bearerToken}}" },
-              { "key": "Content-Type", "value": "application/json" }
+              { "key": "Content-Type",  "value": "application/json" }
             ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"tenantId\": \"{{tenantId}}\",\n  \"clientId\": \"{{clientGuid}}\",\n  \"userId\": \"{{userId}}\",\n  \"name\": \"Demo API Key\",\n  \"scopes\": [\"api.read\"],\n  \"expiresAt\": null\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api-keys",
-              "host": ["{{baseUrl}}"],
-              "path": ["api-keys"]
-            }
+            "description": "Raw API key is returned only in this response.",
+            "body": { "mode": "raw", "raw": "{\n  \"tenantId\": \"{{tenantId}}\",\n  \"clientId\": \"{{clientGuid}}\",\n  \"userId\": \"{{userId}}\",\n  \"name\": \"Demo API Key\",\n  \"scopes\": [\"api.read\"],\n  \"expiresAt\": null\n}" },
+            "url": { "raw": "{{baseUrl}}/api-keys", "host": ["{{baseUrl}}"], "path": ["api-keys"] }
           }
         },
         {
           "name": "Revoke API Key",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));"
+          ]}}],
           "request": {
             "method": "DELETE",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{bearerToken}}" }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api-keys/{{apiKeyId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api-keys", "{{apiKeyId}}"]
-            }
+            "header": [{ "key": "Authorization", "value": "Bearer {{bearerToken}}" }],
+            "url": { "raw": "{{baseUrl}}/api-keys/{{apiKeyId}}", "host": ["{{baseUrl}}"], "path": ["api-keys","{{apiKeyId}}"] }
           }
         },
         {
-          "name": "Validate API Key",
+          "name": "Validate API Key (Public)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Has valid field', () => pm.expect(pm.response.json()).to.have.property('valid'));"
+          ]}}],
           "request": {
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"apiKey\": \"raw-api-key\"\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api-keys/validate",
-              "host": ["{{baseUrl}}"],
-              "path": ["api-keys", "validate"]
-            }
+            "description": "No auth required. Returns `{valid: true/false}` and metadata.",
+            "body": { "mode": "raw", "raw": "{\n  \"apiKey\": \"raw-api-key-value\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api-keys/validate", "host": ["{{baseUrl}}"], "path": ["api-keys","validate"] }
           }
         }
       ]
     },
+
+    {
+      "name": "Providers (External IdP)",
+      "item": [
+        {
+          "name": "List Providers",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));"
+          ]}}],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{bearerToken}}" }],
+            "url": { "raw": "{{baseUrl}}/providers?activeOnly=true", "host": ["{{baseUrl}}"], "path": ["providers"],
+              "query": [{ "key": "activeOnly", "value": "true" }]
+            }
+          }
+        },
+        {
+          "name": "Get Provider By Id",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));"
+          ]}}],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{bearerToken}}" }],
+            "url": { "raw": "{{baseUrl}}/providers/{{providerId}}", "host": ["{{baseUrl}}"], "path": ["providers","{{providerId}}"] }
+          }
+        },
+        {
+          "name": "Create Provider (OIDC)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "if (pm.response.code === 200) {",
+            "  const d = pm.response.json();",
+            "  if (d.id) pm.collectionVariables.set('providerId', d.id);",
+            "}"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{bearerToken}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"providerCode\": \"google\",\n  \"providerName\": \"Google\",\n  \"providerType\": \"OIDC\",\n  \"clientId\": \"your-google-client-id\",\n  \"clientSecret\": \"your-google-client-secret\",\n  \"authorizationEndpoint\": \"https://accounts.google.com/o/oauth2/v2/auth\",\n  \"tokenEndpoint\": \"https://oauth2.googleapis.com/token\",\n  \"userInfoEndpoint\": \"https://openidconnect.googleapis.com/v1/userinfo\",\n  \"jwksUri\": \"https://www.googleapis.com/oauth2/v3/certs\",\n  \"scope\": \"openid profile email\",\n  \"isActive\": true\n}" },
+            "url": { "raw": "{{baseUrl}}/providers", "host": ["{{baseUrl}}"], "path": ["providers"] }
+          }
+        },
+        {
+          "name": "Update Provider",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));"
+          ]}}],
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{bearerToken}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"clientId\": \"updated-client-id\",\n  \"clientSecret\": \"updated-client-secret\",\n  \"isActive\": true\n}" },
+            "url": { "raw": "{{baseUrl}}/providers/{{providerId}}", "host": ["{{baseUrl}}"], "path": ["providers","{{providerId}}"] }
+          }
+        },
+        {
+          "name": "Delete Provider",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));"
+          ]}}],
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{bearerToken}}" }],
+            "url": { "raw": "{{baseUrl}}/providers/{{providerId}}", "host": ["{{baseUrl}}"], "path": ["providers","{{providerId}}"] }
+          }
+        },
+        {
+          "name": "Activate Provider",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{bearerToken}}" }],
+            "url": { "raw": "{{baseUrl}}/providers/{{providerId}}/activate", "host": ["{{baseUrl}}"], "path": ["providers","{{providerId}}","activate"] }
+          }
+        },
+        {
+          "name": "Deactivate Provider",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{bearerToken}}" }],
+            "url": { "raw": "{{baseUrl}}/providers/{{providerId}}/deactivate", "host": ["{{baseUrl}}"], "path": ["providers","{{providerId}}","deactivate"] }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Webhooks",
+      "item": [
+        {
+          "name": "List Webhook Endpoints (By Client)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));"
+          ]}}],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{bearerToken}}" }],
+            "description": "Signing secret is NEVER returned in list responses.",
+            "url": { "raw": "{{baseUrl}}/webhooks/clients/{{clientGuid}}", "host": ["{{baseUrl}}"], "path": ["webhooks","clients","{{clientGuid}}"] }
+          }
+        },
+        {
+          "name": "Create Webhook Endpoint",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 201', () => pm.response.to.have.status(201));",
+            "if (pm.response.code === 201) {",
+            "  const d = pm.response.json();",
+            "  if (d.id)     pm.collectionVariables.set('webhookEndpointId', d.id);",
+            "  if (d.secret) console.log('WEBHOOK SECRET — save immediately:', d.secret);",
+            "}"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{bearerToken}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "description": "HMAC-SHA256 signing secret returned only once. Verify deliveries: `HMAC-SHA256(secret, rawBody) == X-Monkora-Signature`.",
+            "body": { "mode": "raw", "raw": "{\n  \"url\": \"https://your-server.example.com/webhooks/monkora\",\n  \"events\": \"user.created,user.updated,token.issued\"\n}" },
+            "url": { "raw": "{{baseUrl}}/webhooks/clients/{{clientGuid}}", "host": ["{{baseUrl}}"], "path": ["webhooks","clients","{{clientGuid}}"] }
+          }
+        },
+        {
+          "name": "Create Webhook (All Events)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 201', () => pm.response.to.have.status(201));"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{bearerToken}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"url\": \"https://your-server.example.com/webhooks/monkora\",\n  \"events\": \"*\"\n}" },
+            "url": { "raw": "{{baseUrl}}/webhooks/clients/{{clientGuid}}", "host": ["{{baseUrl}}"], "path": ["webhooks","clients","{{clientGuid}}"] }
+          }
+        },
+        {
+          "name": "Set Webhook Active/Inactive",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 204', () => pm.response.to.have.status(204));"
+          ]}}],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{bearerToken}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"isActive\": true\n}" },
+            "url": { "raw": "{{baseUrl}}/webhooks/{{webhookEndpointId}}/active", "host": ["{{baseUrl}}"], "path": ["webhooks","{{webhookEndpointId}}","active"] }
+          }
+        },
+        {
+          "name": "Get Webhook Delivery Logs",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));"
+          ]}}],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{bearerToken}}" }],
+            "url": { "raw": "{{baseUrl}}/webhooks/{{webhookEndpointId}}/deliveries?limit=50", "host": ["{{baseUrl}}"], "path": ["webhooks","{{webhookEndpointId}}","deliveries"],
+              "query": [{ "key": "limit", "value": "50" }]
+            }
+          }
+        },
+        {
+          "name": "Delete Webhook Endpoint",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 204', () => pm.response.to.have.status(204));"
+          ]}}],
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{bearerToken}}" }],
+            "url": { "raw": "{{baseUrl}}/webhooks/{{webhookEndpointId}}", "host": ["{{baseUrl}}"], "path": ["webhooks","{{webhookEndpointId}}"] }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Passkeys (WebAuthn / FIDO2)",
+      "item": [
+        {
+          "name": "Register Passkey — Begin",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "if (pm.response.code === 200) {",
+            "  const d = pm.response.json();",
+            "  if (d.challengeId) pm.collectionVariables.set('passkeyChallengId', d.challengeId);",
+            "}"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{bearerToken}}" }],
+            "description": "Returns `{challengeId, options}`. Pass `options` to `navigator.credentials.create()` in the browser, then send attestation response to the Complete endpoint.",
+            "url": { "raw": "{{baseUrl}}/auth/passkey/register/begin", "host": ["{{baseUrl}}"], "path": ["auth","passkey","register","begin"] }
+          }
+        },
+        {
+          "name": "Register Passkey — Complete",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{bearerToken}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"challengeId\": \"{{passkeyChallengId}}\",\n  \"attestationResponse\": {\n    \"id\": \"base64url-credential-id\",\n    \"rawId\": \"base64url-raw-id\",\n    \"type\": \"public-key\",\n    \"response\": {\n      \"attestationObject\": \"base64url-attestation-object\",\n      \"clientDataJSON\": \"base64url-client-data-json\"\n    }\n  },\n  \"friendlyName\": \"My MacBook Touch ID\"\n}" },
+            "url": { "raw": "{{baseUrl}}/auth/passkey/register/complete", "host": ["{{baseUrl}}"], "path": ["auth","passkey","register","complete"] }
+          }
+        },
+        {
+          "name": "Authenticate Passkey — Begin",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "if (pm.response.code === 200) {",
+            "  const d = pm.response.json();",
+            "  if (d.challengeId) pm.collectionVariables.set('passkeyChallengId', d.challengeId);",
+            "}"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "description": "Public — no auth required. Returns `{challengeId, options}`. Optionally provide email as a login hint.",
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"user@example.com\"\n}" },
+            "url": { "raw": "{{baseUrl}}/auth/passkey/authenticate/begin", "host": ["{{baseUrl}}"], "path": ["auth","passkey","authenticate","begin"] }
+          }
+        },
+        {
+          "name": "Authenticate Passkey — Complete",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "if (pm.response.code === 200) {",
+            "  const d = pm.response.json();",
+            "  if (d.access_token)  pm.collectionVariables.set('bearerToken', d.access_token);",
+            "  if (d.refresh_token) pm.collectionVariables.set('refreshToken', d.refresh_token);",
+            "  if (d.id_token)      pm.collectionVariables.set('idToken', d.id_token);",
+            "}"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"challengeId\": \"{{passkeyChallengId}}\",\n  \"assertionResponse\": {\n    \"id\": \"base64url-credential-id\",\n    \"rawId\": \"base64url-raw-id\",\n    \"type\": \"public-key\",\n    \"response\": {\n      \"authenticatorData\": \"base64url-auth-data\",\n      \"clientDataJSON\": \"base64url-client-data-json\",\n      \"signature\": \"base64url-signature\",\n      \"userHandle\": null\n    }\n  },\n  \"clientId\": \"{{clientId}}\"\n}" },
+            "url": { "raw": "{{baseUrl}}/auth/passkey/authenticate/complete", "host": ["{{baseUrl}}"], "path": ["auth","passkey","authenticate","complete"] }
+          }
+        },
+        {
+          "name": "List My Passkeys",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));"
+          ]}}],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{bearerToken}}" }],
+            "url": { "raw": "{{baseUrl}}/auth/passkey/credentials", "host": ["{{baseUrl}}"], "path": ["auth","passkey","credentials"] }
+          }
+        },
+        {
+          "name": "Delete Passkey",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 204 or 200', () => pm.expect([200, 204]).to.include(pm.response.code));"
+          ]}}],
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{bearerToken}}" }],
+            "url": { "raw": "{{baseUrl}}/auth/passkey/credentials/credential-id-here", "host": ["{{baseUrl}}"], "path": ["auth","passkey","credentials","credential-id-here"] }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "SAML 2.0",
+      "item": [
+        {
+          "name": "SP Metadata",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Content-Type XML', () => pm.expect(pm.response.headers.get('Content-Type')).to.include('xml'));"
+          ]}}],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "description": "Returns SAML 2.0 SP metadata XML. Register this URL in your IdP.",
+            "url": { "raw": "{{baseUrl}}/auth/saml/{{samlProviderCode}}/metadata", "host": ["{{baseUrl}}"], "path": ["auth","saml","{{samlProviderCode}}","metadata"] }
+          }
+        },
+        {
+          "name": "SP-Initiated SSO (Redirect to IdP)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 302 redirect to IdP', () => pm.response.to.have.status(302));"
+          ]}}],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "description": "Initiates SP-initiated SSO. Redirects to IdP with SAMLRequest.",
+            "url": {
+              "raw": "{{baseUrl}}/auth/saml/{{samlProviderCode}}/signin?RelayState={{redirectUri}}",
+              "host": ["{{baseUrl}}"], "path": ["auth","saml","{{samlProviderCode}}","signin"],
+              "query": [{ "key": "RelayState", "value": "{{redirectUri}}" }]
+            }
+          }
+        },
+        {
+          "name": "ACS — Assertion Consumer Service (IdP POST)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200 or 302', () => pm.expect([200, 302]).to.include(pm.response.code));"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/x-www-form-urlencoded" }],
+            "description": "SAML Assertion Consumer Service. In production this is called automatically by the browser redirect from the IdP.",
+            "body": { "mode": "urlencoded", "urlencoded": [
+              { "key": "SAMLResponse", "value": "base64-encoded-saml-response", "type": "text" },
+              { "key": "RelayState",   "value": "{{redirectUri}}", "type": "text" }
+            ]},
+            "url": { "raw": "{{baseUrl}}/auth/saml/{{samlProviderCode}}/acs", "host": ["{{baseUrl}}"], "path": ["auth","saml","{{samlProviderCode}}","acs"] }
+          }
+        },
+        {
+          "name": "Exchange SAML Code for Tokens",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "if (pm.response.code === 200) {",
+            "  const d = pm.response.json();",
+            "  if (d.access_token)  pm.collectionVariables.set('bearerToken', d.access_token);",
+            "  if (d.refresh_token) pm.collectionVariables.set('refreshToken', d.refresh_token);",
+            "  if (d.id_token)      pm.collectionVariables.set('idToken', d.id_token);",
+            "}"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "description": "Exchange the `saml_code` from the ACS redirect (`?saml_code=xxx`) for access + refresh tokens.",
+            "body": { "mode": "raw", "raw": "{\n  \"samlCode\": \"saml-code-from-acs-redirect\",\n  \"clientId\": \"{{clientId}}\"\n}" },
+            "url": { "raw": "{{baseUrl}}/auth/saml/token", "host": ["{{baseUrl}}"], "path": ["auth","saml","token"] }
+          }
+        }
+      ]
+    },
+
     {
       "name": "Console",
       "item": [
         {
           "name": "Get Console Tenant By Id",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));"
+          ]}}],
           "request": {
             "method": "GET",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{bearerToken}}" }
-            ],
+            "header": [{ "key": "Authorization", "value": "Bearer {{bearerToken}}" }],
+            "description": "Exposed by ConsoleController partial class via [HttpGet(\"api/[controller]/{id:guid}\")].",
+            "url": { "raw": "{{baseUrl}}/console/api/Console/{{consoleTenantId}}", "host": ["{{baseUrl}}"], "path": ["console","api","Console","{{consoleTenantId}}"] }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Security — Negative Tests",
+      "description": "Negative test cases verifying the API correctly rejects invalid/malicious inputs. All requests expected to return 4xx.",
+      "item": [
+        {
+          "name": "Token — Missing grant_type → 400 invalid_request",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 400', () => pm.response.to.have.status(400));",
+            "pm.test('error=invalid_request', () => pm.expect(pm.response.json().error).to.equal('invalid_request'));"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/x-www-form-urlencoded" }],
+            "body": { "mode": "urlencoded", "urlencoded": [{ "key": "client_id", "value": "{{clientId}}", "type": "text" }]},
+            "url": { "raw": "{{baseUrl}}/oauth2/token", "host": ["{{baseUrl}}"], "path": ["oauth2","token"] }
+          }
+        },
+        {
+          "name": "Token — password grant (removed in OAuth 2.1) → 400 unsupported_grant_type",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 400', () => pm.response.to.have.status(400));",
+            "pm.test('unsupported_grant_type', () => pm.expect(pm.response.json().error).to.equal('unsupported_grant_type'));"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/x-www-form-urlencoded" }],
+            "body": { "mode": "urlencoded", "urlencoded": [
+              { "key": "grant_type", "value": "password", "type": "text" },
+              { "key": "client_id",  "value": "{{clientId}}", "type": "text" },
+              { "key": "username",   "value": "user@example.com", "type": "text" },
+              { "key": "password",   "value": "password", "type": "text" }
+            ]},
+            "url": { "raw": "{{baseUrl}}/oauth2/token", "host": ["{{baseUrl}}"], "path": ["oauth2","token"] }
+          }
+        },
+        {
+          "name": "Token — Client Credentials with OIDC scope → 400 invalid_scope",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 400', () => pm.response.to.have.status(400));",
+            "pm.test('error=invalid_scope', () => pm.expect(pm.response.json().error).to.equal('invalid_scope'));"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/x-www-form-urlencoded" }],
+            "body": { "mode": "urlencoded", "urlencoded": [
+              { "key": "grant_type",    "value": "client_credentials", "type": "text" },
+              { "key": "scope",         "value": "openid profile", "type": "text" },
+              { "key": "client_id",     "value": "{{clientId}}", "type": "text" },
+              { "key": "client_secret", "value": "{{clientSecret}}", "type": "text" }
+            ]},
+            "url": { "raw": "{{baseUrl}}/oauth2/token", "host": ["{{baseUrl}}"], "path": ["oauth2","token"] }
+          }
+        },
+        {
+          "name": "Authorize — plain PKCE method (rejected in OAuth 2.1) → 400",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 400 (plain PKCE rejected)', () => pm.response.to.have.status(400));"
+          ]}}],
+          "request": {
+            "method": "GET",
+            "header": [],
             "url": {
-              "raw": "{{baseUrl}}/console/api/Console/{{consoleTenantId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["console", "api", "Console", "{{consoleTenantId}}"]
-            },
-            "description": "Route comes from partial ConsoleController with [HttpGet(\"api/[controller]/{id:guid}\")]."
+              "raw": "{{baseUrl}}/oauth2/authorize?response_type=code&client_id={{clientId}}&redirect_uri={{redirectUri}}&scope={{oauthScope}}&state=test&code_challenge=abc123&code_challenge_method=plain",
+              "host": ["{{baseUrl}}"], "path": ["oauth2","authorize"],
+              "query": [
+                { "key": "response_type",         "value": "code" },
+                { "key": "client_id",             "value": "{{clientId}}" },
+                { "key": "redirect_uri",          "value": "{{redirectUri}}" },
+                { "key": "scope",                 "value": "{{oauthScope}}" },
+                { "key": "state",                 "value": "test" },
+                { "key": "code_challenge",        "value": "abc123" },
+                { "key": "code_challenge_method", "value": "plain" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Revoke — No token parameter → 400 invalid_request",
+          "event": [
+            { "listen": "prerequest", "script": { "type": "text/javascript", "exec": [
+              "pm.collectionVariables.set('basicAuth',",
+              "  btoa(pm.collectionVariables.get('clientId') + ':' + pm.collectionVariables.get('clientSecret')));"
+            ]}},
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('Status 400', () => pm.response.to.have.status(400));",
+              "pm.test('error=invalid_request', () => pm.expect(pm.response.json().error).to.equal('invalid_request'));"
+            ]}}
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Basic {{basicAuth}}" },
+              { "key": "Content-Type",  "value": "application/x-www-form-urlencoded" }
+            ],
+            "body": { "mode": "urlencoded", "urlencoded": [] },
+            "url": { "raw": "{{baseUrl}}/oauth2/revoke", "host": ["{{baseUrl}}"], "path": ["oauth2","revoke"] }
+          }
+        },
+        {
+          "name": "UserInfo — No Bearer token → 401 + WWW-Authenticate",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 401', () => pm.response.to.have.status(401));",
+            "pm.test('Has WWW-Authenticate', () => pm.expect(pm.response.headers.get('WWW-Authenticate')).to.include('Bearer'));"
+          ]}}],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/oauth2/userinfo", "host": ["{{baseUrl}}"], "path": ["oauth2","userinfo"] }
+          }
+        },
+        {
+          "name": "Protected Endpoint — Invalid Token → 401",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 401', () => pm.response.to.have.status(401));"
+          ]}}],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer invalid.jwt.token" }],
+            "url": { "raw": "{{baseUrl}}/users", "host": ["{{baseUrl}}"], "path": ["users"] }
+          }
+        },
+        {
+          "name": "Login — Wrong Credentials → 400/401",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 400 or 401', () => pm.expect([400, 401]).to.include(pm.response.code));"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"username\": \"nobody@example.com\",\n  \"password\": \"WrongPassword!\",\n  \"clientId\": \"{{clientId}}\"\n}" },
+            "url": { "raw": "{{baseUrl}}/auth/login", "host": ["{{baseUrl}}"], "path": ["auth","login"] }
+          }
+        },
+        {
+          "name": "Register — Rate Limit Test (expect 429 after repeated calls)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status 200 or 429', () => pm.expect([200, 429]).to.include(pm.response.code));",
+            "if (pm.response.code === 429) {",
+            "  pm.test('Has Retry-After', () => pm.expect(pm.response.headers.get('Retry-After')).to.exist);",
+            "}"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "description": "Rate limit test. Run this request rapidly 11+ times to trigger the auth rate limiter (10 req/min).",
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"rate-limit-test@example.com\",\n  \"password\": \"P@ssw0rd!\",\n  \"clientId\": \"{{clientId}}\"\n}" },
+            "url": { "raw": "{{baseUrl}}/auth/register", "host": ["{{baseUrl}}"], "path": ["auth","register"] }
           }
         }
       ]
